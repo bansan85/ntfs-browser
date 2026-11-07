@@ -17,7 +17,7 @@
 
 using namespace NTFS_BROWSER_NAMESPACE;
 
-namespace NtfsAttrDump {
+namespace NTFS_BROWSER_NAMESPACE::Example::NtfsAttr {
 
 namespace {
 
@@ -255,4 +255,4 @@ DumpResult DumpAttributes(NtfsVolume<Cache::Strategy::FullCache>& volume,
   return result;
 }
 
-}  // namespace NtfsAttrDump
+}  // namespace NTFS_BROWSER_NAMESPACE::Example::NtfsAttr

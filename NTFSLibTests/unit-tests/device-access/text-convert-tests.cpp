@@ -10,9 +10,11 @@
 
 #include "utf/utf.h"
 
-using NtfsDevice::PathFromWide;
-using NtfsDevice::WideFromPath;
-using NtfsDevice::WideToUtf8;
+namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
+
+using ToolDeviceAccess::PathFromWide;
+using ToolDeviceAccess::WideFromPath;
+using ToolDeviceAccess::WideToUtf8;
 
 namespace {
 
@@ -56,7 +58,7 @@ TEST_CASE("PathFromWide and WideFromPath round-trip a non-ASCII name",
 
 #ifndef _WIN32
 
-using NtfsDevice::Utf8ToWide;
+using ToolDeviceAccess::Utf8ToWide;
 
 TEST_CASE("Utf8ToWide decodes a lone surrogate's WTF-8 form exactly",
           "[device-access][text-convert]") {
@@ -116,7 +118,7 @@ TEST_CASE("AppendAsUtf8 appends what WideToUtf8 returns",
        NTFS_BROWSER_NAMESPACE::Test::Support::ExoticNames()) {
     INFO(exotic.label);
     std::string out = "before:";
-    NtfsDevice::AppendAsUtf8(out, exotic.name);
+    ToolDeviceAccess::AppendAsUtf8(out, exotic.name);
     CHECK(out == "before:" + exotic.utf8);
   }
 }

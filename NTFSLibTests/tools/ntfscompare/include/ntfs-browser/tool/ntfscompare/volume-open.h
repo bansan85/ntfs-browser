@@ -9,13 +9,13 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
-namespace NtfsDevice {
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 struct DeviceTarget;
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess
 
-namespace NtfsCompare {
+namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare {
 
 // Options for every volume this tool opens. They are the library defaults,
 // written out so the comparison does not depend on them. include_deleted
@@ -79,8 +79,8 @@ struct MountEntry {
 // std::nullopt on any failure; a read-access failure says that access is
 // needed.
 [[nodiscard]] std::optional<VolumeHandles>
-    OpenDeviceVolume(const NtfsDevice::DeviceTarget& target);
+    OpenDeviceVolume(const Tool::DeviceAccess::DeviceTarget& target);
 
 #endif  // !_WIN32
 
-}  // namespace NtfsCompare
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare

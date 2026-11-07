@@ -6,7 +6,7 @@
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
 
-namespace NtfsDevice {
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 // Reports whether arg is a "--log=" argument, in the wide argv a wmain() or
 // a converted POSIX main() holds.
@@ -45,4 +45,4 @@ class Utf8ConsoleOutput {
 // Tells stderr that the log file of config could not be opened.
 void ReportLogFileError(const NTFS_BROWSER_NAMESPACE::Log::Config& config);
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess

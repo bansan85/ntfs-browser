@@ -50,6 +50,9 @@
 #include "arguments.h"
 #include "display-paths.h"
 
+namespace ExampleNtfsMftList = NTFS_BROWSER_NAMESPACE::Example::NtfsMftList;
+namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
+
 #ifdef _WIN32
   #include <cwctype>
 
@@ -59,10 +62,10 @@
 #endif
 
 using namespace NTFS_BROWSER_NAMESPACE;
-using MftList::Arguments;
-using MftList::CountHardLinks;
-using MftList::DisplayPaths;
-using NtfsDevice::Output;
+using ExampleNtfsMftList::Arguments;
+using ExampleNtfsMftList::CountHardLinks;
+using ExampleNtfsMftList::DisplayPaths;
+using ToolDeviceAccess::Output;
 
 namespace {
 
@@ -112,12 +115,12 @@ constexpr size_t min_chunks_ahead = 4;
 // Converts to UTF-8, which the console is switched to on Windows, so every
 // name prints whatever the active code page or locale.
 std::string ToUtf8(std::wstring_view text) {
-  return NtfsDevice::WideToUtf8(text);
+  return ToolDeviceAccess::WideToUtf8(text);
 }
 
 // The last write time of an entry in the host's local zone. A time the
 // platform cannot show reads as all zeros.
-NtfsDevice::LocalTime LocalWriteTime(const FILETIME& write_time) {
+ToolDeviceAccess::LocalTime LocalWriteTime(const FILETIME& write_time) {
 #ifdef _WIN32
   // The library already converts the time to local on Windows.
   SYSTEMTIME local{};
@@ -137,8 +140,8 @@ NtfsDevice::LocalTime LocalWriteTime(const FILETIME& write_time) {
   if (ticks == 0) {
     return {.year = filetime_epoch_year, .month = 1, .day = 1};
   }
-  return NtfsDevice::UtcTicksToLocalTime(ticks).value_or(
-      NtfsDevice::LocalTime{});
+  return ToolDeviceAccess::UtcTicksToLocalTime(ticks).value_or(
+      ToolDeviceAccess::LocalTime{});
 #endif
 }
 
@@ -154,10 +157,11 @@ std::string
 }
 
 // Prints the columns of entry, then its path.
-void PrintMainLine(NtfsDevice::LineBuffer& out,
+void PrintMainLine(ToolDeviceAccess::LineBuffer& out,
                    const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry,
                    const std::string& path) {
-  const NtfsDevice::LocalTime local_time = LocalWriteTime(entry.write_time);
+  const ToolDeviceAccess::LocalTime local_time =
+      LocalWriteTime(entry.write_time);
 
   out.AppendNumber(entry.record, record_width);
   out.Append(" ");
@@ -190,7 +194,8 @@ void PrintMainLine(NtfsDevice::LineBuffer& out,
 }
 
 // Prints one "=" line for each hard link whose path differs from path.
-void PrintOtherLinks(NtfsDevice::LineBuffer& out, const DisplayPaths& paths,
+void PrintOtherLinks(ToolDeviceAccess::LineBuffer& out,
+                     const DisplayPaths& paths,
                      const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry,
                      const std::string& path, DisplayPaths::Scratch& scratch) {
   for (size_t i = 0; i < entry.names.size(); i++) {
@@ -254,7 +259,7 @@ std::string ReasonText(DWORD reasons) {
 
 // A time of the journal as "YYYY-MM-DD hh:mm".
 std::string TimeText(const FILETIME& time) {
-  const NtfsDevice::LocalTime local = LocalWriteTime(time);
+  const ToolDeviceAccess::LocalTime local = LocalWriteTime(time);
   char text[32]{};
   snprintf(text, sizeof(text), "%04u-%02u-%02u %02u:%02u", local.year,
            local.month, local.day, local.hour, local.minute);
@@ -263,7 +268,7 @@ std::string TimeText(const FILETIME& time) {
 
 // Prints what the journal knows of an entry, under its listing lines.
 void PrintJournalLine(
-    NtfsDevice::LineBuffer& out,
+    ToolDeviceAccess::LineBuffer& out,
     const NTFS_BROWSER_NAMESPACE::Mft::MftTree::UsnInfo& info) {
   out.Print("{:{}}~ {} {}", "", path_column, TimeText(info.last_time),
             ReasonText(info.last_reason));
@@ -290,7 +295,7 @@ std::string TallyText(const Alloc::ClusterTally& tally) {
 
 // Prints what the scan counted of an entry's clusters, and with the map, the
 // byte ranges of each stream in file order.
-void PrintClusterLines(NtfsDevice::LineBuffer& out,
+void PrintClusterLines(ToolDeviceAccess::LineBuffer& out,
                        const Alloc::ClusterAccount& account,
                        ULONGLONG cluster_size) {
   out.PrintLine("{:{}}# clusters: {}", "", path_column,
@@ -310,7 +315,7 @@ void PrintClusterLines(NtfsDevice::LineBuffer& out,
 // Prints one listing line for entry, then one line per other hard link, then
 // what the journal knows of it, then what is known of its clusters. scratch is
 // reused from one entry to the next.
-void PrintEntry(NtfsDevice::LineBuffer& out, const DisplayPaths& paths,
+void PrintEntry(ToolDeviceAccess::LineBuffer& out, const DisplayPaths& paths,
                 const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry,
                 const Alloc::ClusterAccount* account, ULONGLONG cluster_size,
                 DisplayPaths::Scratch& scratch) {
@@ -373,8 +378,8 @@ void PrintEntries(Output& out, const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
 
   // The text of the chunks in flight, each on a cache line of its own: a thread
   // changes the size of its text with every piece it appends.
-  struct alignas(MftList::cache_line_bytes) ChunkText {
-    NtfsDevice::LineBuffer text;
+  struct alignas(ExampleNtfsMftList::cache_line_bytes) ChunkText {
+    ToolDeviceAccess::LineBuffer text;
   };
 
   std::vector<ChunkText> chunks(window);
@@ -386,7 +391,7 @@ void PrintEntries(Output& out, const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
   // Chunk c and chunk c + window are never held at once, so they share a slot.
   const auto slot_of = [window](size_t chunk) { return chunk % window; };
 
-  NtfsDevice::ChunkSteps steps;
+  ToolDeviceAccess::ChunkSteps steps;
   steps.prepare = [&](size_t chunk) {
     for (size_t i = first_of(chunk); i < first_of(chunk + 1); i++) {
       // i < entries.size() by first_of().
@@ -397,7 +402,7 @@ void PrintEntries(Output& out, const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
   steps.make = [&](size_t chunk, size_t slot) {
     // slot_of() is below window, and slot below threads.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    NtfsDevice::LineBuffer& text = chunks[slot_of(chunk)].text;
+    ToolDeviceAccess::LineBuffer& text = chunks[slot_of(chunk)].text;
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     DisplayPaths::Scratch& scratch = scratches[slot];
     for (size_t i = first_of(chunk); i < first_of(chunk + 1); i++) {
@@ -412,11 +417,11 @@ void PrintEntries(Output& out, const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
   steps.consume = [&](size_t chunk) {
     // slot_of() is below window.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    NtfsDevice::LineBuffer& text = chunks[slot_of(chunk)].text;
+    ToolDeviceAccess::LineBuffer& text = chunks[slot_of(chunk)].text;
     out.AppendBlock(text.Text());
     text.Clear();
   };
-  NtfsDevice::RunOrderedChunks(
+  ToolDeviceAccess::RunOrderedChunks(
       {.chunk_count = chunk_count, .threads = threads, .window = window},
       steps);
 }
@@ -468,14 +473,14 @@ std::unique_ptr<NtfsVolume<Cache::Strategy::NoCache>>
 std::unique_ptr<NtfsVolume<Cache::Strategy::NoCache>>
     OpenVolume(std::wstring_view target, const VolumeOptions& options) {
   // The whole volume is listed, so the target must name no directory.
-  const std::optional<NtfsDevice::DeviceTarget> split =
-      NtfsDevice::SplitDeviceTarget(target);
+  const std::optional<ToolDeviceAccess::DeviceTarget> split =
+      ToolDeviceAccess::SplitDeviceTarget(target);
   if (!split || !split->directory.empty()) {
     return nullptr;
   }
 
-  auto reader = std::make_unique<NtfsDevice::PosixDeviceDiskReader>();
-  if (!reader->Open(NtfsDevice::WideFromPath(split->device))) {
+  auto reader = std::make_unique<ToolDeviceAccess::PosixDeviceDiskReader>();
+  if (!reader->Open(ToolDeviceAccess::WideFromPath(split->device))) {
     const int error = reader->LastError();
     if (error == EACCES || error == EPERM) {
       fprintf(stderr, "Cannot read device %s: read access is needed\n",
@@ -552,17 +557,17 @@ void PrintStats(Output& out,
 // Lists every $MFT record of the volume args names. Returns the exit code.
 int ListVolume(const Arguments& args) {
   if (!Log::Configure(args.log_config)) {
-    NtfsDevice::ReportLogFileError(args.log_config);
+    ToolDeviceAccess::ReportLogFileError(args.log_config);
   }
 
   // Names print as UTF-8: a console shows them right with its code page set.
-  const NtfsDevice::Utf8ConsoleOutput console;
+  const ToolDeviceAccess::Utf8ConsoleOutput console;
 
   // The profile and --tune settings, before the volume opens: the reader takes
   // its caps then.
   VolumeOptions volume_options = args.volume_options;
-  NtfsDevice::AppliedTuning applied;
-  if (const std::string failure = NtfsDevice::ApplyTuning(
+  ToolDeviceAccess::AppliedTuning applied;
+  if (const std::string failure = ToolDeviceAccess::ApplyTuning(
           args.bench, args.target, volume_options, applied);
       !failure.empty()) {
     fprintf(stderr, "%s\n", failure.c_str());
@@ -572,7 +577,7 @@ int ListVolume(const Arguments& args) {
     fprintf(stderr,
             "The profile has no section for this disk: defaults used\n");
   }
-  NtfsDevice::BenchSession session(
+  ToolDeviceAccess::BenchSession session(
       {"NtfsMftList", args.command_line, ToUtf8(args.target)}, args.bench,
       applied, volume_options);
 
@@ -622,8 +627,8 @@ int ListVolume(const Arguments& args) {
 // exit code.
 int Run(int argc, wchar_t* argv[]) {
   Arguments args;
-  if (!MftList::ParseArguments(argc, argv, args)) {
-    MftList::Usage();
+  if (!ExampleNtfsMftList::ParseArguments(argc, argv, args)) {
+    ExampleNtfsMftList::Usage();
     return -1;
   }
   return ListVolume(args);
@@ -639,8 +644,9 @@ int wmain(int argc, wchar_t* argv[]) { return Run(argc, argv); }
 #else
 
 int main(int argc, char* argv[]) {
-  std::vector<std::wstring> wide = NtfsDevice::ArgumentsAsWide(argc, argv);
-  std::vector<wchar_t*> pointers = NtfsDevice::ArgumentPointers(wide);
+  std::vector<std::wstring> wide =
+      ToolDeviceAccess::ArgumentsAsWide(argc, argv);
+  std::vector<wchar_t*> pointers = ToolDeviceAccess::ArgumentPointers(wide);
   return Run(argc, pointers.data());
 }
 

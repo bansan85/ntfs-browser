@@ -10,7 +10,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
-namespace NtfsDump {
+namespace NTFS_BROWSER_NAMESPACE::Example::NtfsDump {
 
 // What one dump produced. message is empty on success. Otherwise it is the
 // text the dialog shows, and dump stays empty.
@@ -26,4 +26,4 @@ DumpResult
                  NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>& volume,
              std::wstring_view path);
 
-}  // namespace NtfsDump
+}  // namespace NTFS_BROWSER_NAMESPACE::Example::NtfsDump

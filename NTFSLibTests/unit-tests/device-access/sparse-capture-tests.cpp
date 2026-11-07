@@ -26,6 +26,8 @@
 
 #include "io/file-reader.h"
 
+namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
+
 #ifdef _WIN32
   #include <windows.h>
 #else
@@ -40,7 +42,7 @@ namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using Catch::Matchers::ContainsSubstring;
-using NtfsDevice::SparseCapture;
+using ToolDeviceAccess::SparseCapture;
 
 namespace {
 

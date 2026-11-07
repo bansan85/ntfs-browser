@@ -24,6 +24,8 @@
 #include "data/std-info-permission.h"
 #include "mft-tree-parent-support.h"
 
+namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
+
 using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::Test::Support::sample_failure_exit_code;
 using NTFS_BROWSER_NAMESPACE::Test::Support::SampleRun;
@@ -38,7 +40,7 @@ constexpr ULONGLONG image_write_time = 0x1112131415161718ULL;
 // The listings' "{write}" as NtfsMftList prints it. The sample converts
 // the time to the machine's local zone, so the text depends on the host.
 std::string LocalWriteTime() {
-  const auto local = NtfsDevice::UtcTicksToLocalTime(image_write_time);
+  const auto local = ToolDeviceAccess::UtcTicksToLocalTime(image_write_time);
   REQUIRE(local.has_value());
 
   char text[32]{};
@@ -182,7 +184,7 @@ namespace {
 
 // The journal's own time, as the sample prints it.
 std::string JournalTimeText() {
-  const auto local = NtfsDevice::UtcTicksToLocalTime(
+  const auto local = ToolDeviceAccess::UtcTicksToLocalTime(
       NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_usn_default_time);
   REQUIRE(local.has_value());
 

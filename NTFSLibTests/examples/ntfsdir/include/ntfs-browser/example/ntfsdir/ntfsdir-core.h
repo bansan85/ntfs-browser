@@ -18,6 +18,8 @@
 #include <ntfs-browser/tool/device-access/bench-options.h>
 #include <ntfs-browser/volume-options.h>
 
+namespace NTFS_BROWSER_NAMESPACE::Example::NtfsDir {
+
 // Prints command-line usage help.
 void Usage();
 
@@ -48,7 +50,7 @@ struct Arguments {
   wchar_t* path = nullptr;
   // The instrumentation and tuning options (--benchmark, --capture,
   // --stop-after, --profile, --tune), and the command line as UTF-8.
-  NtfsDevice::BenchOptions bench;
+  Tool::DeviceAccess::BenchOptions bench;
   std::vector<std::string> command_line;
 };
 
@@ -84,3 +86,5 @@ template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 int ListFrom(NTFS_BROWSER_NAMESPACE::NtfsVolume<S>& volume,
              const ListTarget& target, bool recursive,
              std::FILE* stream = stdout);
+
+}  // namespace NTFS_BROWSER_NAMESPACE::Example::NtfsDir

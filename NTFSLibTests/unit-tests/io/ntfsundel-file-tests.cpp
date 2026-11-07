@@ -19,15 +19,18 @@
 #include <ntfs-browser/test/support/long-path-support.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
 
+namespace ExampleNtfsUndel = NTFS_BROWSER_NAMESPACE::Example::NtfsUndel;
+namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
+
 namespace Fs = std::filesystem;
+using ExampleNtfsUndel::CreatedFile;
+using ExampleNtfsUndel::CreateError;
+using ExampleNtfsUndel::CreateRecoveryFile;
+using ExampleNtfsUndel::ExistingFile;
+using ExampleNtfsUndel::NameChange;
+using ExampleNtfsUndel::SafeFileName;
 using NTFS_BROWSER_NAMESPACE::Test::DeviceAccess::TempDir;
 using NTFS_BROWSER_NAMESPACE::Test::Support::LongTempDir;
-using NtfsUndel::CreatedFile;
-using NtfsUndel::CreateError;
-using NtfsUndel::CreateRecoveryFile;
-using NtfsUndel::ExistingFile;
-using NtfsUndel::NameChange;
-using NtfsUndel::SafeFileName;
 
 namespace {
 
@@ -84,7 +87,7 @@ TEST_CASE("SafeFileName keeps a name Win32 can create", "[undel][file-name]") {
        {L"report.txt", L"café", L"a b", L"a.b.c", L"x", L"CONSOLE",
         L"conference.txt", L"COM10", L"LPT", L".hidden", L"a-b_c~1.TXT",
         L"日本.txt"}) {
-    INFO(NtfsDevice::WideToUtf8(name));
+    INFO(ToolDeviceAccess::WideToUtf8(name));
     CHECK(SafeFileName(name) == name);
   }
 }
@@ -333,11 +336,11 @@ TEST_CASE("a RecoveryFile that moves keeps the file open once",
       directory.Path().wstring(), L"moved.txt", ExistingFile::KeepBoth);
   REQUIRE(created.file);
 
-  NtfsUndel::RecoveryFile moved = std::move(*created.file);
+  ExampleNtfsUndel::RecoveryFile moved = std::move(*created.file);
   CHECK(moved.Write(Bytes("moved")));
   CHECK_FALSE(created.file->Write(Bytes("moved-from")));
 
-  NtfsUndel::RecoveryFile assigned = std::move(moved);
+  ExampleNtfsUndel::RecoveryFile assigned = std::move(moved);
   CHECK(assigned.Write(Bytes(" twice")));
   CHECK_FALSE(moved.Write(Bytes("nothing")));
 }

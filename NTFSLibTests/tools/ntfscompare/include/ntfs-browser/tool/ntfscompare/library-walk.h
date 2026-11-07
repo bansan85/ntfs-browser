@@ -32,7 +32,7 @@ class FileRecord;
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Io
 
-namespace NtfsCompare {
+namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare {
 
 // Resolves relativePath (components separated by '/', matching the "/"-joined
 // keys every Listing uses; empty means the volume's root) to the MFT record
@@ -152,4 +152,4 @@ template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
     WalkMftTree(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
                 ULONGLONG start_record);
 
-}  // namespace NtfsCompare
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare

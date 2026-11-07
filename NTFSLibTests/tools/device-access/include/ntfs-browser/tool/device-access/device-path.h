@@ -5,7 +5,9 @@
 #include <string>
 #include <string_view>
 
-namespace NtfsDevice {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 // A command-line target split into the volume source and the directory
 // inside the volume.
@@ -49,4 +51,4 @@ enum class TargetKind {
 [[nodiscard]] std::optional<DeviceTarget>
     SplitDeviceTarget(std::wstring_view target);
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess

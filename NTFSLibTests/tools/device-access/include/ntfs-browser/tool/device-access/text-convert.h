@@ -4,7 +4,9 @@
 #include <string>
 #include <string_view>
 
-namespace NtfsDevice {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 // Encodes a wide string as UTF-8. wchar_t is UTF-16 on Windows and UTF-32
 // elsewhere, and both are handled. A valid surrogate pair becomes one 4-byte
@@ -36,4 +38,4 @@ void AppendAsUtf8(std::string& out, std::wstring_view wide);
 
 #endif  // !_WIN32
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess

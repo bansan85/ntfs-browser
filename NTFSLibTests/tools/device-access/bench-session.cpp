@@ -13,6 +13,7 @@
 
 #include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/io/extended-path.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/bench-session.h>
 #include <ntfs-browser/tool/device-access/json.h>
 #include <ntfs-browser/tool/device-access/sparse-capture.h>
@@ -22,7 +23,7 @@
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 
-namespace NtfsDevice {
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 namespace {
 
@@ -351,4 +352,4 @@ void BenchSession::Finish() {
                bench_.summary_path.string().c_str());
 }
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess

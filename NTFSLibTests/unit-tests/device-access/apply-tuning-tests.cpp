@@ -21,13 +21,15 @@
 #include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
 
+namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
+
 namespace TestDeviceAccess = NTFS_BROWSER_NAMESPACE::Test::DeviceAccess;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using NtfsDevice::AppliedTuning;
-using NtfsDevice::ApplyTuning;
-using NtfsDevice::BenchOptions;
+using ToolDeviceAccess::AppliedTuning;
+using ToolDeviceAccess::ApplyTuning;
+using ToolDeviceAccess::BenchOptions;
 
 namespace {
 
@@ -257,7 +259,7 @@ TEST_CASE("A --tune alone applies without a profile",
 
 TEST_CASE("A --tune the table refuses names its reason",
           "[device-access][apply-tuning]") {
-  const auto failure_of = [](NtfsDevice::TuneSetting tune) {
+  const auto failure_of = [](ToolDeviceAccess::TuneSetting tune) {
     BenchOptions bench;
     bench.tunes.push_back(std::move(tune));
     const Applied result = Apply(bench);
@@ -278,7 +280,7 @@ TEST_CASE("A --tune the table refuses names its reason",
 
 TEST_CASE("Every knob of the table can be set from a profile",
           "[device-access][apply-tuning]") {
-  NtfsDevice::JsonWriter json;
+  ToolDeviceAccess::JsonWriter json;
   json.BeginObject();
   json.Field("format", std::uint64_t{1});
   json.Key("disks");

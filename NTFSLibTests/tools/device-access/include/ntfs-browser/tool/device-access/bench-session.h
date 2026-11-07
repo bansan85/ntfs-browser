@@ -9,7 +9,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/bench-options.h>
 
-namespace NtfsDevice {
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 class JsonWriter;
 class SparseCapture;
@@ -72,4 +72,4 @@ class BenchSession {
   bool active_{false};
 };
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess

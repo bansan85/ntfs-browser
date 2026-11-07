@@ -17,6 +17,8 @@
 #include "ntfsundel.h"
 #include "ntfsundelDlg.h"
 
+namespace ExampleNtfsUndel = NTFS_BROWSER_NAMESPACE::Example::NtfsUndel;
+
 using namespace NTFS_BROWSER_NAMESPACE;
 
 #ifdef _DEBUG
@@ -194,12 +196,12 @@ void CNtfsundelDlg::OnSearch() {
   SetSearching(true);
 
   stop = FALSE;
-  const NtfsUndel::SearchControl control{
+  const ExampleNtfsUndel::SearchControl control{
       .stop_requested = [] { return static_cast<bool>(stop); },
       .pump_messages = [] { return PeekAndPump(); }};
   const std::wstring filter = static_cast<const _TCHAR*>(m_filter);
-  const std::optional<NtfsUndel::SearchResult> result =
-      NtfsUndel::SearchDeletedFiles(volume, filter, control);
+  const std::optional<ExampleNtfsUndel::SearchResult> result =
+      ExampleNtfsUndel::SearchDeletedFiles(volume, filter, control);
   if (!result) {
     MessageBox(_T("Invalid filter expression"));
     SetSearching(false);
@@ -216,23 +218,24 @@ void CNtfsundelDlg::OnSearch() {
 }
 
 // Lists the search result rows, and warns when the list was cut short.
-void CNtfsundelDlg::ShowSearchResults(const NtfsUndel::SearchResult& result) {
-  for (const NtfsUndel::DeletedFile& file : result.files) {
+void CNtfsundelDlg::ShowSearchResults(
+    const ExampleNtfsUndel::SearchResult& result) {
+  for (const ExampleNtfsUndel::DeletedFile& file : result.files) {
     AddResultRow(file);
   }
   if (result.truncated) {
-    MessageBox(NtfsUndel::TooManyFilesMessage().c_str());
+    MessageBox(ExampleNtfsUndel::TooManyFilesMessage().c_str());
   }
 }
 
 // Appends one row: reference, full path and write time.
-void CNtfsundelDlg::AddResultRow(const NtfsUndel::DeletedFile& file) {
+void CNtfsundelDlg::AddResultRow(const ExampleNtfsUndel::DeletedFile& file) {
   CString reference;
   reference.Format(_T("%I64u"), file.reference);
   const int itm = m_files.InsertItem(m_files.GetItemCount(), reference);
   m_files.SetItemText(itm, 1, file.full_path.c_str());
-  m_files.SetItemText(itm, 2,
-                      NtfsUndel::FormatWriteTime(file.write_time).c_str());
+  m_files.SetItemText(
+      itm, 2, ExampleNtfsUndel::FormatWriteTime(file.write_time).c_str());
 }
 
 // Asks where to save the file. False when the user cancels, or keeps the
@@ -241,7 +244,7 @@ bool CNtfsundelDlg::ChooseRecoveryPath(const CString& name, _TCHAR volname,
                                        CString& path) {
   // Save as, under a name Win32 can create.
   const std::wstring safe_name =
-      NtfsUndel::SafeFileName(static_cast<const _TCHAR*>(name));
+      ExampleNtfsUndel::SafeFileName(static_cast<const _TCHAR*>(name));
   CFileDialog savedlg(FALSE, nullptr, safe_name.c_str());
   if (savedlg.DoModal() != IDOK) {
     return false;
@@ -259,11 +262,11 @@ namespace {
 
 // What to tell the user when the record of a deleted file could not be
 // opened, or null when it could.
-const _TCHAR* OpenFailureText(NtfsUndel::RecoverError error) {
+const _TCHAR* OpenFailureText(ExampleNtfsUndel::RecoverError error) {
   switch (error) {
-    case NtfsUndel::RecoverError::RecordParse:
+    case ExampleNtfsUndel::RecoverError::RecordParse:
       return _T("File Record parse error");
-    case NtfsUndel::RecoverError::AttributeParse:
+    case ExampleNtfsUndel::RecoverError::AttributeParse:
       return _T("File Record attribute parse error");
     default:
       return nullptr;
@@ -285,8 +288,8 @@ void CNtfsundelDlg::OnRecover() {
   // must still be visible here, or recovery could never find its record.
   NtfsVolume<Cache::Strategy::NoCache> volume(volname,
                                               {.include_deleted = true});
-  const NtfsUndel::OpenedRecord opened =
-      NtfsUndel::OpenDeletedFile(volume, ref);
+  const ExampleNtfsUndel::OpenedRecord opened =
+      ExampleNtfsUndel::OpenDeletedFile(volume, ref);
   if (const _TCHAR* const failure = OpenFailureText(opened.error)) {
     MessageBox(failure);
     return;
@@ -294,10 +297,10 @@ void CNtfsundelDlg::OnRecover() {
 
   // Ask before anything is created: the data may belong to another file now,
   // or sit on bad clusters. A refusal copies nothing and leaves no empty file.
-  const bool go_on = NtfsUndel::ShouldRecover(
-      *opened.record, [this](const NtfsUndel::RecoveryCheck& check) {
-        const std::wstring message = NtfsUndel::RecoveryMessage(check);
-        if (check.advice == NtfsUndel::RecoveryAdvice::Warn) {
+  const bool go_on = ExampleNtfsUndel::ShouldRecover(
+      *opened.record, [this](const ExampleNtfsUndel::RecoveryCheck& check) {
+        const std::wstring message = ExampleNtfsUndel::RecoveryMessage(check);
+        if (check.advice == ExampleNtfsUndel::RecoveryAdvice::Warn) {
           MessageBox(message.c_str());
           return true;
         }
@@ -314,23 +317,23 @@ void CNtfsundelDlg::OnRecover() {
 
   // The save dialog has asked the user about a file that exists: replace it.
   const std::filesystem::path chosen(static_cast<const _TCHAR*>(path));
-  NtfsUndel::CreatedFile created = NtfsUndel::CreateRecoveryFile(
+  ExampleNtfsUndel::CreatedFile created = ExampleNtfsUndel::CreateRecoveryFile(
       chosen.parent_path().wstring(), chosen.filename().wstring(),
-      NtfsUndel::ExistingFile::Replace);
+      ExampleNtfsUndel::ExistingFile::Replace);
   if (!created.file) {
-    MessageBox(created.error == NtfsUndel::CreateError::PathTooLong
+    MessageBox(created.error == ExampleNtfsUndel::CreateError::PathTooLong
                    ? _T("File path too long")
                    : _T("File creation failed"));
     return;
   }
-  NtfsUndel::RecoveryFile& file = *created.file;
-  if (file.Change() == NtfsUndel::NameChange::Unsafe) {
+  ExampleNtfsUndel::RecoveryFile& file = *created.file;
+  if (file.Change() == ExampleNtfsUndel::NameChange::Unsafe) {
     MessageBox((L"Windows cannot create that name. The file is saved as " +
                 file.Path())
                    .c_str());
   }
 
-  const NtfsUndel::CopyResult copied = NtfsUndel::CopyUnnamedData(
+  const ExampleNtfsUndel::CopyResult copied = ExampleNtfsUndel::CopyUnnamedData(
       *opened.record,
       [this](std::uint64_t) {
         return MessageBox(
@@ -344,15 +347,15 @@ void CNtfsundelDlg::OnRecover() {
 
 // Tells the user how a copy ended. A file with no data, or a declined large
 // file, ends without a message.
-void CNtfsundelDlg::ReportCopy(const NtfsUndel::CopyResult& copied) {
+void CNtfsundelDlg::ReportCopy(const ExampleNtfsUndel::CopyResult& copied) {
   switch (copied.error) {
-    case NtfsUndel::RecoverError::NoDataStream:
-    case NtfsUndel::RecoverError::Declined:
+    case ExampleNtfsUndel::RecoverError::NoDataStream:
+    case ExampleNtfsUndel::RecoverError::Declined:
       return;
-    case NtfsUndel::RecoverError::Read:
+    case ExampleNtfsUndel::RecoverError::Read:
       MessageBox(_T("Read data error"));
       return;
-    case NtfsUndel::RecoverError::Write:
+    case ExampleNtfsUndel::RecoverError::Write:
       MessageBox(_T("Write data error"));
       return;
     default:

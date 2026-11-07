@@ -13,7 +13,7 @@
 #include <ntfs-browser/tool/device-access/device-path.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
 
-namespace NtfsDevice {
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 namespace {
 
@@ -146,4 +146,4 @@ std::optional<DeviceTarget> SplitDeviceTarget(std::wstring_view target) {
   return std::nullopt;
 }
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess

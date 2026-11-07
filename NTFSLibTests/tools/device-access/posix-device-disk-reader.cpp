@@ -32,7 +32,7 @@
   #include <ntfs-browser/tool/device-access/text-convert.h>
   #include <ntfs-browser/tuning/tuning.h>
 
-namespace NtfsDevice {
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 namespace {
 
@@ -155,6 +155,6 @@ void PosixDeviceDiskReader::PrefetchStanding(ULONGLONG offset,
   Prefetch(offset, length);
 }
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess
 
 #endif  // !_WIN32

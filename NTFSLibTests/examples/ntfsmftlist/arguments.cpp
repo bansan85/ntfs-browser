@@ -14,7 +14,7 @@
 
 using namespace NTFS_BROWSER_NAMESPACE;
 
-namespace MftList {
+namespace NTFS_BROWSER_NAMESPACE::Example::NtfsMftList {
 
 namespace {
 
@@ -71,19 +71,19 @@ bool ParseThreads(std::wstring_view text, unsigned& threads) {
 // ones the console tools share.
 OptionStatus ParseSharedOption(std::wstring_view arg, Arguments& args) {
   std::string error;
-  switch (NtfsDevice::ParseBenchOption(arg, args.bench, error)) {
-    case NtfsDevice::OptionResult::Accepted:
+  switch (Tool::DeviceAccess::ParseBenchOption(arg, args.bench, error)) {
+    case Tool::DeviceAccess::OptionResult::Accepted:
       return OptionStatus::Accepted;
-    case NtfsDevice::OptionResult::Malformed:
+    case Tool::DeviceAccess::OptionResult::Malformed:
       fprintf(stderr, "%s\n", error.c_str());
       return OptionStatus::Rejected;
-    case NtfsDevice::OptionResult::NotMine:
+    case Tool::DeviceAccess::OptionResult::NotMine:
       break;
   }
-  if (!NtfsDevice::IsLogOption(arg)) {
+  if (!Tool::DeviceAccess::IsLogOption(arg)) {
     return OptionStatus::NotMine;
   }
-  return NtfsDevice::ParseLogOption(arg, args.log_config)
+  return Tool::DeviceAccess::ParseLogOption(arg, args.log_config)
              ? OptionStatus::Accepted
              : OptionStatus::Rejected;
 }
@@ -123,7 +123,7 @@ OptionStatus ParseListingOption(std::wstring_view arg, Arguments& args) {
 bool ParseArguments(int argc, wchar_t* argv[], Arguments& args) {
   for (int i = 1; i < argc; i++) {
     const std::wstring_view arg(argv[i]);
-    args.command_line.push_back(NtfsDevice::WideToUtf8(arg));
+    args.command_line.push_back(Tool::DeviceAccess::WideToUtf8(arg));
     OptionStatus status = ParseSharedOption(arg, args);
     if (status == OptionStatus::NotMine) {
       status = ParseListingOption(arg, args);
@@ -147,7 +147,7 @@ void Usage() {
       "Usage: ntfsmftlist [--log=...] [--deleted] [--recover] [--threads=N] "
       "[--clusters[=map]] [--verify-data[=sample|full]] <volume>\n");
   printf("  %s\n", std::string(Log::option_usage).c_str());
-  printf("%s", std::string(NtfsDevice::BenchUsage()).c_str());
+  printf("%s", std::string(Tool::DeviceAccess::BenchUsage()).c_str());
   printf("  --deleted     also list the records NTFS freed\n");
   printf(
       "  --threads=N   threads that parse $MFT and format the listing, 1 "
@@ -206,4 +206,4 @@ void Usage() {
 #endif
 }
 
-}  // namespace MftList
+}  // namespace NTFS_BROWSER_NAMESPACE::Example::NtfsMftList

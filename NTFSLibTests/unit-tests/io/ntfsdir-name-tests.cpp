@@ -23,6 +23,8 @@
 #include <ntfs-browser/test/support/sample-run.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
 
+namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
+
 using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithNameTree;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeTreeNode;
@@ -53,7 +55,7 @@ std::string RecursivePath(const std::string& image,
                           const std::vector<std::wstring>& names) {
   std::string path = image;
   for (const std::wstring& name : names) {
-    path = Below(path, NtfsDevice::WideToUtf8(name));
+    path = Below(path, ToolDeviceAccess::WideToUtf8(name));
   }
   return path;
 }

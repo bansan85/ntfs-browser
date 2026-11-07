@@ -239,7 +239,7 @@ Run ListVolume(NtfsVolume<S>& volume,
   REQUIRE(file != nullptr);
 
   Run run;
-  run.exit_code = ListFrom<S>(
+  run.exit_code = Example::NtfsDir::ListFrom<S>(
       volume, {.label = L"image", .path = L"", .root = L"image"}, true, file);
   run.text = ReadAndRemove(file, path);
   run.log = WithoutReadLines(Test::Support::TakeCapturedLog());

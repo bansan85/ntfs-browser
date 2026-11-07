@@ -40,7 +40,7 @@
   #include <ntfs-browser/tool/device-access/posix-device-disk-reader.h>
 #endif
 
-namespace NtfsBenchTool {
+namespace NTFS_BROWSER_NAMESPACE::Tool::Benchmark {
 
 namespace {
 
@@ -189,7 +189,7 @@ class Device {
   explicit Device(std::wstring_view target) {
     std::wstring path(target);
     if (const std::optional<wchar_t> letter =
-            NtfsDevice::DriveLetterOf(target)) {
+            Tool::DeviceAccess::DriveLetterOf(target)) {
       path = std::wstring(L"\\\\.\\") + *letter + L":";
     }
     handle_ =
@@ -316,7 +316,7 @@ class Device {
 class Device {
  public:
   explicit Device(std::wstring_view target) {
-    const std::string path = NtfsDevice::WideToUtf8(target);
+    const std::string path = Tool::DeviceAccess::WideToUtf8(target);
     descriptor_ = open(path.c_str(), O_RDONLY);
   }
 
@@ -406,7 +406,8 @@ using ZoneVolume = NTFS_BROWSER_NAMESPACE::NtfsVolume<
 
 // Opens target as a volume: a drive letter or a device path.
 std::unique_ptr<ZoneVolume> OpenZoneVolume(const std::wstring& target) {
-  const std::optional<wchar_t> letter = NtfsDevice::DriveLetterOf(target);
+  const std::optional<wchar_t> letter =
+      Tool::DeviceAccess::DriveLetterOf(target);
   return letter ? std::make_unique<ZoneVolume>(*letter)
                 : std::make_unique<ZoneVolume>(std::wstring_view(target));
 }
@@ -415,7 +416,7 @@ std::unique_ptr<ZoneVolume> OpenZoneVolume(const std::wstring& target) {
 
 // Opens target as a volume. Null when the Linux reader cannot open it.
 std::unique_ptr<ZoneVolume> OpenZoneVolume(const std::wstring& target) {
-  auto reader = std::make_unique<NtfsDevice::PosixDeviceDiskReader>();
+  auto reader = std::make_unique<Tool::DeviceAccess::PosixDeviceDiskReader>();
   if (!reader->Open(target)) {
     return nullptr;
   }
@@ -519,7 +520,7 @@ std::vector<Result> MeasureSheet(const Device& device, const Zone& zone,
 }
 
 // Writes one line of the sheet.
-void WriteResult(NtfsDevice::JsonWriter& json, const Result& result) {
+void WriteResult(Tool::DeviceAccess::JsonWriter& json, const Result& result) {
   json.BeginObject();
   json.Field("pattern", result.pattern);
   json.Field("queue_depth", static_cast<std::uint64_t>(result.queue_depth));
@@ -559,7 +560,7 @@ int DiskBenchCommand(const Arguments& args) {
   const Device device(target);
   if (!device.Ok()) {
     std::fprintf(stderr, "Cannot open %s\n",
-                 NtfsDevice::WideToUtf8(target).c_str());
+                 Tool::DeviceAccess::WideToUtf8(target).c_str());
     return 1;
   }
 
@@ -574,10 +575,10 @@ int DiskBenchCommand(const Arguments& args) {
   const std::vector<Result> results =
       MeasureSheet(device, zone, window, seconds);
 
-  NtfsDevice::JsonWriter json;
+  Tool::DeviceAccess::JsonWriter json;
   json.BeginObject();
   json.Field("format", json_format);
-  json.Field("target", NtfsDevice::WideToUtf8(target));
+  json.Field("target", Tool::DeviceAccess::WideToUtf8(target));
   json.Key("zone");
   json.BeginObject();
   json.Field("offset", zone.offset);
@@ -594,4 +595,4 @@ int DiskBenchCommand(const Arguments& args) {
   return EmitJson(args, json);
 }
 
-}  // namespace NtfsBenchTool
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::Benchmark

@@ -6,9 +6,10 @@
 #include <string>
 #include <utility>
 
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
 
-namespace NtfsCompare {
+namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare {
 
 // Writes a std::format message to stderr.
 template <class... Args>
@@ -26,7 +27,7 @@ void PrintOut(std::format_string<Args...> fmt, Args&&... args) {
 // is UTF-8 on every platform: the active code page of Windows would turn a
 // character it lacks into '?'.
 [[nodiscard]] inline std::string NativeText(const std::filesystem::path& path) {
-  return NtfsDevice::WideToUtf8(NtfsDevice::WideFromPath(path));
+  return Tool::DeviceAccess::WideToUtf8(Tool::DeviceAccess::WideFromPath(path));
 }
 
-}  // namespace NtfsCompare
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare

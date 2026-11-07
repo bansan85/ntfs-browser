@@ -29,6 +29,8 @@
 #include <ntfs-browser/tool/ntfscompare/library-walk.h>
 #include <ntfs-browser/tool/ntfscompare/volume-open.h>
 
+namespace ToolNtfsCompare = NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare;
+
 namespace NTFS_BROWSER_NAMESPACE {
 
 struct VolumeOptions;
@@ -54,16 +56,16 @@ using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithDumpTree;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftTree;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeDataRun;
 using NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap;
-using NtfsCompare::CompareAgainstReference;
-using NtfsCompare::CompareLibraryMethods;
-using NtfsCompare::comparison_volume_options;
-using NtfsCompare::Entry;
-using NtfsCompare::Finding;
-using NtfsCompare::Listing;
-using NtfsCompare::Report;
-using NtfsCompare::ResolveDirectoryRecord;
-using NtfsCompare::WalkLibraryIndex;
-using NtfsCompare::WalkMftTree;
+using ToolNtfsCompare::CompareAgainstReference;
+using ToolNtfsCompare::CompareLibraryMethods;
+using ToolNtfsCompare::comparison_volume_options;
+using ToolNtfsCompare::Entry;
+using ToolNtfsCompare::Finding;
+using ToolNtfsCompare::Listing;
+using ToolNtfsCompare::Report;
+using ToolNtfsCompare::ResolveDirectoryRecord;
+using ToolNtfsCompare::WalkLibraryIndex;
+using ToolNtfsCompare::WalkMftTree;
 
 namespace {
 
@@ -446,8 +448,8 @@ TEST_CASE("A name with an unpaired surrogate is the same in every method",
 
   const std::vector<std::wstring> expected{name};
   CHECK(Keys(library) == expected);
-  CHECK(Keys(NtfsCompare::WalkStdFilesystem(dir.Path())) == expected);
-  CHECK(Keys(NtfsCompare::WalkOsApi(dir.Path())) == expected);
+  CHECK(Keys(ToolNtfsCompare::WalkStdFilesystem(dir.Path())) == expected);
+  CHECK(Keys(ToolNtfsCompare::WalkOsApi(dir.Path())) == expected);
 }
 
 TEST_CASE("An accented name is the same in every method",
@@ -473,8 +475,8 @@ TEST_CASE("An accented name is the same in every method",
 
   const std::vector<std::wstring> expected{name};
   CHECK(Keys(WalkLibraryIndex(*volume, *docs)) == expected);
-  CHECK(Keys(NtfsCompare::WalkStdFilesystem(dir.Path())) == expected);
-  CHECK(Keys(NtfsCompare::WalkOsApi(dir.Path())) == expected);
+  CHECK(Keys(ToolNtfsCompare::WalkStdFilesystem(dir.Path())) == expected);
+  CHECK(Keys(ToolNtfsCompare::WalkOsApi(dir.Path())) == expected);
 }
 
 #endif  // !_WIN32

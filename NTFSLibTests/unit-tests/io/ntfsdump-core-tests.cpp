@@ -17,12 +17,14 @@
 
 #include "sample-dump-support.h"
 
+namespace ExampleNtfsDump = NTFS_BROWSER_NAMESPACE::Example::NtfsDump;
+
 namespace {
 
 using NoCacheVolume = NTFS_BROWSER_NAMESPACE::NtfsVolume<
     NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>;
+using ExampleNtfsDump::DumpResult;
 using NTFS_BROWSER_NAMESPACE::Tests::DumpTreeImage;
-using NtfsDump::DumpResult;
 
 // A volume over image, opened the way the dialog opens it.
 std::unique_ptr<NoCacheVolume>
@@ -40,7 +42,7 @@ DumpResult DumpPath(std::vector<BYTE> image, std::wstring_view path,
                     NTFS_BROWSER_NAMESPACE::VolumeOptions options = {}) {
   const std::unique_ptr<NoCacheVolume> volume =
       OpenVolume(std::move(image), options);
-  return NtfsDump::DumpFile(*volume, path);
+  return ExampleNtfsDump::DumpFile(*volume, path);
 }
 
 // The in-use file of the dump tree, with resident data.

@@ -35,6 +35,8 @@
 #include <ntfs-browser/tool/ntfscompare/std-filesystem-walk.h>
 #include <ntfs-browser/tool/ntfscompare/volume-open.h>
 
+namespace ToolNtfsCompare = NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare;
+
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Fs = std::filesystem;
 using NTFS_BROWSER_NAMESPACE::Mft::MftTree;
@@ -43,17 +45,17 @@ using NTFS_BROWSER_NAMESPACE::Test::FakeImage::MakeNameChain;
 using NTFS_BROWSER_NAMESPACE::Test::Support::FillerName;
 using NTFS_BROWSER_NAMESPACE::Test::Support::LongTempDir;
 using NTFS_BROWSER_NAMESPACE::Test::Support::OpenNameTreeVolume;
-using NtfsCompare::CompareAgainstReference;
-using NtfsCompare::CompareLibraryMethods;
-using NtfsCompare::comparison_volume_options;
-using NtfsCompare::Entry;
-using NtfsCompare::Listing;
-using NtfsCompare::Report;
-using NtfsCompare::ResolveDirectoryRecord;
-using NtfsCompare::WalkLibraryIndex;
-using NtfsCompare::WalkMftTree;
-using NtfsCompare::WalkOsApi;
-using NtfsCompare::WalkStdFilesystem;
+using ToolNtfsCompare::CompareAgainstReference;
+using ToolNtfsCompare::CompareLibraryMethods;
+using ToolNtfsCompare::comparison_volume_options;
+using ToolNtfsCompare::Entry;
+using ToolNtfsCompare::Listing;
+using ToolNtfsCompare::Report;
+using ToolNtfsCompare::ResolveDirectoryRecord;
+using ToolNtfsCompare::WalkLibraryIndex;
+using ToolNtfsCompare::WalkMftTree;
+using ToolNtfsCompare::WalkOsApi;
+using ToolNtfsCompare::WalkStdFilesystem;
 
 namespace {
 

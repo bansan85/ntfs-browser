@@ -15,16 +15,18 @@
 #include <ntfs-browser/tool/ntfscompare/compare-engine.h>
 #include <ntfs-browser/tool/ntfscompare/entry.h>
 
-using NtfsCompare::CompareAgainstReference;
-using NtfsCompare::CompareLibraryMethods;
-using NtfsCompare::Entry;
-using NtfsCompare::Finding;
-using NtfsCompare::Listing;
+namespace ToolNtfsCompare = NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare;
+
+using ToolNtfsCompare::CompareAgainstReference;
+using ToolNtfsCompare::CompareLibraryMethods;
+using ToolNtfsCompare::Entry;
+using ToolNtfsCompare::Finding;
+using ToolNtfsCompare::Listing;
 #ifndef _WIN32
-using NtfsCompare::OsNamesAreComparable;
+using ToolNtfsCompare::OsNamesAreComparable;
 #endif
-using NtfsCompare::PrintReport;
-using NtfsCompare::Report;
+using ToolNtfsCompare::PrintReport;
+using ToolNtfsCompare::Report;
 
 namespace {
 

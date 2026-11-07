@@ -19,6 +19,8 @@
 #include <ntfs-browser/test/support/sample-run.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
 
+namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
+
 using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftTree;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithNameTree;
@@ -50,7 +52,7 @@ std::string PathOf(const std::vector<std::wstring>& names) {
   std::string path;
   for (const std::wstring& name : names) {
     path += '\\';
-    path += NtfsDevice::WideToUtf8(name);
+    path += ToolDeviceAccess::WideToUtf8(name);
   }
   return path;
 }
@@ -235,8 +237,9 @@ TEST_CASE("NtfsMftList prints the name of a long stream",
       RunMftList({L"--deleted", L"--clusters=map", image.path.wstring()});
 
   CHECK(run.exit_code == 0);
-  CHECK_THAT(run.out, ContainsSubstring("# stream " +
-                                        NtfsDevice::WideToUtf8(name) + ":"));
+  CHECK_THAT(run.out,
+             ContainsSubstring("# stream " +
+                               ToolDeviceAccess::WideToUtf8(name) + ":"));
 }
 
 TEST_CASE("NtfsMftList lists a long name once, whatever its DOS alias",

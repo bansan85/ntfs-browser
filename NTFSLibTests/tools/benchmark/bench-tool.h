@@ -12,22 +12,22 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/bench-options.h>
 
-namespace NtfsDevice {
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 class JsonWriter;
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess
 
-namespace NtfsBenchTool {
+namespace NTFS_BROWSER_NAMESPACE::Tool::Benchmark {
 
 // The command line of one subcommand: the words that are not options, and the
 // options as written.
 struct Arguments {
   std::vector<std::wstring> words;
   // "--name=value" as {name, value}, "--name" as {name, ""}. The options of
-  // NtfsDevice::BenchOptions (--profile, --tune, --disk...) are parsed apart.
+  // DeviceAccess::BenchOptions (--profile, --tune, --disk...) are parsed apart.
   std::vector<std::pair<std::string, std::string>> options;
-  NtfsDevice::BenchOptions bench;
+  Tool::DeviceAccess::BenchOptions bench;
 
   [[nodiscard]] bool Has(std::string_view name) const;
   [[nodiscard]] std::optional<std::string> Value(std::string_view name) const;
@@ -58,7 +58,7 @@ struct Arguments {
 
 // Writes json to the file --json (or --out) names, or to stdout without it.
 // Returns the exit code.
-int EmitJson(const Arguments& args, NtfsDevice::JsonWriter& json);
+int EmitJson(const Arguments& args, Tool::DeviceAccess::JsonWriter& json);
 
 // Empties the system file cache: flushes the modified pages, then drops the
 // standby list on Windows, and the page cache on Linux. Needs administrator
@@ -75,4 +75,4 @@ int PurgeCommand(const Arguments& args);
 int WakeCommand(const Arguments& args);
 int SampleCommand(const Arguments& args);
 
-}  // namespace NtfsBenchTool
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::Benchmark

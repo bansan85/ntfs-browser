@@ -10,6 +10,8 @@
 #include "ntfsattr.h"
 #include "ntfsattrDlg.h"
 
+namespace ExampleNtfsAttr = NTFS_BROWSER_NAMESPACE::Example::NtfsAttr;
+
 using namespace NTFS_BROWSER_NAMESPACE;
 
 #ifdef _DEBUG
@@ -138,7 +140,7 @@ void CNtfsattrDlg::OnOK() {
 
   UpdateData(TRUE);
   m_filename =
-      NtfsAttrDump::TargetPath(fd.GetPathName().GetString(), m_dir == TRUE)
+      ExampleNtfsAttr::TargetPath(fd.GetPathName().GetString(), m_dir == TRUE)
           .c_str();
   UpdateData(FALSE);
 
@@ -148,8 +150,8 @@ void CNtfsattrDlg::OnOK() {
   NTFS_BROWSER_NAMESPACE::NtfsVolume<
       NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>
       volume(m_filename.GetAt(0));
-  const NtfsAttrDump::DumpResult result =
-      NtfsAttrDump::DumpAttributes(volume, m_filename.GetString());
+  const ExampleNtfsAttr::DumpResult result =
+      ExampleNtfsAttr::DumpAttributes(volume, m_filename.GetString());
   if (!result.message.empty()) {
     MessageBox(result.message.c_str());
     return;

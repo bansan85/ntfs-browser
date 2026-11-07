@@ -9,7 +9,7 @@
 
 #include "time-convert.h"
 
-namespace NtfsCompare {
+namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare {
 
 namespace {
 
@@ -138,4 +138,4 @@ Listing WalkMftTree(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
   return result;
 }
 
-}  // namespace NtfsCompare
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare

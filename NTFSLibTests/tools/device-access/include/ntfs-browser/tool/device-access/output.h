@@ -9,9 +9,10 @@
 #include <thread>
 #include <utility>
 
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/line-buffer.h>
 
-namespace NtfsDevice {
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 // Bytes of a listing gathered before stdout gets them, unless the tuning says
 // otherwise (Tuning::OutputTuning). 1 MiB turns a listing of millions of lines
@@ -110,4 +111,4 @@ class Output : public LineBuffer {
   std::thread writer_;
 };
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess

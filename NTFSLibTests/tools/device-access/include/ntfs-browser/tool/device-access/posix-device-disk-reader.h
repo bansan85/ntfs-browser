@@ -11,7 +11,7 @@
   #include <ntfs-browser/disk-reader.h>
   #include <ntfs-browser/namespace.h>
 
-namespace NtfsDevice {
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 // Production IDiskReader for Linux: opens a raw block device node (eg.
 // "/dev/sdb1") or an image file read-only and reads it with pread(). A
@@ -62,6 +62,6 @@ class PosixDeviceDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   int last_error_ = 0;
 };
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess
 
 #endif  // !_WIN32

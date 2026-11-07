@@ -4,7 +4,9 @@
 #include <string>
 #include <string_view>
 
-namespace NtfsDevice {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 // Who a disk is, as its firmware says. The profile keys a disk by it.
 struct DiskIdentity {
@@ -25,4 +27,4 @@ struct DiskIdentity {
 [[nodiscard]] std::optional<DiskIdentity>
     IdentifyDisk(std::wstring_view target);
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess

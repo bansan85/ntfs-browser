@@ -17,7 +17,7 @@
 
 using namespace NTFS_BROWSER_NAMESPACE;
 
-namespace MftList {
+namespace NTFS_BROWSER_NAMESPACE::Example::NtfsMftList {
 
 namespace {
 
@@ -134,7 +134,7 @@ void DisplayPaths::Display(const Entry& entry, std::optional<size_t> name_index,
       out += '\\';
       // route.index was checked against entry.names by RouteOf().
       // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-      NtfsDevice::AppendAsUtf8(out, entry.names[route.index].name);
+      Tool::DeviceAccess::AppendAsUtf8(out, entry.names[route.index].name);
       return;
     }
     case Route::Kind::Lost: {
@@ -147,14 +147,14 @@ void DisplayPaths::Display(const Entry& entry, std::optional<size_t> name_index,
         return;
       }
       AppendLostPrefix(out, name.parent_record);
-      NtfsDevice::AppendAsUtf8(out, name.name);
+      Tool::DeviceAccess::AppendAsUtf8(out, name.name);
       return;
     }
     case Route::Kind::UnderRoot:
       out += '\\';
       // route.index was checked against entry.names by RouteOf().
       // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-      NtfsDevice::AppendAsUtf8(out, entry.names[route.index].name);
+      Tool::DeviceAccess::AppendAsUtf8(out, entry.names[route.index].name);
       return;
     case Route::Kind::Walk:
       break;
@@ -171,7 +171,7 @@ void DisplayPaths::Display(const Entry& entry, std::optional<size_t> name_index,
     return;
   }
   AppendLostPrefix(out, lost);
-  NtfsDevice::AppendAsUtf8(out, path);
+  Tool::DeviceAccess::AppendAsUtf8(out, path);
 }
 
 // Decides how the path of entry through name_index, or through its primary
@@ -235,7 +235,7 @@ void DisplayPaths::Build(const Entry& directory, Directory& out) const {
     const std::scoped_lock lock{tree_mutex_};
     path = tree_.GetPath(directory.record, &out.lost);
   }
-  NtfsDevice::AppendAsUtf8(out.path, path);
+  Tool::DeviceAccess::AppendAsUtf8(out.path, path);
 }
 
 // Builds and keeps the path of the directory route needs, if any.
@@ -340,7 +340,8 @@ void DisplayPaths::StoreChain(const ChainEnd& end) {
     }
     // The chain holds entries that PrimaryName() gave a name.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    NtfsDevice::AppendAsUtf8(path.path, item->names[*PrimaryName(*item)].name);
+    Tool::DeviceAccess::AppendAsUtf8(path.path,
+                                     item->names[*PrimaryName(*item)].name);
     Store(*item, Directory{path});
   }
 }
@@ -389,4 +390,4 @@ const DisplayPaths::Directory&
   return scratch.unkept;
 }
 
-}  // namespace MftList
+}  // namespace NTFS_BROWSER_NAMESPACE::Example::NtfsMftList

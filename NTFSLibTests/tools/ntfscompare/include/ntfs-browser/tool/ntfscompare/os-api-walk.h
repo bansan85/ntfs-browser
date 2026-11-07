@@ -2,9 +2,10 @@
 
 #include <filesystem>
 
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/ntfscompare/entry.h>
 
-namespace NtfsCompare {
+namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare {
 
 // Recursively lists root via the platform's own native directory-enumeration
 // API: FindFirstFileW/FindNextFileW plus GetCompressedFileSizeW on Windows,
@@ -16,4 +17,4 @@ namespace NtfsCompare {
 // Human-readable name of the OS API this build uses, for the report.
 [[nodiscard]] const char* OsApiMethodName() noexcept;
 
-}  // namespace NtfsCompare
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare

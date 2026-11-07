@@ -3,11 +3,14 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/driver-names.h>
 
-using NtfsDevice::DecodeDriverName;
-using NtfsDevice::IsDriverMappingKnown;
-using NtfsDevice::NeedsDriverMapping;
+namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
+
+using ToolDeviceAccess::DecodeDriverName;
+using ToolDeviceAccess::IsDriverMappingKnown;
+using ToolDeviceAccess::NeedsDriverMapping;
 
 namespace {
 

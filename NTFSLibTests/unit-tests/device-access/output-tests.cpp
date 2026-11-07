@@ -32,8 +32,10 @@
 #include <ntfs-browser/tool/device-access/line-buffer.h>
 #include <ntfs-browser/tool/device-access/output.h>
 
+namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
+
 namespace TestDeviceAccess = NTFS_BROWSER_NAMESPACE::Test::DeviceAccess;
-using NtfsDevice::Output;
+using ToolDeviceAccess::Output;
 
 namespace {
 
@@ -168,7 +170,7 @@ TEST_CASE("Output gives the same bytes whatever the size of its chunks",
   const std::string whole = Listing(path, 0);
   REQUIRE_FALSE(whole.empty());
   CHECK(whole.starts_with(std::string("     0 name     #0") +
-                          std::string(NtfsDevice::line_end)));
+                          std::string(ToolDeviceAccess::line_end)));
 
   for (const size_t flush_bytes :
        {size_t{1}, size_t{7}, size_t{100}, size_t{4096}, size_t{100000},
@@ -284,10 +286,11 @@ TEST_CASE("Output flushes what is left when it ends, in any chunk size",
   const std::string text = Listing(dir.Path() / "out.txt", flush_bytes);
 
   // 300 lines of the listing, the last one ended.
-  CHECK(text.ends_with(NtfsDevice::line_end));
+  CHECK(text.ends_with(ToolDeviceAccess::line_end));
   size_t lines = 0;
-  for (size_t at = text.find(NtfsDevice::line_end); at != std::string::npos;
-       at = text.find(NtfsDevice::line_end, at + 1)) {
+  for (size_t at = text.find(ToolDeviceAccess::line_end);
+       at != std::string::npos;
+       at = text.find(ToolDeviceAccess::line_end, at + 1)) {
     lines++;
   }
   CHECK(lines == 600);
@@ -296,7 +299,7 @@ TEST_CASE("Output flushes what is left when it ends, in any chunk size",
 TEST_CASE("A LineBuffer holds the text that an Output writes",
           "[device-access][output]") {
   const TestDeviceAccess::TempDir dir;
-  NtfsDevice::LineBuffer buffer;
+  ToolDeviceAccess::LineBuffer buffer;
 
   FillListing(buffer);
 
@@ -305,7 +308,7 @@ TEST_CASE("A LineBuffer holds the text that an Output writes",
 
 TEST_CASE("A LineBuffer forgets its text on Clear and builds on",
           "[device-access][output]") {
-  NtfsDevice::LineBuffer buffer;
+  ToolDeviceAccess::LineBuffer buffer;
   FillListing(buffer, 0, 10);
   const std::string first(buffer.Text());
   REQUIRE_FALSE(first.empty());
@@ -330,7 +333,7 @@ TEST_CASE("Output writes text built apart as it writes its own",
     Output out(flush_bytes);
     // Blocks of 40 lines, built apart.
     for (int first = 0; first < 300; first += 40) {
-      NtfsDevice::LineBuffer block;
+      ToolDeviceAccess::LineBuffer block;
       FillListing(block, first, (std::min)(first + 40, 300));
       out.AppendBlock(block.Text());
     }

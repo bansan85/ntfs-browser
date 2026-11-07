@@ -10,7 +10,7 @@
 
   #include <ntfs-browser/tool/device-access/host-media.h>
 
-namespace NtfsDevice {
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 namespace {
 
@@ -60,6 +60,6 @@ void SetSysfsRootForTests(std::filesystem::path root) {
   OverriddenRoot() = std::move(root);
 }
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess
 
 #endif  // !_WIN32

@@ -41,7 +41,7 @@
 
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 
-namespace NtfsBenchTool {
+namespace NTFS_BROWSER_NAMESPACE::Tool::Benchmark {
 
 namespace {
 
@@ -94,10 +94,12 @@ bool EnablePrivilege(const wchar_t* name) {
 // The \\.\X: path of a drive target, the target itself when it names a device,
 // or empty.
 std::wstring VolumePath(std::wstring_view target) {
-  if (NtfsDevice::ClassifyTarget(target) == NtfsDevice::TargetKind::Device) {
+  if (Tool::DeviceAccess::ClassifyTarget(target) ==
+      Tool::DeviceAccess::TargetKind::Device) {
     return std::wstring(target);
   }
-  if (const std::optional<wchar_t> letter = NtfsDevice::DriveLetterOf(target)) {
+  if (const std::optional<wchar_t> letter =
+          Tool::DeviceAccess::DriveLetterOf(target)) {
     return std::wstring(L"\\\\.\\") + *letter + L":";
   }
   return {};
@@ -110,19 +112,19 @@ std::wstring VolumePath(std::wstring_view target) {
 // exist. Returns 0 for a drive or a device. A path is never taken for the drive
 // its text starts with.
 int RefuseNonDisk(std::string_view command, std::wstring_view target) {
-  const std::string text = NtfsDevice::WideToUtf8(target);
-  switch (NtfsDevice::ClassifyTarget(target)) {
-    case NtfsDevice::TargetKind::Drive:
-    case NtfsDevice::TargetKind::Device:
+  const std::string text = Tool::DeviceAccess::WideToUtf8(target);
+  switch (Tool::DeviceAccess::ClassifyTarget(target)) {
+    case Tool::DeviceAccess::TargetKind::Drive:
+    case Tool::DeviceAccess::TargetKind::Device:
       return 0;
-    case NtfsDevice::TargetKind::File:
+    case Tool::DeviceAccess::TargetKind::File:
       std::fprintf(stderr,
                    "%.*s needs a drive or a device: %s is a file, which "
                    "names no disk\n",
                    static_cast<int>(command.size()), command.data(),
                    text.c_str());
       return 2;
-    case NtfsDevice::TargetKind::Missing:
+    case Tool::DeviceAccess::TargetKind::Missing:
       break;
   }
   std::fprintf(stderr, "Cannot open %s: no such file or device\n",
@@ -202,7 +204,7 @@ int WakeCommand(const Arguments& args) {
       OPEN_EXISTING, FILE_FLAG_NO_BUFFERING, nullptr);
   if (handle == INVALID_HANDLE_VALUE) {
     std::fprintf(stderr, "Cannot open %s\n",
-                 NtfsDevice::WideToUtf8(path).c_str());
+                 Tool::DeviceAccess::WideToUtf8(path).c_str());
     return 1;
   }
   GET_LENGTH_INFORMATION length{};
@@ -227,7 +229,7 @@ int WakeCommand(const Arguments& args) {
   CloseHandle(handle);
   return ok ? 0 : 1;
 #else
-  const std::string path = NtfsDevice::WideToUtf8(target);
+  const std::string path = Tool::DeviceAccess::WideToUtf8(target);
   const int descriptor = open(path.c_str(), O_RDONLY);
   if (descriptor < 0) {
     std::fprintf(stderr, "Cannot open %s\n", path.c_str());
@@ -253,19 +255,20 @@ int DiskIdCommand(const Arguments& args) {
   // A file names no disk, and the disk that holds it is not the one meant:
   // the script gives the drive or the device it reads. The answer is "none",
   // with the reason, so that an image still gets the "*" section of a profile.
-  const NtfsDevice::TargetKind kind = NtfsDevice::ClassifyTarget(target);
-  if (kind == NtfsDevice::TargetKind::Missing) {
+  const Tool::DeviceAccess::TargetKind kind =
+      Tool::DeviceAccess::ClassifyTarget(target);
+  if (kind == Tool::DeviceAccess::TargetKind::Missing) {
     return RefuseNonDisk("disk-id", target);
   }
-  std::optional<NtfsDevice::DiskIdentity> identity;
-  if (kind != NtfsDevice::TargetKind::File) {
-    identity = NtfsDevice::IdentifyDisk(target);
+  std::optional<Tool::DeviceAccess::DiskIdentity> identity;
+  if (kind != Tool::DeviceAccess::TargetKind::File) {
+    identity = Tool::DeviceAccess::IdentifyDisk(target);
   }
-  NtfsDevice::JsonWriter json;
+  Tool::DeviceAccess::JsonWriter json;
   json.BeginObject();
   json.Field("format", json_format);
   json.Field("found", identity.has_value());
-  if (kind == NtfsDevice::TargetKind::File) {
+  if (kind == Tool::DeviceAccess::TargetKind::File) {
     json.Field("reason", std::string_view("a file names no disk: give the "
                                           "drive or the device that holds it"));
   }
@@ -286,7 +289,7 @@ int DiskIdCommand(const Arguments& args) {
 }
 
 int KnobsCommand(const Arguments& args) {
-  NtfsDevice::JsonWriter json;
+  Tool::DeviceAccess::JsonWriter json;
   json.BeginObject();
   json.Field("format", json_format);
   json.Key("knobs");
@@ -361,7 +364,7 @@ class DiskCounters {
       }
       path = L"\\\\.\\PhysicalDrive" + std::to_wstring(number.DeviceNumber);
     }
-    name_ = NtfsDevice::WideToUtf8(path);
+    name_ = Tool::DeviceAccess::WideToUtf8(path);
     handle_ = CreateFileW(path.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
                           nullptr, OPEN_EXISTING, 0, nullptr);
   }
@@ -423,7 +426,7 @@ class DiskCounters {
   explicit DiskCounters(std::wstring_view target) {
     namespace fs = std::filesystem;
     std::error_code error;
-    const fs::path device(NtfsDevice::WideToUtf8(target));
+    const fs::path device(Tool::DeviceAccess::WideToUtf8(target));
     if (!fs::is_block_file(device, error)) {
       return;
     }
@@ -582,7 +585,8 @@ std::vector<DiskSample> CollectSamples(const DiskCounters& counters,
 }
 
 // Writes one sample.
-void WriteSample(NtfsDevice::JsonWriter& json, const DiskSample& sample) {
+void WriteSample(Tool::DeviceAccess::JsonWriter& json,
+                 const DiskSample& sample) {
   json.BeginObject();
   json.Field("t_unix_ns", sample.t_unix_ns);
   json.Field("bytes_read", sample.bytes_read);
@@ -624,7 +628,7 @@ int SampleCommand(const Arguments& args) {
   const DiskCounters counters(args.words.front());
   if (!counters.Ok()) {
     std::fprintf(stderr, "Cannot read the counters of the disk behind %s\n",
-                 NtfsDevice::WideToUtf8(args.words.front()).c_str());
+                 Tool::DeviceAccess::WideToUtf8(args.words.front()).c_str());
     return 1;
   }
 
@@ -634,7 +638,7 @@ int SampleCommand(const Arguments& args) {
                                 .interval_ms = interval_ms,
                                 .until_file = until_file});
 
-  NtfsDevice::JsonWriter json;
+  Tool::DeviceAccess::JsonWriter json;
   json.BeginObject();
   json.Field("format", json_format);
   json.Field("source", DiskCounters::Source());
@@ -650,4 +654,4 @@ int SampleCommand(const Arguments& args) {
   return EmitJson(args, json);
 }
 
-}  // namespace NtfsBenchTool
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::Benchmark

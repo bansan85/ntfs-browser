@@ -15,7 +15,7 @@
 
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;
 
-namespace NtfsDevice {
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 bool IsLogOption(std::wstring_view arg) {
 #ifdef _WIN32
@@ -75,4 +75,4 @@ void ReportLogFileError(const Log::Config& config) {
   // NOLINTEND(cppcoreguidelines-pro-type-vararg,cert-err33-c)
 }
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess

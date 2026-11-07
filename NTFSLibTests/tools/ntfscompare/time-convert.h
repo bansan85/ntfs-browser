@@ -2,7 +2,9 @@
 
 #include <ntfs-browser/win-types.h>
 
-namespace NtfsCompare {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare {
 
 // 100 ns ticks per second: a Win32 FILETIME's own unit, and this tool's
 // common currency for every timestamp, whatever API it came from.
@@ -50,4 +52,4 @@ inline constexpr ULONGLONG nanos_per_tick = 100;
          static_cast<ULONGLONG>(nanoseconds) / nanos_per_tick;
 }
 
-}  // namespace NtfsCompare
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare

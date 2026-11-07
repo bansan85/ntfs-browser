@@ -11,6 +11,7 @@
 #include <sys/types.h>
 
 #include <ntfs-browser/io/extended-path.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/sparse-capture.h>
 
 #ifdef _WIN32
@@ -22,7 +23,7 @@
   #include <unistd.h>
 #endif
 
-namespace NtfsDevice {
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 namespace {
 
@@ -166,4 +167,4 @@ void SparseCapture::Write(std::uint64_t offset, std::span<const BYTE> bytes) {
 
 bool SparseCapture::SetSize(std::uint64_t bytes) { return impl_->Grow(bytes); }
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess

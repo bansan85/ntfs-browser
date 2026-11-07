@@ -29,7 +29,7 @@
 
 #include "bench-tool.h"
 
-namespace NtfsBenchTool {
+namespace NTFS_BROWSER_NAMESPACE::Tool::Benchmark {
 
 namespace {
 
@@ -108,7 +108,7 @@ void SilenceLibraryLog() {
 }
 
 // Writes the counters of the simulated disk, as fields of the open object.
-void WriteThrottleStats(NtfsDevice::JsonWriter& json,
+void WriteThrottleStats(Tool::DeviceAccess::JsonWriter& json,
                         const TestDiskReaders::ThrottleStats& stats) {
   json.Field("disk_reads", stats.disk_reads);
   json.Field("disk_bytes", stats.disk_bytes);
@@ -176,7 +176,7 @@ int SimulateCommand(const Arguments& args) {
   const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(volume, scan);
 
   const TestDiskReaders::ThrottleStats& stats = disk->Stats();
-  NtfsDevice::JsonWriter json;
+  Tool::DeviceAccess::JsonWriter json;
   json.BeginObject();
   json.Field("format", json_format);
   json.Field("model", kind);
@@ -188,4 +188,4 @@ int SimulateCommand(const Arguments& args) {
   return EmitJson(args, json);
 }
 
-}  // namespace NtfsBenchTool
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::Benchmark

@@ -32,18 +32,11 @@
 #include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
 
-namespace NTFS_BROWSER_NAMESPACE {
-
-template <Cache::Strategy S>
-class NtfsVolume;
-
-}  // namespace NTFS_BROWSER_NAMESPACE
-
 #ifndef _WIN32
   #include <ntfs-browser/tool/device-access/posix-device-disk-reader.h>
 #endif
 
-using namespace NTFS_BROWSER_NAMESPACE;
+namespace NTFS_BROWSER_NAMESPACE::Example::NtfsDir {
 
 void Usage() {
   printf("Invalid parameter\n");
@@ -129,12 +122,12 @@ constexpr unsigned dword_bits = 32;
 
 // Prints message and a newline to stdout, before the listing starts.
 void Say(const std::wstring& message) {
-  NtfsDevice::WriteText(stdout, message);
+  Tool::DeviceAccess::WriteText(stdout, message);
   printf("\n");
 }
 
 // Prints message and a newline in the listing.
-void Report(NtfsDevice::Output& out, const std::wstring& message) {
+void Report(Tool::DeviceAccess::Output& out, const std::wstring& message) {
   out.AppendText(message);
   out.EndLine();
 }
@@ -157,7 +150,8 @@ bool IsListed(const IndexEntryView& ie) {
 
 // The modification time of ie in the host's local zone, or nothing for a
 // time the platform cannot show.
-std::optional<NtfsDevice::LocalTime> LocalWriteTime(const IndexEntryView& ie) {
+std::optional<Tool::DeviceAccess::LocalTime>
+    LocalWriteTime(const IndexEntryView& ie) {
   FILETIME ft;
   ie.GetFileTime(&ft, nullptr, nullptr);
 #ifdef _WIN32
@@ -166,14 +160,14 @@ std::optional<NtfsDevice::LocalTime> LocalWriteTime(const IndexEntryView& ie) {
   if (FileTimeToSystemTime(&ft, &st) != TRUE) {
     return std::nullopt;
   }
-  return NtfsDevice::LocalTime{.year = st.wYear,
-                               .month = st.wMonth,
-                               .day = st.wDay,
-                               .hour = st.wHour,
-                               .minute = st.wMinute};
+  return Tool::DeviceAccess::LocalTime{.year = st.wYear,
+                                       .month = st.wMonth,
+                                       .day = st.wDay,
+                                       .hour = st.wHour,
+                                       .minute = st.wMinute};
 #else
   // The library leaves the time in UTC off Windows.
-  return NtfsDevice::UtcTicksToLocalTime(
+  return Tool::DeviceAccess::UtcTicksToLocalTime(
       (static_cast<ULONGLONG>(ft.dwHighDateTime) << dword_bits) |
       ft.dwLowDateTime);
 #endif
@@ -187,8 +181,8 @@ using Marker = char;
 // Prints the modification time, the size or <DIR>, the attribute flags and
 // the name of one entry. time is the entry time in local time. marker is
 // null when the listing has no marker column.
-void PrintLine(NtfsDevice::Output& out, const IndexEntryView& ie,
-               const NtfsDevice::LocalTime& time,
+void PrintLine(Tool::DeviceAccess::Output& out, const IndexEntryView& ie,
+               const Tool::DeviceAccess::LocalTime& time,
                std::optional<Marker> marker) {
   out.AppendNumber(time.year, 0);
   out.Append("-");
@@ -249,7 +243,7 @@ struct DirectoryEntries {
   };
 
   // Where the listing goes.
-  NtfsDevice::Output* out = nullptr;
+  Tool::DeviceAccess::Output* out = nullptr;
   // Whether the listing has a marker column: only a volume that shows deleted
   // items does.
   bool marking = false;
@@ -270,7 +264,8 @@ void VisitEntry(const IndexEntryView& ie, Io::RecordStanding standing,
   }
   auto& entries = *static_cast<DirectoryEntries<S>*>(context);
 
-  if (const std::optional<NtfsDevice::LocalTime> time = LocalWriteTime(ie)) {
+  if (const std::optional<Tool::DeviceAccess::LocalTime> time =
+          LocalWriteTime(ie)) {
     PrintLine(*entries.out, ie, *time,
               entries.marking ? std::optional<Marker>(MarkerOf(standing))
                               : std::nullopt);
@@ -331,7 +326,7 @@ struct TreeWalk {
 // Makes fr the next pending directory that is new and parses, and reports the
 // ones that are not. Returns false when none is left.
 template <Cache::Strategy S>
-bool EnterNextDirectory(NtfsDevice::Output& out, Io::FileRecord<S>& fr,
+bool EnterNextDirectory(Tool::DeviceAccess::Output& out, Io::FileRecord<S>& fr,
                         Io::DirectoryReadAhead<S>& ahead, TreeWalk& walk) {
   while (!walk.pending.empty()) {
     Pending next = std::move(walk.pending.back());
@@ -369,8 +364,8 @@ bool EnterNextDirectory(NtfsDevice::Output& out, Io::FileRecord<S>& fr,
 // listing, and fr takes them from there: the lines, their order and the reads
 // that are not held stay as they are.
 template <Cache::Strategy S>
-Total ListTree(NtfsDevice::Output& out, Io::FileRecord<S>& fr, bool marking,
-               const std::wstring& root) {
+Total ListTree(Tool::DeviceAccess::Output& out, Io::FileRecord<S>& fr,
+               bool marking, const std::wstring& root) {
   Total tree;
   TreeWalk walk;
   walk.path = root;
@@ -486,7 +481,8 @@ int ListFrom(NtfsVolume<S>& volume, const ListTarget& target, bool recursive,
   // Without --deleted every entry names a file that exists: no marker column.
   const bool marking = volume.GetOptions().include_deleted;
 
-  NtfsDevice::Output out(volume.GetOptions().tuning.output.flush_bytes, stream);
+  Tool::DeviceAccess::Output out(volume.GetOptions().tuning.output.flush_bytes,
+                                 stream);
   Total total;
   if (recursive) {
     total = ListTree(out, fr, marking, target.root);
@@ -520,8 +516,8 @@ std::unique_ptr<NtfsVolume<S>>
   // Win32DiskReader opens a plain file the same way as a device.
   return std::make_unique<NtfsVolume<S>>(std::wstring_view(label), options);
 #else
-  auto reader = std::make_unique<NtfsDevice::PosixDeviceDiskReader>();
-  if (!reader->Open(NtfsDevice::WideFromPath(device))) {
+  auto reader = std::make_unique<Tool::DeviceAccess::PosixDeviceDiskReader>();
+  if (!reader->Open(Tool::DeviceAccess::WideFromPath(device))) {
     const int error = reader->LastError();
     if (error == EACCES || error == EPERM) {
       Say(L"Cannot read device " + label + L": read access is needed");
@@ -536,9 +532,9 @@ std::unique_ptr<NtfsVolume<S>>
 
 // Lists the directory of an image file or device. Returns the exit code.
 template <Cache::Strategy S>
-int ListDevice(const NtfsDevice::DeviceTarget& target, bool recursive,
+int ListDevice(const Tool::DeviceAccess::DeviceTarget& target, bool recursive,
                const VolumeOptions& options) {
-  const std::wstring label = NtfsDevice::WideFromPath(target.device);
+  const std::wstring label = Tool::DeviceAccess::WideFromPath(target.device);
   const std::unique_ptr<NtfsVolume<S>> volume =
       OpenDeviceVolume<S>(target.device, label, options);
   if (!volume) {
@@ -584,8 +580,8 @@ int ListDrive(wchar_t* path, bool recursive, const VolumeOptions& options) {
 // Lists the directory that path names. Returns the exit code.
 template <Cache::Strategy S>
 int ListDirectory(wchar_t* path, bool recursive, const VolumeOptions& options) {
-  if (const std::optional<NtfsDevice::DeviceTarget> target =
-          NtfsDevice::SplitDeviceTarget(path)) {
+  if (const std::optional<Tool::DeviceAccess::DeviceTarget> target =
+          Tool::DeviceAccess::SplitDeviceTarget(path)) {
     return ListDevice<S>(*target, recursive, options);
   }
 
@@ -624,19 +620,19 @@ bool ApplyVolumeOption(std::wstring_view arg, VolumeOptions& options) {
 std::optional<Arguments> ParseArguments(int argc, wchar_t* argv[]) {
   Arguments args;
   for (int i = 1; i < argc; i++) {
-    args.command_line.push_back(NtfsDevice::WideToUtf8(argv[i]));
+    args.command_line.push_back(Tool::DeviceAccess::WideToUtf8(argv[i]));
     std::string error;
-    const NtfsDevice::OptionResult bench =
-        NtfsDevice::ParseBenchOption(argv[i], args.bench, error);
-    if (bench == NtfsDevice::OptionResult::Malformed) {
+    const Tool::DeviceAccess::OptionResult bench =
+        Tool::DeviceAccess::ParseBenchOption(argv[i], args.bench, error);
+    if (bench == Tool::DeviceAccess::OptionResult::Malformed) {
       fprintf(stderr, "%s\n", error.c_str());
       return std::nullopt;
     }
-    if (bench == NtfsDevice::OptionResult::Accepted) {
+    if (bench == Tool::DeviceAccess::OptionResult::Accepted) {
       continue;
     }
-    if (NtfsDevice::IsLogOption(argv[i])) {
-      if (!NtfsDevice::ParseLogOption(argv[i], args.log_config)) {
+    if (Tool::DeviceAccess::IsLogOption(argv[i])) {
+      if (!Tool::DeviceAccess::ParseLogOption(argv[i], args.log_config)) {
         return std::nullopt;
       }
     } else if (IsRecursiveOption(argv[i])) {
@@ -665,16 +661,16 @@ int RunNtfsDir(int argc, wchar_t* argv[]) {
   }
 
   // Names print as UTF-8: a console shows them right with its code page set.
-  const NtfsDevice::Utf8ConsoleOutput console;
+  const Tool::DeviceAccess::Utf8ConsoleOutput console;
   if (!Log::Configure(args->log_config)) {
-    NtfsDevice::ReportLogFileError(args->log_config);
+    Tool::DeviceAccess::ReportLogFileError(args->log_config);
   }
 
   // The profile and --tune settings, before the volume opens: the reader takes
   // its caps then.
   VolumeOptions volume_options = args->volume_options;
-  NtfsDevice::AppliedTuning applied;
-  if (const std::string failure = NtfsDevice::ApplyTuning(
+  Tool::DeviceAccess::AppliedTuning applied;
+  if (const std::string failure = Tool::DeviceAccess::ApplyTuning(
           args->bench, args->path, volume_options, applied);
       !failure.empty()) {
     fprintf(stderr, "%s\n", failure.c_str());
@@ -684,9 +680,9 @@ int RunNtfsDir(int argc, wchar_t* argv[]) {
     fprintf(stderr,
             "The profile has no section for this disk: defaults used\n");
   }
-  NtfsDevice::BenchSession session(
+  Tool::DeviceAccess::BenchSession session(
       {S == Cache::Strategy::FullCache ? "NtfsDir" : "NtfsDir2",
-       args->command_line, NtfsDevice::WideToUtf8(args->path)},
+       args->command_line, Tool::DeviceAccess::WideToUtf8(args->path)},
       args->bench, applied, volume_options);
 
   return ListDirectory<S>(args->path, args->recursive, volume_options);
@@ -694,3 +690,5 @@ int RunNtfsDir(int argc, wchar_t* argv[]) {
 
 template int RunNtfsDir<Cache::Strategy::FullCache>(int argc, wchar_t* argv[]);
 template int RunNtfsDir<Cache::Strategy::NoCache>(int argc, wchar_t* argv[]);
+
+}  // namespace NTFS_BROWSER_NAMESPACE::Example::NtfsDir

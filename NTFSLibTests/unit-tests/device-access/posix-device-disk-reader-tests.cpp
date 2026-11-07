@@ -17,9 +17,11 @@
 #include <ntfs-browser/tool/device-access/posix-device-disk-reader.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
 
+namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
+
 using NTFS_BROWSER_NAMESPACE::Test::DeviceAccess::TempDir;
-using NtfsDevice::PosixDeviceDiskReader;
-using NtfsDevice::WideFromPath;
+using ToolDeviceAccess::PosixDeviceDiskReader;
+using ToolDeviceAccess::WideFromPath;
 
 namespace {
 

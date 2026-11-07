@@ -14,7 +14,7 @@ namespace NTFS_BROWSER_NAMESPACE::Utf {
 // form (WTF-8: U+D800 is ED A0 80), which NTFS stores as it is, so two names
 // that differ only by one stay distinct. That is not well-formed UTF-8. A
 // value above U+10FFFF becomes U+FFFD. The tools' own conversion
-// (NtfsDevice::WideToUtf8) follows the same rule.
+// (Tool::DeviceAccess::WideToUtf8) follows the same rule.
 // wchar_t is 16 bits on Windows and 32 bits elsewhere, and one decoder
 // handles both widths: a unit above 0xFFFF can only be a whole code point,
 // never half of a surrogate pair.

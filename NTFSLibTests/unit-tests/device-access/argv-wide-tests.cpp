@@ -3,10 +3,13 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/argv-wide.h>
 
-using NtfsDevice::ArgumentPointers;
-using NtfsDevice::ArgumentsAsWide;
+namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
+
+using ToolDeviceAccess::ArgumentPointers;
+using ToolDeviceAccess::ArgumentsAsWide;
 
 TEST_CASE("ArgumentsAsWide keeps the order and decodes UTF-8",
           "[device-access][argv-wide]") {

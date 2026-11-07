@@ -17,7 +17,7 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 
 #ifdef _WIN32
 
-namespace NtfsCompare {
+namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare {
 
 namespace {
 
@@ -74,7 +74,7 @@ std::optional<VolumeHandles>
   return handles;
 }
 
-}  // namespace NtfsCompare
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare
 
 #else  // POSIX
 
@@ -88,7 +88,7 @@ std::optional<VolumeHandles>
   #include <ntfs-browser/tool/device-access/posix-device-disk-reader.h>
   #include <ntfs-browser/tool/device-access/text-convert.h>
 
-namespace NtfsCompare {
+namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare {
 
 namespace {
 
@@ -148,8 +148,8 @@ std::optional<MountInfo> FindMount(const std::filesystem::path& target) {
 
 // The two readers over device, one for each cache strategy's volume.
 struct ReaderPair {
-  std::unique_ptr<NtfsDevice::PosixDeviceDiskReader> full_cache;
-  std::unique_ptr<NtfsDevice::PosixDeviceDiskReader> no_cache;
+  std::unique_ptr<Tool::DeviceAccess::PosixDeviceDiskReader> full_cache;
+  std::unique_ptr<Tool::DeviceAccess::PosixDeviceDiskReader> no_cache;
 };
 
 // Says on stderr why device could not be opened, telling a missing read
@@ -164,10 +164,10 @@ void ReportOpenFailure(const std::filesystem::path& device, int error) {
 }
 
 // Opens device once. Returns null after saying why on stderr when it cannot.
-std::unique_ptr<NtfsDevice::PosixDeviceDiskReader>
+std::unique_ptr<Tool::DeviceAccess::PosixDeviceDiskReader>
     OpenReader(const std::filesystem::path& device) {
-  auto reader = std::make_unique<NtfsDevice::PosixDeviceDiskReader>();
-  if (!reader->Open(NtfsDevice::WideFromPath(device))) {
+  auto reader = std::make_unique<Tool::DeviceAccess::PosixDeviceDiskReader>();
+  if (!reader->Open(Tool::DeviceAccess::WideFromPath(device))) {
     ReportOpenFailure(device, reader->LastError());
     return nullptr;
   }
@@ -229,7 +229,7 @@ std::optional<MountEntry> FindMountOfDevice(const std::filesystem::path& device,
 }
 
 std::optional<VolumeHandles>
-    OpenDeviceVolume(const NtfsDevice::DeviceTarget& target) {
+    OpenDeviceVolume(const Tool::DeviceAccess::DeviceTarget& target) {
   std::optional<ReaderPair> readers = OpenReaders(target.device);
   if (!readers) {
     return std::nullopt;
@@ -285,13 +285,13 @@ std::optional<VolumeHandles>
     return std::nullopt;
   }
 
-  handles->relative_path = NtfsDevice::WideFromPath(
+  handles->relative_path = Tool::DeviceAccess::WideFromPath(
       canonical.lexically_relative(mount->mount_point).generic_string());
   handles->mount_point = mount->mount_point;
   handles->mount_fstype = mount->fstype;
   return handles;
 }
 
-}  // namespace NtfsCompare
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare
 
 #endif  // _WIN32

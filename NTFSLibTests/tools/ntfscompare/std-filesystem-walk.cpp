@@ -15,7 +15,7 @@
 #include "console.h"
 #include "time-convert.h"
 
-namespace NtfsCompare {
+namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare {
 
 namespace {
 
@@ -46,7 +46,7 @@ std::wstring RelativeKey(const std::filesystem::path& root,
   return relative.generic_wstring();
 #else
   // The std wide conversion refuses a name that is not valid UTF-8.
-  return NtfsDevice::Utf8ToWide(relative.generic_string());
+  return Tool::DeviceAccess::Utf8ToWide(relative.generic_string());
 #endif
 }
 
@@ -102,4 +102,4 @@ Listing WalkStdFilesystem(const std::filesystem::path& listed_root) {
   return result;
 }
 
-}  // namespace NtfsCompare
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare

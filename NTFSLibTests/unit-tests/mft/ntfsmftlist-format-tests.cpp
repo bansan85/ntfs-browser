@@ -29,6 +29,8 @@
 
 #include "mft-tree-parent-support.h"
 
+namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
+
 using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftTree;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithNameTree;
@@ -261,7 +263,7 @@ std::string Shown(const std::wstring& path,
     return "<no name>";
   }
   return (lost ? "<lost #" + std::to_string(*lost) + ">\\" : std::string{}) +
-         NtfsDevice::WideToUtf8(path);
+         ToolDeviceAccess::WideToUtf8(path);
 }
 
 // Checks that the listing of image shows, for every entry the library keeps,

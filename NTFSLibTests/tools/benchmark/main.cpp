@@ -34,12 +34,15 @@
 
 #include "bench-tool.h"
 
+namespace ToolBenchmark = NTFS_BROWSER_NAMESPACE::Tool::Benchmark;
+namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
+
 #ifndef _WIN32
   #include <ntfs-browser/tool/device-access/argv-wide.h>
   #include <ntfs-browser/tool/device-access/posix-device-disk-reader.h>
 #endif
 
-namespace NtfsBenchTool {
+namespace NTFS_BROWSER_NAMESPACE::Tool::Benchmark {
 
 bool Arguments::Has(std::string_view name) const {
   for (const auto& [key, value] : options) {
@@ -81,7 +84,7 @@ namespace {
 
 // Stores a "--name" or "--name=value" argument that no bench option took.
 void AddLongOption(const std::wstring& argument, Arguments& parsed) {
-  const std::string text = NtfsDevice::WideToUtf8(argument);
+  const std::string text = Tool::DeviceAccess::WideToUtf8(argument);
   const std::size_t equals = text.find('=');
   parsed.options.emplace_back(
       text.substr(2,
@@ -95,13 +98,14 @@ bool ParseArguments(const std::vector<std::wstring>& arguments,
                     Arguments& parsed) {
   for (const std::wstring& argument : arguments) {
     std::string error;
-    switch (NtfsDevice::ParseBenchOption(argument, parsed.bench, error)) {
-      case NtfsDevice::OptionResult::Accepted:
+    switch (
+        Tool::DeviceAccess::ParseBenchOption(argument, parsed.bench, error)) {
+      case Tool::DeviceAccess::OptionResult::Accepted:
         continue;
-      case NtfsDevice::OptionResult::Malformed:
+      case Tool::DeviceAccess::OptionResult::Malformed:
         std::fprintf(stderr, "%s\n", error.c_str());
         return false;
-      case NtfsDevice::OptionResult::NotMine:
+      case Tool::DeviceAccess::OptionResult::NotMine:
         break;
     }
     if (argument.starts_with(L"--")) {
@@ -116,9 +120,9 @@ bool ParseArguments(const std::vector<std::wstring>& arguments,
 std::optional<NTFS_BROWSER_NAMESPACE::VolumeOptions>
     TunedOptions(const Arguments& args, std::wstring_view target) {
   NTFS_BROWSER_NAMESPACE::VolumeOptions options;
-  NtfsDevice::AppliedTuning applied;
+  Tool::DeviceAccess::AppliedTuning applied;
   const std::string failure =
-      NtfsDevice::ApplyTuning(args.bench, target, options, applied);
+      Tool::DeviceAccess::ApplyTuning(args.bench, target, options, applied);
   if (!failure.empty()) {
     std::fprintf(stderr, "%s\n", failure.c_str());
     return std::nullopt;
@@ -141,7 +145,8 @@ std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> OpenPlatformDevice(
     const std::array<NTFS_BROWSER_NAMESPACE::Tuning::ReaderTuning,
                      NTFS_BROWSER_NAMESPACE::Tuning::pattern_count>& caps) {
   std::wstring path(target);
-  if (const std::optional<wchar_t> letter = NtfsDevice::DriveLetterOf(target)) {
+  if (const std::optional<wchar_t> letter =
+          Tool::DeviceAccess::DriveLetterOf(target)) {
     path = std::wstring(L"\\\\.\\") + *letter + L":";
   }
   return NTFS_BROWSER_NAMESPACE::Bench::OpenPlatformReader(path, caps);
@@ -156,7 +161,7 @@ std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> OpenPlatformDevice(
     const std::array<NTFS_BROWSER_NAMESPACE::Tuning::ReaderTuning,
                      NTFS_BROWSER_NAMESPACE::Tuning::pattern_count>& caps) {
   static_cast<void>(caps);
-  auto posix = std::make_unique<NtfsDevice::PosixDeviceDiskReader>();
+  auto posix = std::make_unique<Tool::DeviceAccess::PosixDeviceDiskReader>();
   if (!posix->Open(target)) {
     return nullptr;
   }
@@ -175,12 +180,12 @@ std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> OpenReader(
       OpenPlatformDevice(target, caps);
   if (!reader) {
     std::fprintf(stderr, "Cannot open %s\n",
-                 NtfsDevice::WideToUtf8(target).c_str());
+                 Tool::DeviceAccess::WideToUtf8(target).c_str());
   }
   return reader;
 }
 
-int EmitJson(const Arguments& args, NtfsDevice::JsonWriter& json) {
+int EmitJson(const Arguments& args, Tool::DeviceAccess::JsonWriter& json) {
   const std::string text = json.Take();
   std::optional<std::string> path = args.Value("json");
   if (!path) {
@@ -263,21 +268,21 @@ int Run(const std::vector<std::wstring>& arguments) {
 
 }  // namespace
 
-}  // namespace NtfsBenchTool
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::Benchmark
 
 #ifdef _WIN32
 
 // NOLINTNEXTLINE(readability-identifier-naming): wmain is the CRT entry point.
 int wmain(int argc, wchar_t* argv[]) {
-  return NtfsBenchTool::Run({argv + 1, argv + argc});
+  return ToolBenchmark::Run({argv + 1, argv + argc});
 }
 
 #else
 
 int main(int argc, char* argv[]) {
   const std::vector<std::wstring> wide =
-      NtfsDevice::ArgumentsAsWide(argc, argv);
-  return NtfsBenchTool::Run({wide.begin() + 1, wide.end()});
+      ToolDeviceAccess::ArgumentsAsWide(argc, argv);
+  return ToolBenchmark::Run({wide.begin() + 1, wide.end()});
 }
 
 #endif

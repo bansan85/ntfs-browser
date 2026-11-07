@@ -18,12 +18,14 @@
 
 #include "sample-dump-support.h"
 
+namespace ExampleNtfsAttr = NTFS_BROWSER_NAMESPACE::Example::NtfsAttr;
+
 namespace {
 
 using FullCacheVolume = NTFS_BROWSER_NAMESPACE::NtfsVolume<
     NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>;
+using ExampleNtfsAttr::DumpResult;
 using NTFS_BROWSER_NAMESPACE::Tests::DumpTreeImage;
-using NtfsAttrDump::DumpResult;
 
 // A volume over image, opened the way the dialog opens it.
 std::unique_ptr<FullCacheVolume>
@@ -41,7 +43,7 @@ DumpResult DumpPath(std::vector<BYTE> image, std::wstring_view path,
                     NTFS_BROWSER_NAMESPACE::VolumeOptions options = {}) {
   const std::unique_ptr<FullCacheVolume> volume =
       OpenVolume(std::move(image), options);
-  return NtfsAttrDump::DumpAttributes(*volume, path);
+  return ExampleNtfsAttr::DumpAttributes(*volume, path);
 }
 
 // The in-use file of the dump tree, with resident data.
@@ -62,19 +64,19 @@ std::size_t FindHeading(const std::wstring& dump, std::wstring_view name,
 TEST_CASE("NtfsAttr target path keeps the picked file, or its folder",
           "[ntfsattr][characterization]") {
   SECTION("a file is dumped as picked") {
-    REQUIRE(NtfsAttrDump::TargetPath(report_path, false) == report_path);
+    REQUIRE(ExampleNtfsAttr::TargetPath(report_path, false) == report_path);
   }
 
   SECTION("a folder is the directory holding the picked file") {
-    REQUIRE(NtfsAttrDump::TargetPath(report_path, true) == L"C:\\Docs");
+    REQUIRE(ExampleNtfsAttr::TargetPath(report_path, true) == L"C:\\Docs");
   }
 
   SECTION("a file in the root gives the drive") {
-    REQUIRE(NtfsAttrDump::TargetPath(L"C:\\big.bin", true) == L"C:");
+    REQUIRE(ExampleNtfsAttr::TargetPath(L"C:\\big.bin", true) == L"C:");
   }
 
   SECTION("a path with no separator gives nothing in folder mode") {
-    REQUIRE(NtfsAttrDump::TargetPath(L"big.bin", true).empty());
+    REQUIRE(ExampleNtfsAttr::TargetPath(L"big.bin", true).empty());
   }
 }
 
@@ -232,10 +234,10 @@ TEST_CASE("NtfsAttr dumps the root directory for a bare drive path",
 TEST_CASE("NtfsAttr folder mode dumps the folder holding the picked file",
           "[ntfsattr][characterization]") {
   const auto volume = OpenVolume(DumpTreeImage());
-  const DumpResult by_folder = NtfsAttrDump::DumpAttributes(
-      *volume, NtfsAttrDump::TargetPath(report_path, true));
+  const DumpResult by_folder = ExampleNtfsAttr::DumpAttributes(
+      *volume, ExampleNtfsAttr::TargetPath(report_path, true));
   const DumpResult by_folder_name =
-      NtfsAttrDump::DumpAttributes(*volume, L"C:\\Docs");
+      ExampleNtfsAttr::DumpAttributes(*volume, L"C:\\Docs");
 
   REQUIRE(by_folder.message.empty());
   REQUIRE(by_folder.dump == by_folder_name.dump);
@@ -246,7 +248,7 @@ TEST_CASE("NtfsAttr dump of zero bytes has no rows",
   const std::vector<BYTE> bytes(16, 0xAA);
   std::wstring lines;
 
-  NtfsAttrDump::AppendData(lines, bytes.data(), 0);
+  ExampleNtfsAttr::AppendData(lines, bytes.data(), 0);
 
   REQUIRE(lines.empty());
 }
@@ -257,7 +259,7 @@ TEST_CASE("NtfsAttr dump rows split at 16 bytes, last row padded with FF",
   bytes[16] = 0x42;
   std::wstring lines;
 
-  NtfsAttrDump::AppendData(lines, bytes.data(), 17);
+  ExampleNtfsAttr::AppendData(lines, bytes.data(), 17);
 
   // The padding bytes are 0xFF, which the text column shows as U+00FF.
   REQUIRE(lines ==
@@ -291,7 +293,7 @@ TEST_CASE("NtfsAttr names each known attribute type",
   }};
 
   for (const auto& [type, name] : names) {
-    REQUIRE(NtfsAttrDump::AttrTypeName(type) == name);
+    REQUIRE(ExampleNtfsAttr::AttrTypeName(type) == name);
   }
 }
 
@@ -309,6 +311,6 @@ TEST_CASE("NtfsAttr names a type with no name by its value",
   }};
 
   for (const auto& [raw, label] : unnamed) {
-    REQUIRE(NtfsAttrDump::AttrTypeName(static_cast<Type>(raw)) == label);
+    REQUIRE(ExampleNtfsAttr::AttrTypeName(static_cast<Type>(raw)) == label);
   }
 }

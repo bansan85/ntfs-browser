@@ -16,7 +16,7 @@
 
 using namespace NTFS_BROWSER_NAMESPACE;
 
-namespace NtfsDump {
+namespace NTFS_BROWSER_NAMESPACE::Example::NtfsDump {
 
 namespace {
 
@@ -200,4 +200,4 @@ DumpResult DumpFile(NtfsVolume<Cache::Strategy::NoCache>& volume,
   return result;
 }
 
-}  // namespace NtfsDump
+}  // namespace NTFS_BROWSER_NAMESPACE::Example::NtfsDump

@@ -18,10 +18,12 @@
 #include <ntfs-browser/tool/ntfscompare/entry.h>
 #include <ntfs-browser/tool/ntfscompare/os-api-walk.h>
 
+namespace ToolNtfsCompare = NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare;
+
 using NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap;
-using NtfsCompare::Entry;
-using NtfsCompare::Listing;
-using NtfsCompare::WalkOsApi;
+using ToolNtfsCompare::Entry;
+using ToolNtfsCompare::Listing;
+using ToolNtfsCompare::WalkOsApi;
 namespace Fs = std::filesystem;
 
 namespace {

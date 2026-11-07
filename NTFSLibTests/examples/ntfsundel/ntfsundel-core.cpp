@@ -23,7 +23,7 @@
 
 using namespace NTFS_BROWSER_NAMESPACE;
 
-namespace NtfsUndel {
+namespace NTFS_BROWSER_NAMESPACE::Example::NtfsUndel {
 
 namespace {
 
@@ -593,4 +593,4 @@ CreatedFile CreateRecoveryFile(std::wstring_view directory,
   return {.file = std::nullopt, .error = CreateError::NoFreeName};
 }
 
-}  // namespace NtfsUndel
+}  // namespace NTFS_BROWSER_NAMESPACE::Example::NtfsUndel

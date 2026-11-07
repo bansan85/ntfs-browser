@@ -20,7 +20,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
-namespace NtfsUndel {
+namespace NTFS_BROWSER_NAMESPACE::Example::NtfsUndel {
 
 // Most rows one search lists. The scan stops once this many have matched. A UI
 // bound, not an NTFS limit, so one search stays bounded on a busy volume.
@@ -277,4 +277,4 @@ struct CreatedFile {
 CreatedFile CreateRecoveryFile(std::wstring_view directory,
                                std::wstring_view name, ExistingFile existing);
 
-}  // namespace NtfsUndel
+}  // namespace NTFS_BROWSER_NAMESPACE::Example::NtfsUndel

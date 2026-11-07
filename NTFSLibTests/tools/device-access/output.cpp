@@ -16,7 +16,7 @@
 
 #include <ntfs-browser/bench/bench.h>
 
-namespace NtfsDevice {
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 namespace {
 
@@ -107,4 +107,4 @@ void Output::StopWriter() {
   writer_.join();
 }
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess

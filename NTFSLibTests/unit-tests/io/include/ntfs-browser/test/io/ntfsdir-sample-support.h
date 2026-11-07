@@ -69,7 +69,7 @@ struct TempImage final {
 // before the name, or empty when the listing has none.
 inline std::string ListingLine(std::string_view name, bool directory,
                                ULONGLONG ticks, std::string_view marker = {}) {
-  const auto local = NtfsDevice::UtcTicksToLocalTime(ticks);
+  const auto local = Tool::DeviceAccess::UtcTicksToLocalTime(ticks);
   if (!local) {
     return {};
   }

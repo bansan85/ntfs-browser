@@ -12,6 +12,7 @@
 
 #include <gsl/narrow>
 
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/ntfscompare/os-api-walk.h>
 
 #ifdef _WIN32
@@ -33,7 +34,7 @@
 
 #include "time-convert.h"
 
-namespace NtfsCompare {
+namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare {
 
 namespace {
 
@@ -289,7 +290,8 @@ void AddDirent(const Frame& frame, const char* name, Listing& result,
   }
 
   const Entry entry = EntryFromStat(file_stat, full);
-  const std::wstring path = ChildPath(frame, NtfsDevice::Utf8ToWide(name));
+  const std::wstring path =
+      ChildPath(frame, Tool::DeviceAccess::Utf8ToWide(name));
   result.emplace(path, entry);
 
   // lstat() reports a symlink as a link, never as a directory, so symlinks
@@ -329,4 +331,4 @@ Listing WalkOsApi(const std::filesystem::path& root) {
 
 #endif  // _WIN32
 
-}  // namespace NtfsCompare
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare

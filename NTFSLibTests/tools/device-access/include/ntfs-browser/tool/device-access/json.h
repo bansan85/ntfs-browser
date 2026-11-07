@@ -6,7 +6,9 @@
 #include <string_view>
 #include <vector>
 
-namespace NtfsDevice {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 struct JsonMember;
 
@@ -99,4 +101,4 @@ class JsonWriter {
   bool after_key_{false};
 };
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess

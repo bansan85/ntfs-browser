@@ -8,9 +8,10 @@
 
 #include <gsl/narrow>
 
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
 
-namespace NtfsDevice {
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 namespace {
 
@@ -228,4 +229,4 @@ std::wstring Utf8ToWide(std::string_view utf8) {
 
 #endif  // !_WIN32
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess

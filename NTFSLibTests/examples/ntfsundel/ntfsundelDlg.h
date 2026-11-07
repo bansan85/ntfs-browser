@@ -11,16 +11,18 @@
 
   #include <cstdint>
 
+  #include <ntfs-browser/namespace.h>
+
 /////////////////////////////////////////////////////////////////////////////
 // CNtfsundelDlg dialog
 
-namespace NtfsUndel {
+namespace NTFS_BROWSER_NAMESPACE::Example::NtfsUndel {
 
 struct CopyResult;
 struct DeletedFile;
 struct SearchResult;
 
-}  // namespace NtfsUndel
+}  // namespace NTFS_BROWSER_NAMESPACE::Example::NtfsUndel
 
 class CNtfsundelDlg : public CDialog {
   // Construction
@@ -63,10 +65,13 @@ class CNtfsundelDlg : public CDialog {
   void SetSearching(bool searching);
   _TCHAR SelectedDriveLetter();
   bool SelectedFile(ULONGLONG& ref, CString& name);
-  void ShowSearchResults(const NtfsUndel::SearchResult& result);
-  void AddResultRow(const NtfsUndel::DeletedFile& file);
+  void ShowSearchResults(
+      const NTFS_BROWSER_NAMESPACE::Example::NtfsUndel::SearchResult& result);
+  void AddResultRow(
+      const NTFS_BROWSER_NAMESPACE::Example::NtfsUndel::DeletedFile& file);
   bool ChooseRecoveryPath(const CString& name, _TCHAR volname, CString& path);
-  void ReportCopy(const NtfsUndel::CopyResult& copied);
+  void ReportCopy(
+      const NTFS_BROWSER_NAMESPACE::Example::NtfsUndel::CopyResult& copied);
   DECLARE_MESSAGE_MAP()
 };
 

@@ -5,9 +5,10 @@
 #include <string>
 #include <vector>
 
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/ntfscompare/entry.h>
 
-namespace NtfsCompare {
+namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare {
 
 // One discrepancy the comparison found, ready to print.
 struct Finding {
@@ -80,4 +81,4 @@ void CompareAgainstReference(const std::string& method_name,
 // true if the report holds a finding other than UNINDEXED.
 bool PrintReport(const Report& report, bool details = true);
 
-}  // namespace NtfsCompare
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare

@@ -4,7 +4,9 @@
 
 #include <optional>
 
-namespace NtfsDevice {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 // A calendar date and time of day, in the host's local zone.
 struct LocalTime {
@@ -20,4 +22,4 @@ struct LocalTime {
 // cannot represent.
 [[nodiscard]] std::optional<LocalTime> UtcTicksToLocalTime(ULONGLONG ticks);
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess

@@ -13,9 +13,11 @@
 #include <ntfs-browser/tool/device-access/device-path.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
 
+namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
+
 using NTFS_BROWSER_NAMESPACE::Test::DeviceAccess::TempDir;
-using NtfsDevice::SplitDeviceTarget;
-using NtfsDevice::WideFromPath;
+using ToolDeviceAccess::SplitDeviceTarget;
+using ToolDeviceAccess::WideFromPath;
 
 namespace {
 
@@ -91,7 +93,7 @@ TEST_CASE("SplitDeviceTarget refuses a target with no file in it",
 
 TEST_CASE("DriveLetterOf reads only a letter, a colon and a separator",
           "[device-access][device-path]") {
-  using NtfsDevice::DriveLetterOf;
+  using ToolDeviceAccess::DriveLetterOf;
 
   CHECK(DriveLetterOf(L"c") == L'c');
   CHECK(DriveLetterOf(L"C:") == L'C');
@@ -111,8 +113,8 @@ TEST_CASE("DriveLetterOf reads only a letter, a colon and a separator",
 
 TEST_CASE("ClassifyTarget takes a file for a file and a missing path for none",
           "[device-access][device-path]") {
-  using NtfsDevice::ClassifyTarget;
-  using NtfsDevice::TargetKind;
+  using ToolDeviceAccess::ClassifyTarget;
+  using ToolDeviceAccess::TargetKind;
   const TempDir dir;
   const std::filesystem::path image = dir.Write("disk.img", "x");
 
@@ -127,8 +129,8 @@ TEST_CASE("ClassifyTarget takes a file for a file and a missing path for none",
 
 TEST_CASE("ClassifyTarget does not take a file under a drive for the drive",
           "[device-access][device-path]") {
-  using NtfsDevice::ClassifyTarget;
-  using NtfsDevice::TargetKind;
+  using ToolDeviceAccess::ClassifyTarget;
+  using ToolDeviceAccess::TargetKind;
   const TempDir dir;
   const std::filesystem::path image = dir.Write("disk.img", "x");
   const std::filesystem::path absent = dir.Path() / "absent.img";
@@ -143,8 +145,8 @@ TEST_CASE("ClassifyTarget does not take a file under a drive for the drive",
 
 TEST_CASE("ClassifyTarget takes a drive and a device path on Windows",
           "[device-access][device-path]") {
-  using NtfsDevice::ClassifyTarget;
-  using NtfsDevice::TargetKind;
+  using ToolDeviceAccess::ClassifyTarget;
+  using ToolDeviceAccess::TargetKind;
 
   CHECK(ClassifyTarget(L"c") == TargetKind::Drive);
   CHECK(ClassifyTarget(L"C:") == TargetKind::Drive);
@@ -163,8 +165,8 @@ TEST_CASE("ClassifyTarget takes a file with a colon in its name for a file",
   const TempDir dir;
   const std::filesystem::path image = dir.Write("c:", "x");
 
-  CHECK(NtfsDevice::ClassifyTarget(WideFromPath(image)) ==
-        NtfsDevice::TargetKind::File);
+  CHECK(ToolDeviceAccess::ClassifyTarget(WideFromPath(image)) ==
+        ToolDeviceAccess::TargetKind::File);
 }
 
 #endif  // _WIN32

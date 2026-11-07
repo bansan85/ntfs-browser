@@ -1,11 +1,13 @@
 #pragma once
 
+#include <ntfs-browser/namespace.h>
+
 #ifndef _WIN32
 
   #include <filesystem>
   #include <optional>
 
-namespace NtfsDevice {
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 // Whether the block device major:minor spins, read from the sysfs tree under
 // root (queue/rotational of the disk, or of the disk that holds the partition).
@@ -24,6 +26,6 @@ namespace NtfsDevice {
 // that no result depends on the disk of the machine.
 void SetSysfsRootForTests(std::filesystem::path root);
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess
 
 #endif  // !_WIN32

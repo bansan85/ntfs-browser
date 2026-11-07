@@ -14,6 +14,7 @@
 
 #include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/io/extended-path.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/bench-options.h>
 #include <ntfs-browser/tool/device-access/disk-identity.h>
 #include <ntfs-browser/tool/device-access/json.h>
@@ -26,7 +27,7 @@ namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 
-namespace NtfsDevice {
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 namespace {
 
@@ -471,4 +472,4 @@ std::string ApplyTuning(const BenchOptions& bench, std::wstring_view target,
   return {};
 }
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess

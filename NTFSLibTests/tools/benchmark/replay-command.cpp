@@ -21,7 +21,7 @@
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 
-namespace NtfsBenchTool {
+namespace NTFS_BROWSER_NAMESPACE::Tool::Benchmark {
 
 namespace {
 
@@ -75,7 +75,7 @@ std::optional<Run> ReplayOnce(const Arguments& args, const Bench::ReadLog& log,
 }
 
 // Writes the counts and the report of one replay.
-void WriteRun(NtfsDevice::JsonWriter& json, const Run& run) {
+void WriteRun(Tool::DeviceAccess::JsonWriter& json, const Run& run) {
   json.BeginObject();
   json.Field("mode", run.mode);
   json.Field("wall_ns", run.result.wall_ns);
@@ -88,7 +88,7 @@ void WriteRun(NtfsDevice::JsonWriter& json, const Run& run) {
   json.Field("standing_cancels", run.result.standing_cancels);
   json.Key("report");
   json.BeginObject();
-  NtfsDevice::WriteReportJson(json, run.report);
+  Tool::DeviceAccess::WriteReportJson(json, run.report);
   json.EndObject();
   json.EndObject();
 }
@@ -102,8 +102,8 @@ int ReplayCommand(const Arguments& args) {
   }
   const std::wstring& target = args.words.at(1);
   std::string error;
-  const std::optional<Bench::ReadLog> log =
-      Bench::LoadReadLog(NtfsDevice::PathFromWide(args.words.at(0)), &error);
+  const std::optional<Bench::ReadLog> log = Bench::LoadReadLog(
+      Tool::DeviceAccess::PathFromWide(args.words.at(0)), &error);
   if (!log) {
     std::fprintf(stderr, "%s\n", error.c_str());
     return 1;
@@ -131,16 +131,16 @@ int ReplayCommand(const Arguments& args) {
     runs.push_back(std::move(*run));
   }
 
-  NtfsDevice::JsonWriter json;
+  Tool::DeviceAccess::JsonWriter json;
   json.BeginObject();
   json.Field("format", std::uint64_t{1});
   json.Field("command", "replay");
-  json.Field("target", NtfsDevice::WideToUtf8(target));
-  json.Field("log", NtfsDevice::WideToUtf8(args.words.at(0)));
+  json.Field("target", Tool::DeviceAccess::WideToUtf8(target));
+  json.Field("log", Tool::DeviceAccess::WideToUtf8(args.words.at(0)));
   json.Field("log_events", static_cast<std::uint64_t>(log->events.size()));
   json.Field("log_volume_bytes", log->volume_bytes);
   json.Key("tuning");
-  NtfsDevice::WriteTuningJson(json, *options);
+  Tool::DeviceAccess::WriteTuningJson(json, *options);
   json.Key("runs");
   json.BeginArray();
   for (const Run& run : runs) {
@@ -151,4 +151,4 @@ int ReplayCommand(const Arguments& args) {
   return EmitJson(args, json);
 }
 
-}  // namespace NtfsBenchTool
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::Benchmark

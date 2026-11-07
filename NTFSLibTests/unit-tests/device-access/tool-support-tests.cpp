@@ -8,9 +8,11 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/tool-support.h>
 
+namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
+
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;
-using NtfsDevice::IsLogOption;
-using NtfsDevice::ParseLogOption;
+using ToolDeviceAccess::IsLogOption;
+using ToolDeviceAccess::ParseLogOption;
 
 TEST_CASE("IsLogOption recognises the --log= prefix only",
           "[device-access][tool-support]") {
@@ -44,7 +46,7 @@ TEST_CASE("ParseLogOption keeps a file path whole",
 
   #include <cstdio>
 
-using NtfsDevice::WriteText;
+using ToolDeviceAccess::WriteText;
 
 namespace {
 

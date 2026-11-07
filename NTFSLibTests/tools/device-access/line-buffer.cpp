@@ -1,9 +1,10 @@
 #include <string_view>
 
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/line-buffer.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
 
-namespace NtfsDevice {
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 void LineBuffer::AppendText(std::wstring_view text) {
 #ifdef _WIN32
@@ -23,4 +24,4 @@ void LineBuffer::AppendText(std::wstring_view text) {
 #endif
 }
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess

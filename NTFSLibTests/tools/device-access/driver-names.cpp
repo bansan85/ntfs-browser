@@ -8,7 +8,7 @@
   #include <ntfs-browser/tool/device-access/driver-names.h>
   #include <ntfs-browser/tool/device-access/text-convert.h>
 
-namespace NtfsDevice {
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 namespace {
 
@@ -48,6 +48,6 @@ std::optional<std::wstring> DecodeDriverName(std::string_view fstype,
   return Utf8ToWide(bytes);
 }
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess
 
 #endif  // !_WIN32

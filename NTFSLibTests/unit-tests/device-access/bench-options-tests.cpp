@@ -18,12 +18,14 @@
 #include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
 
+namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
+
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using Catch::Matchers::ContainsSubstring;
-using NtfsDevice::BenchOptions;
-using NtfsDevice::OptionResult;
-using NtfsDevice::ParseBenchOption;
+using ToolDeviceAccess::BenchOptions;
+using ToolDeviceAccess::OptionResult;
+using ToolDeviceAccess::ParseBenchOption;
 
 namespace {
 
@@ -310,15 +312,15 @@ TEST_CASE("ApplyTuning puts --media in the volume options",
           "[device-access][bench-options]") {
   const NoHostMediaScope cleared("");
   NTFS_BROWSER_NAMESPACE::VolumeOptions options;
-  NtfsDevice::AppliedTuning applied;
+  ToolDeviceAccess::AppliedTuning applied;
 
-  REQUIRE(
-      NtfsDevice::ApplyTuning(BenchOptions{}, L"image.img", options, applied)
-          .empty());
+  REQUIRE(ToolDeviceAccess::ApplyTuning(BenchOptions{}, L"image.img", options,
+                                        applied)
+              .empty());
   CHECK_FALSE(options.media_kind.has_value());
 
-  REQUIRE(NtfsDevice::ApplyTuning(ParseAll({L"--media=hdd"}), L"image.img",
-                                  options, applied)
+  REQUIRE(ToolDeviceAccess::ApplyTuning(ParseAll({L"--media=hdd"}),
+                                        L"image.img", options, applied)
               .empty());
   CHECK(options.media_kind == Tuning::MediaKind::Rotational);
 }
@@ -327,24 +329,25 @@ TEST_CASE("The variable of the tests makes the tools plan for Unknown",
           "[device-access][bench-options]") {
   const NoHostMediaScope set("1");
   NTFS_BROWSER_NAMESPACE::VolumeOptions options;
-  NtfsDevice::AppliedTuning applied;
+  ToolDeviceAccess::AppliedTuning applied;
 
-  REQUIRE(
-      NtfsDevice::ApplyTuning(BenchOptions{}, L"image.img", options, applied)
-          .empty());
+  REQUIRE(ToolDeviceAccess::ApplyTuning(BenchOptions{}, L"image.img", options,
+                                        applied)
+              .empty());
   CHECK(options.media_kind == Tuning::MediaKind::Unknown);
 
-  REQUIRE(NtfsDevice::ApplyTuning(ParseAll({L"--media=ssd"}), L"image.img",
-                                  options, applied)
+  REQUIRE(ToolDeviceAccess::ApplyTuning(ParseAll({L"--media=ssd"}),
+                                        L"image.img", options, applied)
               .empty());
   CHECK(options.media_kind == Tuning::MediaKind::SolidState);
 }
 
 TEST_CASE("MediaKindName names each kind", "[device-access][bench-options]") {
-  CHECK(NtfsDevice::MediaKindName(Tuning::MediaKind::Unknown) == "unknown");
-  CHECK(NtfsDevice::MediaKindName(Tuning::MediaKind::SolidState) ==
+  CHECK(ToolDeviceAccess::MediaKindName(Tuning::MediaKind::Unknown) ==
+        "unknown");
+  CHECK(ToolDeviceAccess::MediaKindName(Tuning::MediaKind::SolidState) ==
         "solid_state");
-  CHECK(NtfsDevice::MediaKindName(Tuning::MediaKind::Rotational) ==
+  CHECK(ToolDeviceAccess::MediaKindName(Tuning::MediaKind::Rotational) ==
         "rotational");
 }
 
@@ -382,7 +385,7 @@ TEST_CASE("A failed option leaves the options as they were",
 }
 
 TEST_CASE("BenchUsage lists every option", "[device-access][bench-options]") {
-  const std::string_view usage = NtfsDevice::BenchUsage();
+  const std::string_view usage = ToolDeviceAccess::BenchUsage();
 
   for (const std::string_view option :
        {"--benchmark", "--capture", "--stop-after", "--profile", "--disk",

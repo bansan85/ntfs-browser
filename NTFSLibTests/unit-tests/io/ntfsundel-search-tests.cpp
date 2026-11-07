@@ -19,14 +19,16 @@
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/volume-options.h>
 
+namespace ExampleNtfsUndel = NTFS_BROWSER_NAMESPACE::Example::NtfsUndel;
+
 namespace {
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 using FullVolume =
     NTFS_BROWSER_NAMESPACE::NtfsVolume<Cache::Strategy::FullCache>;
-using NtfsUndel::DeletedFile;
-using NtfsUndel::SearchControl;
-using NtfsUndel::SearchResult;
+using ExampleNtfsUndel::DeletedFile;
+using ExampleNtfsUndel::SearchControl;
+using ExampleNtfsUndel::SearchResult;
 
 // $STANDARD_INFORMATION alter time the fake image writes into every record.
 constexpr std::uint64_t fake_write_time = 0x1112131415161718ULL;
@@ -57,7 +59,7 @@ std::unique_ptr<FullVolume> OpenVolume(std::vector<BYTE> image,
 SearchResult Search(FullVolume& volume, std::wstring_view filter,
                     const SearchControl& control = {}) {
   std::optional<SearchResult> result =
-      NtfsUndel::SearchDeletedFiles(volume, filter, control);
+      ExampleNtfsUndel::SearchDeletedFiles(volume, filter, control);
   REQUIRE(result.has_value());
   return *std::move(result);
 }
@@ -219,8 +221,10 @@ TEST_CASE("NtfsUndel search rejects a filter that is not a regex",
   const auto volume = OpenVolume(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
                                      BuildFakeNtfsImageWithFreedFileTree());
 
-  CHECK_FALSE(NtfsUndel::SearchDeletedFiles(*volume, L"[", {}).has_value());
-  CHECK_FALSE(NtfsUndel::SearchDeletedFiles(*volume, L"(abc", {}).has_value());
+  CHECK_FALSE(
+      ExampleNtfsUndel::SearchDeletedFiles(*volume, L"[", {}).has_value());
+  CHECK_FALSE(
+      ExampleNtfsUndel::SearchDeletedFiles(*volume, L"(abc", {}).has_value());
 }
 
 TEST_CASE("NtfsUndel search does not scan records past max_records",
@@ -272,13 +276,13 @@ TEST_CASE("NtfsUndel search flags truncation when the list fills exactly",
 
 TEST_CASE("NtfsUndel too-many-files message names the row limit",
           "[undel][search]") {
-  CHECK(NtfsUndel::TooManyFilesMessage().find(
-            std::to_wstring(NtfsUndel::kMaxListedFiles)) != std::wstring::npos);
+  CHECK(ExampleNtfsUndel::TooManyFilesMessage().find(std::to_wstring(
+            ExampleNtfsUndel::kMaxListedFiles)) != std::wstring::npos);
 }
 
 TEST_CASE("NtfsUndel search lists kMaxListedFiles rows by default",
           "[undel][search]") {
-  CHECK(SearchControl{}.max_listed == NtfsUndel::kMaxListedFiles);
+  CHECK(SearchControl{}.max_listed == ExampleNtfsUndel::kMaxListedFiles);
 }
 
 TEST_CASE("NtfsUndel search lists nothing without include_deleted",
@@ -295,13 +299,13 @@ TEST_CASE(
     "conversion",
     "[undel][search][characterization]") {
   // 2000-01-01 00:00 UTC, in FILETIME ticks.
-  CHECK(NtfsUndel::FormatWriteTime(125'911'584'000'000'000ULL) ==
+  CHECK(ExampleNtfsUndel::FormatWriteTime(125'911'584'000'000'000ULL) ==
         L"2000-01-01  00:00");
   // The FILETIME epoch.
-  CHECK(NtfsUndel::FormatWriteTime(0) == L"1601-01-01  00:00");
+  CHECK(ExampleNtfsUndel::FormatWriteTime(0) == L"1601-01-01  00:00");
 }
 
 TEST_CASE("NtfsUndel FormatWriteTime prints zeros for an unconvertible time",
           "[undel][search][characterization]") {
-  CHECK(NtfsUndel::FormatWriteTime(~0ULL) == L"0000-00-00  00:00");
+  CHECK(ExampleNtfsUndel::FormatWriteTime(~0ULL) == L"0000-00-00  00:00");
 }

@@ -14,7 +14,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
-namespace NtfsAttrDump {
+namespace NTFS_BROWSER_NAMESPACE::Example::NtfsAttr {
 
 // Appends a hex dump of datalen bytes at data to lines, 16 bytes a row. Every
 // row ends in CRLF. Zero bytes append nothing, and data is not read.
@@ -43,4 +43,4 @@ DumpResult DumpAttributes(
         NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>& volume,
     std::wstring_view path);
 
-}  // namespace NtfsAttrDump
+}  // namespace NTFS_BROWSER_NAMESPACE::Example::NtfsAttr

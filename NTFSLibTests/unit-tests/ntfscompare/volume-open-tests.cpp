@@ -13,11 +13,14 @@
 #include <ntfs-browser/tool/ntfscompare/volume-open.h>
 #include <ntfs-browser/volume-options.h>
 
+namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
+namespace ToolNtfsCompare = NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare;
+
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::Cache::Strategy;
 using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftTree;
-using NtfsCompare::comparison_volume_options;
+using ToolNtfsCompare::comparison_volume_options;
 
 TEST_CASE("The comparison volume options are the library defaults",
           "[ntfscompare][volume-open]") {
@@ -49,16 +52,16 @@ TEMPLATE_TEST_CASE_SIG(
 
 using NTFS_BROWSER_NAMESPACE::Test::DeviceAccess::TempDir;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::WriteFakeNtfsImage;
-using NtfsCompare::FindMountOfDevice;
-using NtfsCompare::OpenDeviceVolume;
+using ToolNtfsCompare::FindMountOfDevice;
+using ToolNtfsCompare::OpenDeviceVolume;
 
 TEST_CASE("An image file is a device target",
           "[ntfscompare][volume-open][device]") {
   const TempDir dir;
   const std::filesystem::path image = dir.Write("disk.img", "x");
 
-  const auto target = NtfsDevice::SplitDeviceTarget(
-      NtfsDevice::WideFromPath(image) + L"/Windows");
+  const auto target = ToolDeviceAccess::SplitDeviceTarget(
+      ToolDeviceAccess::WideFromPath(image) + L"/Windows");
 
   REQUIRE(target.has_value());
   CHECK(target->device == image);
@@ -67,9 +70,9 @@ TEST_CASE("An image file is a device target",
 
 TEST_CASE("A device that does not exist is not a device target",
           "[ntfscompare][volume-open][device]") {
-  CHECK_FALSE(
-      NtfsDevice::SplitDeviceTarget(L"/dev/ntfscompare-no-such-device/Windows")
-          .has_value());
+  CHECK_FALSE(ToolDeviceAccess::SplitDeviceTarget(
+                  L"/dev/ntfscompare-no-such-device/Windows")
+                  .has_value());
 }
 
 TEST_CASE("OpenDeviceVolume opens both strategies over an image file",

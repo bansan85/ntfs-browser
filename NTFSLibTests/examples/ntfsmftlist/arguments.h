@@ -5,10 +5,11 @@
 
 #include <ntfs-browser/alloc/cluster-account.h>
 #include <ntfs-browser/log/log.h>
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/bench-options.h>
 #include <ntfs-browser/volume-options.h>
 
-namespace MftList {
+namespace NTFS_BROWSER_NAMESPACE::Example::NtfsMftList {
 
 // What the command line asks for.
 struct Arguments {
@@ -24,7 +25,7 @@ struct Arguments {
   const wchar_t* target = nullptr;
   // The instrumentation and tuning options, and the command line they came
   // from as UTF-8, for the summary.
-  NtfsDevice::BenchOptions bench;
+  Tool::DeviceAccess::BenchOptions bench;
   std::vector<std::string> command_line;
 };
 
@@ -35,4 +36,4 @@ bool ParseArguments(int argc, wchar_t* argv[], Arguments& args);
 // Prints command-line usage help.
 void Usage();
 
-}  // namespace MftList
+}  // namespace NTFS_BROWSER_NAMESPACE::Example::NtfsMftList

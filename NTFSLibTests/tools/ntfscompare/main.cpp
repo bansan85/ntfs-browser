@@ -41,24 +41,27 @@
 
 #include "console.h"
 
+namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
+namespace ToolNtfsCompare = NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare;
+
 using NTFS_BROWSER_NAMESPACE::Mft::MftTree;
-using NtfsCompare::Listing;
-using NtfsCompare::NativeText;
-using NtfsCompare::OpenVolumeFor;
+using ToolNtfsCompare::Listing;
+using ToolNtfsCompare::NativeText;
+using ToolNtfsCompare::OpenVolumeFor;
 #ifndef _WIN32
-using NtfsCompare::OpenDeviceVolume;
-using NtfsCompare::OsNamesAreComparable;
+using ToolNtfsCompare::OpenDeviceVolume;
+using ToolNtfsCompare::OsNamesAreComparable;
 #endif
-using NtfsCompare::OsApiMethodName;
-using NtfsCompare::PrintErr;
-using NtfsCompare::PrintOut;
-using NtfsCompare::Report;
-using NtfsCompare::ResolveDirectoryRecord;
-using NtfsCompare::VolumeHandles;
-using NtfsCompare::WalkLibraryIndex;
-using NtfsCompare::WalkMftTree;
-using NtfsCompare::WalkOsApi;
-using NtfsCompare::WalkStdFilesystem;
+using ToolNtfsCompare::OsApiMethodName;
+using ToolNtfsCompare::PrintErr;
+using ToolNtfsCompare::PrintOut;
+using ToolNtfsCompare::Report;
+using ToolNtfsCompare::ResolveDirectoryRecord;
+using ToolNtfsCompare::VolumeHandles;
+using ToolNtfsCompare::WalkLibraryIndex;
+using ToolNtfsCompare::WalkMftTree;
+using ToolNtfsCompare::WalkOsApi;
+using ToolNtfsCompare::WalkStdFilesystem;
 
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;
 
@@ -275,7 +278,7 @@ int CompareFolder(const std::filesystem::path& target,
 // Compares the volume that device names, an image file or a block device,
 // against the operating system at its mount point plus the directory, if it
 // is mounted. Returns the exit code.
-int CompareDevice(const NtfsDevice::DeviceTarget& device,
+int CompareDevice(const ToolDeviceAccess::DeviceTarget& device,
                   const ArgChar* target_arg, bool details) {
   std::optional<VolumeHandles> volume = OpenDeviceVolume(device);
   if (!volume) {
@@ -286,7 +289,7 @@ int CompareDevice(const NtfsDevice::DeviceTarget& device,
   if (volume->mount_point) {
     os_target = *volume->mount_point;
     if (!volume->relative_path.empty()) {
-      *os_target /= NtfsDevice::PathFromWide(volume->relative_path);
+      *os_target /= ToolDeviceAccess::PathFromWide(volume->relative_path);
     }
   }
   return CompareVolume(*volume, target_arg, os_target, details);
@@ -305,7 +308,7 @@ int Run(int argc, ArgChar** argv) {
   }
 
   // Names print as UTF-8: a console shows them right with its code page set.
-  const NtfsDevice::Utf8ConsoleOutput console;
+  const ToolDeviceAccess::Utf8ConsoleOutput console;
   if (!Log::Configure(arguments->log_config)) {
     PrintErr("Cannot open log file {}\n",
              NativeText(arguments->log_config.file_path));
@@ -313,9 +316,9 @@ int Run(int argc, ArgChar** argv) {
 
 #ifndef _WIN32
   // A device or an image file leads the target: /dev/sda1/Windows.
-  if (const std::optional<NtfsDevice::DeviceTarget> device =
-          NtfsDevice::SplitDeviceTarget(
-              NtfsDevice::Utf8ToWide(arguments->target))) {
+  if (const std::optional<ToolDeviceAccess::DeviceTarget> device =
+          ToolDeviceAccess::SplitDeviceTarget(
+              ToolDeviceAccess::Utf8ToWide(arguments->target))) {
     return CompareDevice(*device, arguments->target, !arguments->summary);
   }
 #endif

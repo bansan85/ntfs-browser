@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
 #include <ntfs-browser/tool/ntfscompare/compare-engine.h>
 
@@ -20,7 +21,7 @@
   #include <ntfs-browser/tool/device-access/driver-names.h>
 #endif
 
-namespace NtfsCompare {
+namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare {
 
 namespace {
 
@@ -43,7 +44,7 @@ std::string FormatValue(bool value) { return value ? "true" : "false"; }
 // Listing key every method shares; this is display only. A name prints as
 // UTF-8, like the other tools' output.
 std::string Narrow(const std::wstring& wide) {
-  return NtfsDevice::WideToUtf8(wide);
+  return Tool::DeviceAccess::WideToUtf8(wide);
 }
 
 // Calls visit(member pointer, report name) once per compared Entry field. The
@@ -377,9 +378,10 @@ bool OsNamesAreComparable(const Listing& reference,
                           const std::string& mount_fstype) {
   const bool needs_mapping =
       std::ranges::any_of(reference, [](const auto& listed) {
-        return NtfsDevice::NeedsDriverMapping(listed.first);
+        return Tool::DeviceAccess::NeedsDriverMapping(listed.first);
       });
-  if (!needs_mapping || NtfsDevice::IsDriverMappingKnown(mount_fstype)) {
+  if (!needs_mapping ||
+      Tool::DeviceAccess::IsDriverMappingKnown(mount_fstype)) {
     return true;
   }
 
@@ -393,4 +395,4 @@ bool OsNamesAreComparable(const Listing& reference,
 
 #endif  // !_WIN32
 
-}  // namespace NtfsCompare
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare

@@ -6,7 +6,9 @@
 #include <optional>
 #include <string>
 
-namespace NtfsCompare {
+#include <ntfs-browser/namespace.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare {
 
 // One file or directory's metadata, as one method reports it. A field left
 // std::nullopt means this method cannot structurally provide it - not a
@@ -36,4 +38,4 @@ struct Entry {
 // name only (a DOS 8.3 alias is never a key on its own).
 using Listing = std::map<std::wstring, Entry>;
 
-}  // namespace NtfsCompare
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare

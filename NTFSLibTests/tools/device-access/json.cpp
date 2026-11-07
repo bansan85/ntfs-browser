@@ -9,9 +9,10 @@
 #include <system_error>
 #include <utility>
 
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/json.h>
 
-namespace NtfsDevice {
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 namespace {
 
@@ -589,4 +590,4 @@ std::string JsonWriter::Take() {
   return std::move(out_);
 }
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess

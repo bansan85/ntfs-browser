@@ -1,11 +1,13 @@
 #pragma once
 
+#include <ntfs-browser/namespace.h>
+
 #ifndef _WIN32
 
   #include <string>
   #include <vector>
 
-namespace NtfsDevice {
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 // Decodes each UTF-8 argument of a POSIX main() into a wide string, so the
 // tools share their wide argv code with the Windows wmain().
@@ -16,6 +18,6 @@ namespace NtfsDevice {
 [[nodiscard]] std::vector<wchar_t*>
     ArgumentPointers(std::vector<std::wstring>& arguments);
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess
 
 #endif  // !_WIN32

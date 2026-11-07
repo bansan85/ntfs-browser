@@ -12,7 +12,7 @@
 #include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
 
-namespace NtfsDevice {
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 // One --tune=name[@Mk]=value setting.
 struct TuneSetting {
@@ -87,4 +87,4 @@ struct AppliedTuning {
                 NTFS_BROWSER_NAMESPACE::VolumeOptions& options,
                 AppliedTuning& applied);
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess

@@ -11,7 +11,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/ordered-chunks.h>
 
-namespace NtfsDevice {
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 namespace {
 
@@ -169,4 +169,4 @@ void RunOrderedChunks(const ChunkJob& job, const ChunkSteps& steps) {
   }
 }
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess

@@ -1,12 +1,14 @@
 #pragma once
 
+#include <ntfs-browser/namespace.h>
+
 #ifndef _WIN32
 
   #include <optional>
   #include <string>
   #include <string_view>
 
-namespace NtfsDevice {
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 // Reports whether name holds an unpaired surrogate, so it has no UTF-8 form.
 // The Linux NTFS drivers each render such a name their own way, and
@@ -24,6 +26,6 @@ namespace NtfsDevice {
 [[nodiscard]] std::optional<std::wstring>
     DecodeDriverName(std::string_view fstype, std::string_view bytes);
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess
 
 #endif  // !_WIN32

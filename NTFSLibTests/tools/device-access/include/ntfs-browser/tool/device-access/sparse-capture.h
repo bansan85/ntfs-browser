@@ -10,7 +10,7 @@
 #include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/namespace.h>
 
-namespace NtfsDevice {
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 // Writes what a run reads into a sparse file, at the offset of each read. The
 // file is an image of the ranges the run used and of nothing else: the tool
@@ -45,4 +45,4 @@ class SparseCapture final : public NTFS_BROWSER_NAMESPACE::Bench::ICaptureSink {
   std::string error_;
 };
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess

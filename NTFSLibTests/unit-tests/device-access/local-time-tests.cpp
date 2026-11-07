@@ -7,10 +7,13 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/local-time.h>
 
-using NtfsDevice::LocalTime;
-using NtfsDevice::UtcTicksToLocalTime;
+namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
+
+using ToolDeviceAccess::LocalTime;
+using ToolDeviceAccess::UtcTicksToLocalTime;
 
 namespace {
 

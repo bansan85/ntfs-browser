@@ -30,6 +30,8 @@
 #include <ntfs-browser/tool/device-access/json.h>
 #include <ntfs-browser/tuning/knobs.h>
 
+namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
+
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace MftListSample = NTFS_BROWSER_NAMESPACE::Tests::MftListSample;
 namespace TestDeviceAccess = NTFS_BROWSER_NAMESPACE::Test::DeviceAccess;
@@ -37,8 +39,8 @@ namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using Catch::Matchers::ContainsSubstring;
-using NtfsDevice::JsonValue;
 using TestSupport::SampleRun;
+using ToolDeviceAccess::JsonValue;
 
 namespace {
 
@@ -73,7 +75,7 @@ std::string ReadText(const std::filesystem::path& path) {
 
 JsonValue Parse(const std::string& text) {
   std::string error;
-  std::optional<JsonValue> parsed = NtfsDevice::ParseJson(text, error);
+  std::optional<JsonValue> parsed = ToolDeviceAccess::ParseJson(text, error);
   INFO("parse error: " << error);
   REQUIRE(parsed.has_value());
   return std::move(*parsed);

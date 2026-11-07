@@ -13,7 +13,7 @@
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 
-namespace MftList {
+namespace NTFS_BROWSER_NAMESPACE::Example::NtfsMftList {
 
 // Bytes that two threads must not both write to. The size of a cache line on
 // the processors the tool runs on; std::hardware_destructive_interference_size
@@ -155,4 +155,4 @@ class DisplayPaths {
   size_t kept_bytes_{0};
 };
 
-}  // namespace MftList
+}  // namespace NTFS_BROWSER_NAMESPACE::Example::NtfsMftList

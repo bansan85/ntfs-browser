@@ -11,13 +11,16 @@
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/json.h>
 
+namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
+
 using Catch::Matchers::ContainsSubstring;
-using NtfsDevice::JsonValue;
-using NtfsDevice::JsonWriter;
-using NtfsDevice::ParseJson;
-using Kind = NtfsDevice::JsonValue::Kind;
+using ToolDeviceAccess::JsonValue;
+using ToolDeviceAccess::JsonWriter;
+using ToolDeviceAccess::ParseJson;
+using Kind = ToolDeviceAccess::JsonValue::Kind;
 
 namespace {
 

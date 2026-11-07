@@ -17,13 +17,15 @@
 #include <ntfs-browser/tool/device-access/text-convert.h>
 #include <ntfs-browser/tuning/tuning.h>
 
+namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
+
 namespace fs = std::filesystem;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using NTFS_BROWSER_NAMESPACE::Test::DeviceAccess::TempDir;
-using NtfsDevice::PosixDeviceDiskReader;
-using NtfsDevice::RotationalOfBlockDevice;
-using NtfsDevice::SysfsRoot;
-using NtfsDevice::WideFromPath;
+using ToolDeviceAccess::PosixDeviceDiskReader;
+using ToolDeviceAccess::RotationalOfBlockDevice;
+using ToolDeviceAccess::SysfsRoot;
+using ToolDeviceAccess::WideFromPath;
 
 namespace {
 
@@ -74,7 +76,7 @@ constexpr const char* skip_variable = "NTFS_BROWSER_NO_HOST_MEDIA_QUERY";
 class SysfsRootScope final {
  public:
   explicit SysfsRootScope(const fs::path& root) : previous_(SysfsRoot()) {
-    NtfsDevice::SetSysfsRootForTests(root);
+    ToolDeviceAccess::SetSysfsRootForTests(root);
     unsetenv(skip_variable);
   }
 
@@ -84,7 +86,7 @@ class SysfsRootScope final {
   SysfsRootScope& operator=(SysfsRootScope&&) = delete;
 
   ~SysfsRootScope() {
-    NtfsDevice::SetSysfsRootForTests(previous_);
+    ToolDeviceAccess::SetSysfsRootForTests(previous_);
     setenv(skip_variable, "1", 1);
   }
 

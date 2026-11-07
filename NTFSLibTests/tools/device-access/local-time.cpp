@@ -3,13 +3,14 @@
 #include <limits>
 #include <optional>
 
+#include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/local-time.h>
 
 #ifndef _WIN32
   #include <ctime>
 #endif
 
-namespace NtfsDevice {
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 namespace {
 
@@ -74,4 +75,4 @@ std::optional<LocalTime> UtcTicksToLocalTime(ULONGLONG ticks) {
 #endif
 }
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess

@@ -7,6 +7,8 @@
 #include "ntfsdump.h"
 #include "ntfsdumpDlg.h"
 
+namespace ExampleNtfsDump = NTFS_BROWSER_NAMESPACE::Example::NtfsDump;
+
 using namespace NTFS_BROWSER_NAMESPACE;
 
 #ifdef _DEBUG
@@ -132,8 +134,8 @@ void CNtfsdumpDlg::OnOK() {
   NTFS_BROWSER_NAMESPACE::NtfsVolume<
       NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>
       volume(m_filename.GetAt(0));
-  const NtfsDump::DumpResult result =
-      NtfsDump::DumpFile(volume, m_filename.GetString());
+  const ExampleNtfsDump::DumpResult result =
+      ExampleNtfsDump::DumpFile(volume, m_filename.GetString());
   if (!result.message.empty()) {
     MessageBox(result.message.c_str());
     return;

@@ -11,7 +11,7 @@
   #include <ntfs-browser/tool/device-access/argv-wide.h>
   #include <ntfs-browser/tool/device-access/text-convert.h>
 
-namespace NtfsDevice {
+namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 
 std::vector<std::wstring> ArgumentsAsWide(int argc, char** argv) {
   const std::span<char*> raw(argv, gsl::narrow<size_t>(argc));
@@ -32,6 +32,6 @@ std::vector<wchar_t*> ArgumentPointers(std::vector<std::wstring>& arguments) {
   return pointers;
 }
 
-}  // namespace NtfsDevice
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess
 
 #endif  // !_WIN32
