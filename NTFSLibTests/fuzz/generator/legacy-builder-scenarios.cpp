@@ -52,6 +52,82 @@ const std::vector<LegacyFixtures::Damaged>& Inputs() {
        .base = FakeImage::BuildFakeNtfsImage},
       {.name = "root_record_parse_failure",
        .base = FakeImage::BuildFakeNtfsImageWithCorruptRootRecord},
+      {.name = "corrupt_compressed_index_allocation",
+       .base =
+           FakeImage::BuildFakeNtfsImageWithCorruptCompressedIndexAllocation,
+       .damage = PackRoot,
+       .needs = Feature::Decompression},
+      {.name = "compressed_index_allocation_unmapped_unit",
+       .base = FakeImage::
+           BuildFakeNtfsImageWithUnmappedCompressionUnitIndexAllocation,
+       .damage = PackRoot,
+       .needs = Feature::Decompression},
+      {.name = "compressed_index_allocation_sparse_unit",
+       .base = FakeImage::
+           BuildFakeNtfsImageWithSparseCompressionUnitIndexAllocation,
+       .damage = PackRoot,
+       .needs = Feature::Decompression},
+      {.name = "compressed_index_allocation_real_after_hole",
+       .base = FakeImage::
+           BuildFakeNtfsImageWithRealClustersAfterHoleIndexAllocation,
+       .damage = PackRoot,
+       .needs = Feature::Decompression},
+      {.name = "compressed_index_allocation_short_decompressed_unit",
+       .base = FakeImage::
+           BuildFakeNtfsImageWithShortDecompressedUnitIndexAllocation,
+       .damage = PackRoot,
+       .needs = Feature::Decompression},
+      {.name = "compressed_index_allocation_misaligned_start_vcn",
+       .base =
+           FakeImage::BuildFakeNtfsImageWithMisalignedStartVcnIndexAllocation,
+       .damage = PackRoot,
+       .needs = Feature::Decompression},
+      {.name = "compressed_index_allocation_oversized_compression_unit",
+       .base = FakeImage::
+           BuildFakeNtfsImageWithOversizedCompressionUnitIndexAllocation,
+       .damage = PackRoot,
+       .needs = Feature::Decompression},
+      {.name = "compressed_index_allocation_comp_unit_size_out_of_range",
+       .base = FakeImage::
+           BuildFakeNtfsImageWithCompUnitSizeOutOfRangeIndexAllocation,
+       .damage = PackRoot,
+       .needs = Feature::Decompression},
+      {.name = "compressed_index_allocation_lznt1_backreference_exceeds_dest",
+       .base = FakeImage::
+           BuildFakeNtfsImageWithLznt1BackreferenceExceedsDestIndexAllocation,
+       .damage = PackRoot,
+       .needs = Feature::Decompression},
+      {.name = "compressed_index_allocation_lznt1_chunk_exceeds_src_bounds",
+       .base = FakeImage::
+           BuildFakeNtfsImageWithLznt1ChunkExceedsSrcBoundsIndexAllocation,
+       .damage = PackRoot,
+       .needs = Feature::Decompression},
+      {.name = "compressed_index_allocation_lznt1_chunk_over_4096",
+       .base =
+           FakeImage::BuildFakeNtfsImageWithLznt1ChunkOver4096IndexAllocation,
+       .damage = PackRoot,
+       .needs = Feature::Decompression},
+      {.name = "compressed_index_allocation_lznt1_invalid_signature",
+       .base = FakeImage::
+           BuildFakeNtfsImageWithLznt1InvalidSignatureIndexAllocation,
+       .damage = PackRoot,
+       .needs = Feature::Decompression},
+      {.name = "compressed_index_allocation_lznt1_literal_exceeds_dest",
+       .base = FakeImage::
+           BuildFakeNtfsImageWithLznt1LiteralExceedsDestIndexAllocation,
+       .damage = PackRoot,
+       .needs = Feature::Decompression},
+      {.name = "compressed_index_allocation_lznt1_truncated_word",
+       .base =
+           FakeImage::BuildFakeNtfsImageWithLznt1TruncatedWordIndexAllocation,
+       .damage = PackRoot,
+       .needs = Feature::Decompression},
+      {.name =
+           "compressed_index_allocation_lznt1_uncompressed_chunk_exceeds_dest",
+       .base = FakeImage::
+           BuildFakeNtfsImageWithLznt1UncompressedChunkExceedsDestIndexAllocation,
+       .damage = PackRoot,
+       .needs = Feature::Decompression},
   };
   return inputs;
 }
