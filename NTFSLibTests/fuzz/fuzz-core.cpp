@@ -739,6 +739,19 @@ void ProbeOnce(std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
   }
 }
 
+void ProbeFullCacheOnce(
+    std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
+    const VolumeOptions& options) {
+  try {
+    NtfsVolume<NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache> volume(
+        std::move(reader), options);
+    ProbeVolume(volume);
+  }
+  // NOLINTNEXTLINE(bugprone-empty-catch)
+  catch (const std::exception&) {
+  }
+}
+
 void ProbeScanOnce(std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
                    const VolumeOptions& options) {
   static_cast<void>(

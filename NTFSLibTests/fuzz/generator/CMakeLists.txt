@@ -60,6 +60,20 @@ add_library(
   "record-slack-scenarios.cpp"
   "include/ntfs-browser/tool/fuzzgen/slack-names-scenarios.h"
   "slack-names-scenarios.cpp"
+  "include/ntfs-browser/tool/fuzzgen/record-edit.h"
+  "record-edit.cpp"
+  "include/ntfs-browser/tool/fuzzgen/legacy-fixtures.h"
+  "legacy-fixtures.cpp"
+  "include/ntfs-browser/tool/fuzzgen/mft-fixture-scenarios.h"
+  "mft-fixture-scenarios.cpp"
+  "include/ntfs-browser/tool/fuzzgen/file-record-scenarios.h"
+  "file-record-scenarios.cpp"
+  "include/ntfs-browser/tool/fuzzgen/volume-record-scenarios.h"
+  "volume-record-scenarios.cpp"
+  "include/ntfs-browser/tool/fuzzgen/attribute-list-fixture-scenarios.h"
+  "attribute-list-fixture-scenarios.cpp"
+  "include/ntfs-browser/tool/fuzzgen/index-fixture-scenarios.h"
+  "index-fixture-scenarios.cpp"
 )
 
 target_include_directories(

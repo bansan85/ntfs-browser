@@ -47,6 +47,14 @@ void FuzzTestcase(std::span<BYTE> data, bool inject_failures,
 void ProbeOnce(std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
                const NTFS_BROWSER_NAMESPACE::VolumeOptions& options = {});
 
+// Runs every probe of ProbeOnce() on a FullCache volume over reader. A
+// recording reader around an image yields the byte stream that a FullCache run
+// of an input replays: the cache reads whole blocks, in another order than a
+// NoCache volume. Library exceptions are caught here.
+void ProbeFullCacheOnce(
+    std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
+    const NTFS_BROWSER_NAMESPACE::VolumeOptions& options = {});
+
 // Scans the $MFT once with one thread, on a NoCache volume over reader, as
 // the thread probe of FuzzTestcase() does for each input. A recording reader
 // around an image yields the byte stream that probe replays in step: the other

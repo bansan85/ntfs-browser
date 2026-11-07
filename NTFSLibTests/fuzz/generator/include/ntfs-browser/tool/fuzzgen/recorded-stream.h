@@ -28,7 +28,10 @@ class RecordedStream {
     // on. The input is padded with zeros to the size of the image: the replay
     // reader reports the length of the input as the size of the volume, and
     // the account judges clusters against it.
-    ClusterAccount
+    ClusterAccount,
+    // Test::Fuzz::ProbeFullCacheOnce(), the main probes on a FullCache volume,
+    // which reads whole blocks.
+    FullCache
   };
 
   // The saved input of probe over image, with the volume opened under options.

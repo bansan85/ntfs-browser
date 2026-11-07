@@ -1,12 +1,16 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/fuzzgen/alloc-scan-scenarios.h>
+#include <ntfs-browser/tool/fuzzgen/attribute-list-fixture-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/attribute-list-scan-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/bad-cluster-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/boot-sector-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/case-twin-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/cluster-bitmap-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/cluster-state-scenarios.h>
+#include <ntfs-browser/tool/fuzzgen/file-record-scenarios.h>
+#include <ntfs-browser/tool/fuzzgen/index-fixture-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/index-slack-scenarios.h>
+#include <ntfs-browser/tool/fuzzgen/mft-fixture-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/mft-scan-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/record-slack-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/run-list-scenarios.h>
@@ -16,6 +20,7 @@
 #include <ntfs-browser/tool/fuzzgen/tiny-stream-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/usn-journal-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/usn-tree-scenarios.h>
+#include <ntfs-browser/tool/fuzzgen/volume-record-scenarios.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 
@@ -36,6 +41,11 @@ ScenarioRegistry ScenarioCatalog::Build() {
   IndexSlackScenarios::Register(registry);
   RecordSlackScenarios::Register(registry);
   SlackNamesScenarios::Register(registry);
+  MftFixtureScenarios::Register(registry);
+  FileRecordScenarios::Register(registry);
+  VolumeRecordScenarios::Register(registry);
+  AttributeListFixtureScenarios::Register(registry);
+  IndexFixtureScenarios::Register(registry);
   return registry;
 }
 

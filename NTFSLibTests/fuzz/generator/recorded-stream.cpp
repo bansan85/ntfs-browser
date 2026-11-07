@@ -35,6 +35,9 @@ std::vector<BYTE>
       case Probe::ClusterAccount:
         Test::Fuzz::ProbeClusterAccountOnce(std::move(reader), options);
         break;
+      case Probe::FullCache:
+        Test::Fuzz::ProbeFullCacheOnce(std::move(reader), options);
+        break;
     }
   }
 
