@@ -28,6 +28,8 @@ add_library(
   "fake-ntfs-image-compressed-index.cpp"
   "fake-ntfs-image-efs.cpp"
   "fake-ntfs-image-slack.cpp"
+  "include/ntfs-browser/test/fake-image/slack-inputs.h"
+  "fake-ntfs-image-slack-inputs.cpp"
   "fake-ntfs-image-usn.cpp"
   "include/ntfs-browser/test/fake-image/file-record-header-edit.h"
   "include/ntfs-browser/test/usn/usn-journal-record.h"

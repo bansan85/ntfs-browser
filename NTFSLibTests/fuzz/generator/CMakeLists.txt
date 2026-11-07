@@ -54,6 +54,12 @@ add_library(
   "run-list-scenarios.cpp"
   "include/ntfs-browser/tool/fuzzgen/attribute-list-scan-scenarios.h"
   "attribute-list-scan-scenarios.cpp"
+  "include/ntfs-browser/tool/fuzzgen/index-slack-scenarios.h"
+  "index-slack-scenarios.cpp"
+  "include/ntfs-browser/tool/fuzzgen/record-slack-scenarios.h"
+  "record-slack-scenarios.cpp"
+  "include/ntfs-browser/tool/fuzzgen/slack-names-scenarios.h"
+  "slack-names-scenarios.cpp"
 )
 
 target_include_directories(

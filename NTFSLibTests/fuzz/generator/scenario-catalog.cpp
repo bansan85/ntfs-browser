@@ -6,10 +6,13 @@
 #include <ntfs-browser/tool/fuzzgen/case-twin-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/cluster-bitmap-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/cluster-state-scenarios.h>
+#include <ntfs-browser/tool/fuzzgen/index-slack-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/mft-scan-scenarios.h>
+#include <ntfs-browser/tool/fuzzgen/record-slack-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/run-list-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-catalog.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
+#include <ntfs-browser/tool/fuzzgen/slack-names-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/tiny-stream-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/usn-journal-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/usn-tree-scenarios.h>
@@ -30,6 +33,9 @@ ScenarioRegistry ScenarioCatalog::Build() {
   MftScanScenarios::Register(registry);
   RunListScenarios::Register(registry);
   AttributeListScanScenarios::Register(registry);
+  IndexSlackScenarios::Register(registry);
+  RecordSlackScenarios::Register(registry);
+  SlackNamesScenarios::Register(registry);
   return registry;
 }
 
