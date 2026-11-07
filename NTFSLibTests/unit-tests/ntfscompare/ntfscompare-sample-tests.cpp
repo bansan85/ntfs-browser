@@ -9,9 +9,8 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/namespace.h>
-
-#include "sample-run.h"
-#include "temp-dir.h"
+#include <ntfs-browser/test/device-access/temp-dir.h>
+#include <ntfs-browser/test/support/sample-run.h>
 
 #ifndef _WIN32
   #include <sys/stat.h>

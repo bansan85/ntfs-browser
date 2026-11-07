@@ -19,11 +19,11 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/support/name-support.h>
+#include <ntfs-browser/test/support/name-tree-support.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "mft/tree-testing.h"
-#include "name-support.h"
-#include "name-tree-support.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;

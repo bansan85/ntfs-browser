@@ -17,11 +17,11 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fuzz/fuzz-core.h>
 #include <ntfs-browser/test/fuzz/looping-disk-reader.h>
+#include <ntfs-browser/test/support/test-log-sink.h>
 
 #include "frozen/bits/elsa_std.h"
 #include "frozen/unordered_map.h"
 #include "fuzzer-expected-messages.h"
-#include "test-log-sink.h"
 
 using NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog;
 using NTFS_BROWSER_NAMESPACE::Tests::FuzzRegression::expected_error_messages;

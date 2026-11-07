@@ -29,8 +29,8 @@
 
 #if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
     (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT))
-  #include "efs-test-support.h"
-  #include "efs-tests-support.h"
+  #include <ntfs-browser/test/efs/efs-test-support.h>
+  #include <ntfs-browser/test/efs/efs-tests-support.h>
 #endif
 
 #ifdef NTFS_BROWSER_ENABLE_DECOMPRESSION

@@ -20,9 +20,8 @@
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-
-#include "corpus-test-support.h"
-#include "optional-access.h"
+#include <ntfs-browser/test/corpus/corpus-test-support.h>
+#include <ntfs-browser/test/support/optional-access.h>
 
 namespace NTFS_BROWSER_NAMESPACE {
 

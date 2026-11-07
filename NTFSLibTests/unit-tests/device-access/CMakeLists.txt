@@ -12,7 +12,7 @@ target_sources(
     "output-tests.cpp"
     "profile-tools-tests.cpp"
     "sparse-capture-tests.cpp"
-    "temp-dir.h"
+    "include/ntfs-browser/test/device-access/temp-dir.h"
     "text-convert-tests.cpp"
     "tool-support-tests.cpp"
 )
@@ -21,7 +21,7 @@ target_link_libraries(NtfsBrowserTests PRIVATE NtfsDeviceAccess)
 
 target_include_directories(
   NtfsBrowserTests
-  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}"
+  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
 # The tests of NtfsBench run the executable (tools/benchmark/).

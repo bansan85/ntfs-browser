@@ -31,10 +31,10 @@
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/support/test-log-sink.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "log/ntfs-common.h"
-#include "test-log-sink.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;

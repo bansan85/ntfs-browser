@@ -2,7 +2,7 @@ target_sources(
   NtfsBrowserTests
   PRIVATE
     "corpus-test-support.cpp"
-    "corpus-test-support.h"
+    "include/ntfs-browser/test/corpus/corpus-test-support.h"
     "dftt-ntfs-tests.cpp"
     "external-boot-tests.cpp"
     "external-logfile-fixtures-tests.cpp"
@@ -24,7 +24,7 @@ target_sources(
     "external-slack-tests.cpp"
     "nps-ntfs1-ntfsdir-tests.cpp"
     "nps-ntfs1-test-support.cpp"
-    "nps-ntfs1-test-support.h"
+    "include/ntfs-browser/test/corpus/nps-ntfs1-test-support.h"
     "nps-ntfs1-tests.cpp"
     "ntfs-samples-2m-tests.cpp"
     "ntfs-samples-fragmented-mft-tests.cpp"
@@ -37,5 +37,5 @@ target_sources(
 
 target_include_directories(
   NtfsBrowserTests
-  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}"
+  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )

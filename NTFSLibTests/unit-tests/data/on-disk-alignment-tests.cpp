@@ -23,6 +23,7 @@
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/fake-image/file-record-header-edit.h>
+#include <ntfs-browser/test/support/optional-access.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "data/file-record-header.h"
@@ -32,7 +33,6 @@
 #include "data/index-block.h"
 #include "data/index-entry.h"
 #include "data/index-root.h"
-#include "optional-access.h"
 #include "record/header.h"
 
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;

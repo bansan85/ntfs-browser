@@ -1,8 +1,7 @@
-#include "md5-test-support.h"
-
 #include <ntfs-browser/win-types.h>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/support/md5-test-support.h>
 
 #ifdef NTFS_TEST_HAS_MD5
 

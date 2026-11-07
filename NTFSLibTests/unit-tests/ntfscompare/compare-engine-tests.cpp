@@ -11,10 +11,9 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/support/name-support.h>
 #include <ntfs-browser/tool/ntfscompare/compare-engine.h>
 #include <ntfs-browser/tool/ntfscompare/entry.h>
-
-#include "name-support.h"
 
 using NtfsCompare::CompareAgainstReference;
 using NtfsCompare::CompareLibraryMethods;

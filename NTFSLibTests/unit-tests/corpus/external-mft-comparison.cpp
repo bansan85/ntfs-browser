@@ -15,8 +15,8 @@
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/corpus/corpus-test-support.h>
 
-#include "corpus-test-support.h"
 #include "external-mft-support.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {

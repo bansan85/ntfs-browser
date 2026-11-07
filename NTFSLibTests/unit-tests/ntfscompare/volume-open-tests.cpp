@@ -43,10 +43,9 @@ TEMPLATE_TEST_CASE_SIG(
   #include <filesystem>
   #include <string>
 
+  #include <ntfs-browser/test/device-access/temp-dir.h>
   #include <ntfs-browser/tool/device-access/device-path.h>
   #include <ntfs-browser/tool/device-access/text-convert.h>
-
-  #include "temp-dir.h"
 
 using NTFS_BROWSER_NAMESPACE::Tests::TempDir;
 using NTFS_BROWSER_NAMESPACE::Tests::WriteFakeNtfsImage;

@@ -13,6 +13,7 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/attr/nonresident-index-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/volume-options.h>
 
@@ -21,7 +22,6 @@
 #include "data/index-entry-flag.h"
 #include "data/index-entry.h"
 #include "data/index-root.h"
-#include "nonresident-index-support.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Io {

@@ -10,8 +10,7 @@
 
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
-
-#include "alloc-test-support.h"
+#include <ntfs-browser/test/alloc/alloc-test-support.h>
 
 namespace NtfsBrowser {
 namespace Cache {

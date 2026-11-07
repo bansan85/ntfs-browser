@@ -21,10 +21,9 @@
   #include <ntfs-browser/namespace.h>
   #include <ntfs-browser/ntfs-volume.h>
   #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
+  #include <ntfs-browser/test/efs/efs-test-support.h>
   #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-
-  #include "efs-test-support.h"
-  #include "test-log-sink.h"
+  #include <ntfs-browser/test/support/test-log-sink.h>
 
 namespace Fs = std::filesystem;
 

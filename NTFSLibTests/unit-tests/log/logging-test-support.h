@@ -12,9 +12,9 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/support/test-log-sink.h>
 
 #include "../support/child-process.h"
-#include "test-log-sink.h"
 
 namespace Fs = std::filesystem;
 

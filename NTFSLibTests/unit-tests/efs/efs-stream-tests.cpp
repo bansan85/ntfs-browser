@@ -29,14 +29,14 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
+#include <ntfs-browser/test/efs/efs-test-support.h>
+#include <ntfs-browser/test/efs/efs-tests-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/support/optional-access.h>
+#include <ntfs-browser/test/support/test-log-sink.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "efs-test-support.h"
-#include "efs-tests-support.h"
 #include "efs/fek.h"
-#include "optional-access.h"
-#include "test-log-sink.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Attr {

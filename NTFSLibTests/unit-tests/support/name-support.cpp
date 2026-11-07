@@ -1,5 +1,3 @@
-#include "name-support.h"
-
 #include <cstddef>
 #include <string>
 #include <string_view>
@@ -7,6 +5,7 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/support/name-support.h>
 
 #include "utf/utf.h"
 

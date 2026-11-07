@@ -23,11 +23,10 @@
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/attr/nonresident-index-support.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-
-#include "nonresident-index-support.h"
-#include "test-log-sink.h"
+#include <ntfs-browser/test/support/test-log-sink.h>
 
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

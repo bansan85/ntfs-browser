@@ -23,15 +23,15 @@
   #include <ntfs-browser/mft/idx.h>
   #include <ntfs-browser/namespace.h>
   #include <ntfs-browser/ntfs-volume.h>
+  #include <ntfs-browser/test/device-access/temp-dir.h>
   #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+  #include <ntfs-browser/test/support/host-media-support.h>
   #include <ntfs-browser/tuning/tuning.h>
   #include <ntfs-browser/volume-options.h>
 
   #include "directory-read-ahead-support.h"
-  #include "host-media-support.h"
   #include "io/host-media-kind.h"
   #include "io/win32-disk-reader.h"
-  #include "temp-dir.h"
 
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

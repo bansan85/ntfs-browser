@@ -11,8 +11,7 @@
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-
-#include "sample-run.h"
+#include <ntfs-browser/test/support/sample-run.h>
 
 // What the tests of NtfsMftList share: how to run it, and the image it lists.
 namespace NTFS_BROWSER_NAMESPACE::Tests::MftListSample {

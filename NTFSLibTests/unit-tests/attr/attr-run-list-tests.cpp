@@ -23,11 +23,11 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/support/test-log-sink.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "data/header-non-resident.h"
 #include "data/ntfs-bpb.h"
-#include "test-log-sink.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;

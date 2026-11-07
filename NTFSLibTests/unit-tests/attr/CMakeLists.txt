@@ -19,7 +19,7 @@ target_sources(
     "coverage-attrs-tests.cpp"
     "coverage-nonresident-index-tests.cpp"
     "index-entry-size-tests.cpp"
-    "nonresident-index-support.h"
+    "include/ntfs-browser/test/attr/nonresident-index-support.h"
     "real-ranges-tests.cpp"
 )
 
@@ -31,5 +31,5 @@ endif()
 
 target_include_directories(
   NtfsBrowserTests
-  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}"
+  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )

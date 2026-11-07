@@ -16,14 +16,14 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/device-access/temp-dir.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/support/sample-run.h>
 #include <ntfs-browser/tool/device-access/json.h>
 #include <ntfs-browser/tuning/knobs.h>
 
 #include "ntfsdir-sample-support.h"
 #include "ntfsmftlist-sample-support.h"
-#include "sample-run.h"
-#include "temp-dir.h"
 
 namespace DirSample = NTFS_BROWSER_NAMESPACE::Tests::DirSample;
 namespace MftListSample = NTFS_BROWSER_NAMESPACE::Tests::MftListSample;

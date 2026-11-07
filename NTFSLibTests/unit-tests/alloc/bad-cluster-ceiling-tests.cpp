@@ -14,11 +14,11 @@
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/alloc/alloc-failure-support.h>
+#include <ntfs-browser/test/alloc/alloc-test-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "alloc-failure-support.h"
-#include "alloc-test-support.h"
 #include "alloc/bad-cluster-list.h"
 
 namespace NtfsBrowser {

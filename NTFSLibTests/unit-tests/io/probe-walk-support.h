@@ -22,12 +22,12 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
+#include <ntfs-browser/test/support/test-log-sink.h>
 #include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "io/file-record-index.h"
 #include "log/ntfs-common.h"
-#include "test-log-sink.h"
 
 namespace NtfsBrowser {
 namespace Cache {

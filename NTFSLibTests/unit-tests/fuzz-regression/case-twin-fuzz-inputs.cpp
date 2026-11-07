@@ -11,10 +11,10 @@
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/support/name-support.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "fuzz-input-writer.h"
-#include "name-support.h"
 
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;

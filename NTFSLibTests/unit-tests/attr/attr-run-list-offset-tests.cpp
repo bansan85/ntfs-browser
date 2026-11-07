@@ -20,9 +20,8 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
+#include <ntfs-browser/test/support/scratch-record.h>
 #include <ntfs-browser/volume-options.h>
-
-#include "scratch-record.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;

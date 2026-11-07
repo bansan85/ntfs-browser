@@ -28,14 +28,14 @@
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/alloc/alloc-test-support.h>
+#include <ntfs-browser/test/alloc/cluster-account-support.h>
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/usn/types.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "alloc-test-support.h"
-#include "cluster-account-support.h"
 #include "knob-effect-support.h"
 #include "mft-tree-state-support.h"
 #include "usn-journal-record.h"

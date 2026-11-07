@@ -8,8 +8,8 @@
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/corpus/corpus-test-support.h>
 
-#include "corpus-test-support.h"
 #include "ntfs-samples-support.h"
 
 using NTFS_BROWSER_NAMESPACE::IndexEntryView;

@@ -15,12 +15,12 @@
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/alloc/alloc-failure-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/support/scripted-disk-reader.h>
 #include <ntfs-browser/usn/types.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "alloc-failure-support.h"
-#include "scripted-disk-reader.h"
 #include "usn-test-support.h"
 #include "usn/usn-journal-loader.h"
 

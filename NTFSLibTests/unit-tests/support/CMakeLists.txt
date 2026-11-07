@@ -1,32 +1,32 @@
 target_sources(
   NtfsBrowserTests
   PRIVATE
-    "bench-session-guard.h"
+    "include/ntfs-browser/test/support/bench-session-guard.h"
     "child-process.cpp"
     "child-process.h"
     "child-process-tests.cpp"
     "host-media-support.cpp"
-    "host-media-support.h"
-    "level-recorder.h"
+    "include/ntfs-browser/test/support/host-media-support.h"
+    "include/ntfs-browser/test/support/level-recorder.h"
     "md5-test-support.cpp"
-    "md5-test-support.h"
+    "include/ntfs-browser/test/support/md5-test-support.h"
     "name-support.cpp"
-    "name-support.h"
-    "optional-access.h"
+    "include/ntfs-browser/test/support/name-support.h"
+    "include/ntfs-browser/test/support/optional-access.h"
     "sample-run.cpp"
-    "sample-run.h"
+    "include/ntfs-browser/test/support/sample-run.h"
     "scan-comparison.cpp"
-    "scan-comparison.h"
-    "scratch-record.h"
-    "scripted-disk-reader.h"
+    "include/ntfs-browser/test/support/scan-comparison.h"
+    "include/ntfs-browser/test/support/scratch-record.h"
+    "include/ntfs-browser/test/support/scripted-disk-reader.h"
     "sysfs-support.cpp"
     "test-log-sink.cpp"
-    "test-log-sink.h"
+    "include/ntfs-browser/test/support/test-log-sink.h"
     "walk-comparison.cpp"
-    "walk-comparison.h"
+    "include/ntfs-browser/test/support/walk-comparison.h"
 )
 
 target_include_directories(
   NtfsBrowserTests
-  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}"
+  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )

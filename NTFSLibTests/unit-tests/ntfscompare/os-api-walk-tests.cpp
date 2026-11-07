@@ -14,10 +14,9 @@
   #include <windows.h>
 #endif
 
+#include <ntfs-browser/test/support/optional-access.h>
 #include <ntfs-browser/tool/ntfscompare/entry.h>
 #include <ntfs-browser/tool/ntfscompare/os-api-walk.h>
-
-#include "optional-access.h"
 
 using NTFS_BROWSER_NAMESPACE::Tests::Unwrap;
 using NtfsCompare::Entry;

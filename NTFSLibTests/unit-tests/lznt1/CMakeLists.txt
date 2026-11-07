@@ -1,4 +1,7 @@
-target_sources(NtfsBrowserTests PRIVATE "compression-test-constants.h")
+target_sources(
+  NtfsBrowserTests
+  PRIVATE "include/ntfs-browser/test/lznt1/compression-test-constants.h"
+)
 
 # These call Lznt1::Decompress directly or drive compressed reads end to end:
 # nothing left to link against without decompression.
@@ -11,5 +14,5 @@ endif()
 
 target_include_directories(
   NtfsBrowserTests
-  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}"
+  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )

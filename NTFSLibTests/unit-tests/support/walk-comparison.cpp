@@ -1,5 +1,3 @@
-#include "walk-comparison.h"
-
 #include <ntfs-browser/win-types.h>
 
 #include <sstream>
@@ -17,8 +15,8 @@
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
-
-#include "test-log-sink.h"
+#include <ntfs-browser/test/support/test-log-sink.h>
+#include <ntfs-browser/test/support/walk-comparison.h>
 
 namespace NtfsBrowser {
 

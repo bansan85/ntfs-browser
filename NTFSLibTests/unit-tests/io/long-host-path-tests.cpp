@@ -13,10 +13,10 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/support/long-path-support.h>
+#include <ntfs-browser/test/support/test-log-sink.h>
 
 #include "log/ntfs-common.h"
-#include "long-path-support.h"
-#include "test-log-sink.h"
 
 #ifdef _WIN32
   #include "io/file-reader.h"

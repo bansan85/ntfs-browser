@@ -20,13 +20,12 @@
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/corpus/corpus-test-support.h>
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
+#include <ntfs-browser/test/support/md5-test-support.h>
+#include <ntfs-browser/test/support/optional-access.h>
 #include <ntfs-browser/volume-options.h>
-
-#include "corpus-test-support.h"
-#include "md5-test-support.h"
-#include "optional-access.h"
 
 using NTFS_BROWSER_NAMESPACE::IndexEntry;
 using NTFS_BROWSER_NAMESPACE::Attr::AttrBase;

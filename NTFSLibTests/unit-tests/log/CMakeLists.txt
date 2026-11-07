@@ -13,8 +13,3 @@ target_sources(
     "spdlog-adapter-tests.cpp"
     "volume-options-log-tests.cpp"
 )
-
-target_include_directories(
-  NtfsBrowserTests
-  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}"
-)

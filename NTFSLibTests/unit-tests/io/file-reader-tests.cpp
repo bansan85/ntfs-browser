@@ -29,10 +29,10 @@
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/partition-disk-reader.h>
+#include <ntfs-browser/test/support/optional-access.h>
 #include <ntfs-browser/tuning/tuning.h>
 
 #include "io/file-reader.h"
-#include "optional-access.h"
 
 namespace {
 

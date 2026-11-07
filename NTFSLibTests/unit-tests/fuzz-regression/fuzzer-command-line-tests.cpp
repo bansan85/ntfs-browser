@@ -10,8 +10,7 @@
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fuzz/fuzz-core.h>
-
-#include "test-log-sink.h"
+#include <ntfs-browser/test/support/test-log-sink.h>
 
 namespace {
 

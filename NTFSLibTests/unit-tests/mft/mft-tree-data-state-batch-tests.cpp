@@ -14,10 +14,10 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/alloc/alloc-test-support.h>
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 
-#include "alloc-test-support.h"
 #include "alloc/cluster-bitmap.h"
 #include "mft/tree-testing.h"
 

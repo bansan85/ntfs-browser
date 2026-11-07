@@ -13,13 +13,13 @@
 
 #include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/efs/efs-test-support.h>
+#include <ntfs-browser/test/support/test-log-sink.h>
 
-#include "efs-test-support.h"
 #include "efs/efs-context.h"
 #include "efs/efs-stream.h"
 #include "efs/fek.h"
 #include "efs/sector-cipher.h"
-#include "test-log-sink.h"
 
 namespace Efs = NTFS_BROWSER_NAMESPACE::Efs;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;

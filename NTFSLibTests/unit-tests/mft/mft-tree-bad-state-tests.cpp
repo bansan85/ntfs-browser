@@ -16,14 +16,14 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/alloc/alloc-failure-support.h>
+#include <ntfs-browser/test/alloc/alloc-test-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/support/test-log-sink.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "alloc-failure-support.h"
-#include "alloc-test-support.h"
 #include "mft-tree-state-support.h"
 #include "mft/tree-testing.h"
-#include "test-log-sink.h"
 
 using Catch::Matchers::ContainsSubstring;
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;

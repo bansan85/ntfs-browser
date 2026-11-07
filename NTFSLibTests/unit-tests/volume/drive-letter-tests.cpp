@@ -6,8 +6,7 @@
 
   #include <ntfs-browser/cache/strategy.h>
   #include <ntfs-browser/ntfs-volume.h>
-
-  #include "test-log-sink.h"
+  #include <ntfs-browser/test/support/test-log-sink.h>
 
 using Catch::Matchers::ContainsSubstring;
 

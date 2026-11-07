@@ -9,8 +9,8 @@
 #include <gsl/narrow>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/support/optional-access.h>
 
-#include "optional-access.h"
 #include "upcase/upcase.h"
 
 using NTFS_BROWSER_NAMESPACE::UpCase::Table;

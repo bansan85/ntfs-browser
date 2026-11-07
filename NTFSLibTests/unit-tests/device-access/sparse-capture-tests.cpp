@@ -18,13 +18,13 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/device-access/temp-dir.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/support/bench-session-guard.h>
 #include <ntfs-browser/tool/device-access/sparse-capture.h>
 
-#include "bench-session-guard.h"
 #include "io/file-reader.h"
-#include "temp-dir.h"
 
 #ifdef _WIN32
   #include <windows.h>

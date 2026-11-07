@@ -16,15 +16,15 @@
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/corpus/corpus-test-support.h>
+#include <ntfs-browser/test/corpus/nps-ntfs1-test-support.h>
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
+#include <ntfs-browser/test/support/scan-comparison.h>
+#include <ntfs-browser/test/support/test-log-sink.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "corpus-test-support.h"
 #include "external-mft-support.h"
-#include "nps-ntfs1-test-support.h"
-#include "scan-comparison.h"
-#include "test-log-sink.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;

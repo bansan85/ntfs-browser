@@ -25,12 +25,11 @@
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/device-access/temp-dir.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/support/bench-session-guard.h>
 #include <ntfs-browser/volume-options.h>
-
-#include "bench-session-guard.h"
-#include "temp-dir.h"
 
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

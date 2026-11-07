@@ -16,12 +16,11 @@
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/alloc/alloc-test-support.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/recording-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/fuzz/fuzz-core.h>
-
-#include "alloc-test-support.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;

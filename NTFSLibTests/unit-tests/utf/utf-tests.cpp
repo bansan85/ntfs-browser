@@ -9,8 +9,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/support/name-support.h>
 
-#include "name-support.h"
 #include "utf/utf.h"
 
 namespace {

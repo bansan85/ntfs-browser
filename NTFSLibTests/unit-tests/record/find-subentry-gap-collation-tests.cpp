@@ -17,9 +17,8 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/support/optional-access.h>
 #include <ntfs-browser/volume-options.h>
-
-#include "optional-access.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Io {

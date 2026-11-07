@@ -14,13 +14,13 @@ if(NTFS_BROWSER_EFS_MASTER)
       "efs-stream-limits-tests.cpp"
       "efs-stream-tests.cpp"
       "efs-test-support.cpp"
-      "efs-test-support.h"
-      "efs-tests-support.h"
+      "include/ntfs-browser/test/efs/efs-test-support.h"
+      "include/ntfs-browser/test/efs/efs-tests-support.h"
       "nps-ntfs1-efs-tests.cpp"
   )
 endif()
 
 target_include_directories(
   NtfsBrowserTests
-  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}"
+  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )

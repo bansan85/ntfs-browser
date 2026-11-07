@@ -13,10 +13,9 @@
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/corpus/nps-ntfs1-test-support.h>
+#include <ntfs-browser/test/support/md5-test-support.h>
 #include <ntfs-browser/volume-options.h>
-
-#include "md5-test-support.h"
-#include "nps-ntfs1-test-support.h"
 
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;

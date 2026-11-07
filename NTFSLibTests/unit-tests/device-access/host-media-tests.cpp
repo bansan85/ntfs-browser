@@ -11,12 +11,11 @@
 #endif
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/device-access/temp-dir.h>
 #include <ntfs-browser/tool/device-access/host-media.h>
 #include <ntfs-browser/tool/device-access/posix-device-disk-reader.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
 #include <ntfs-browser/tuning/tuning.h>
-
-#include "temp-dir.h"
 
 namespace fs = std::filesystem;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;

@@ -23,9 +23,9 @@
 #include <catch2/matchers/catch_matchers.hpp>
 
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/support/sample-run.h>
 
 #include "ntfsdir-sample-support.h"
-#include "sample-run.h"
 
 using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::Tests::dump_broken_alter_time;

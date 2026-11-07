@@ -13,12 +13,11 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/corpus/corpus-test-support.h>
+#include <ntfs-browser/test/corpus/nps-ntfs1-test-support.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
+#include <ntfs-browser/test/support/walk-comparison.h>
 #include <ntfs-browser/volume-options.h>
-
-#include "corpus-test-support.h"
-#include "nps-ntfs1-test-support.h"
-#include "walk-comparison.h"
 
 namespace NtfsBrowser {
 

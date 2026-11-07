@@ -26,9 +26,9 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/standalone-mft-disk-reader.h>
+#include <ntfs-browser/test/support/test-log-sink.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "test-log-sink.h"
 #include "utf/utf.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {

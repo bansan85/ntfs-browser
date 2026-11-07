@@ -28,6 +28,7 @@
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/fake-image/file-record-header-edit.h>
+#include <ntfs-browser/test/support/test-log-sink.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "data/file-record-flag.h"
@@ -41,7 +42,6 @@
 #include "data/standard-information.h"
 #include "data/std-info-permission.h"
 #include "data/volume-information.h"
-#include "test-log-sink.h"
 
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

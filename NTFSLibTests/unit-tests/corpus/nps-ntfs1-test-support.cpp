@@ -1,5 +1,3 @@
-#include "nps-ntfs1-test-support.h"
-
 #include <ntfs-browser/win-types.h>
 
 #include <optional>
@@ -15,8 +13,8 @@
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-
-#include "optional-access.h"
+#include <ntfs-browser/test/corpus/nps-ntfs1-test-support.h>
+#include <ntfs-browser/test/support/optional-access.h>
 
 namespace NTFS_BROWSER_NAMESPACE {
 

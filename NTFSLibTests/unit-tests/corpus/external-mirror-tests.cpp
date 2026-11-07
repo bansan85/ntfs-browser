@@ -25,13 +25,13 @@
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/corpus/corpus-test-support.h>
 #include <ntfs-browser/test/disk-readers/standalone-mft-disk-reader.h>
+#include <ntfs-browser/test/support/test-log-sink.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "corpus-test-support.h"
 #include "data/ntfs-bpb.h"
 #include "external-mft-support.h"
-#include "test-log-sink.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 

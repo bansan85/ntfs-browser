@@ -1,13 +1,12 @@
 #ifdef _WIN32
 
-  #include "host-media-support.h"
-
   #include <string>
   #include <vector>
 
   #include <windows.h>
 
   #include <ntfs-browser/namespace.h>
+  #include <ntfs-browser/test/support/host-media-support.h>
   #include <ntfs-browser/tuning/tuning.h>
 
   #include "io/host-media-kind.h"

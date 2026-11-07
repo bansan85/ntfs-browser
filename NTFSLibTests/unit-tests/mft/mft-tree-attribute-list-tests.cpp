@@ -27,9 +27,9 @@
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/support/level-recorder.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "level-recorder.h"
 #include "mft/tree-testing.h"
 
 namespace NtfsBrowser {

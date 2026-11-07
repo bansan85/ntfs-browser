@@ -19,14 +19,14 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/device-access/temp-dir.h>
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
+#include <ntfs-browser/test/support/bench-session-guard.h>
 #include <ntfs-browser/tuning/tuning.h>
 
-#include "bench-session-guard.h"
 #include "bench/recorder.h"
 #include "io/file-reader.h"
-#include "temp-dir.h"
 
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

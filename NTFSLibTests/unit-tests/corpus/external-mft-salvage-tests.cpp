@@ -19,9 +19,9 @@
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/corpus/corpus-test-support.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "corpus-test-support.h"
 #include "external-mft-support.h"
 
 namespace NTFS_BROWSER_NAMESPACE {

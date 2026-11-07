@@ -9,8 +9,3 @@ target_sources(
     "on-disk-struct-layout-tests.cpp"
     "update-sequence-block-count-tests.cpp"
 )
-
-target_include_directories(
-  NtfsBrowserTests
-  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}"
-)

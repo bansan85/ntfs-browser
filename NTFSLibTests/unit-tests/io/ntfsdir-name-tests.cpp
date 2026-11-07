@@ -17,12 +17,12 @@
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/support/long-path-support.h>
+#include <ntfs-browser/test/support/name-support.h>
+#include <ntfs-browser/test/support/sample-run.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
 
-#include "long-path-support.h"
-#include "name-support.h"
 #include "ntfsdir-sample-support.h"
-#include "sample-run.h"
 
 using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithNameTree;

@@ -19,14 +19,14 @@
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/efs/efs-test-support.h>
+#include <ntfs-browser/test/efs/efs-tests-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/support/scripted-disk-reader.h>
+#include <ntfs-browser/test/support/test-log-sink.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "efs-test-support.h"
-#include "efs-tests-support.h"
 #include "efs/fek.h"
-#include "scripted-disk-reader.h"
-#include "test-log-sink.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;

@@ -1,5 +1,3 @@
-#include "corpus-test-support.h"
-
 #include <ntfs-browser/win-types.h>
 
 #include <cstdlib>
@@ -16,6 +14,7 @@
 
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/corpus/corpus-test-support.h>
 #include <ntfs-browser/test/disk-readers/partition-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/recording-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/sequential-disk-reader.h>

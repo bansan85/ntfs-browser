@@ -14,9 +14,9 @@
 
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/support/test-log-sink.h>
 
 #include "alloc/bad-cluster-list.h"
-#include "test-log-sink.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 using Alloc::BadClusterList;

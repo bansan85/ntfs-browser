@@ -19,10 +19,9 @@
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
+#include <ntfs-browser/test/efs/efs-test-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/volume-options.h>
-
-#include "efs-test-support.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Attr {

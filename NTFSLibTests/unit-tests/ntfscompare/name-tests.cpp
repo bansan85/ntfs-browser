@@ -22,19 +22,18 @@
   #include <windows.h>
 #endif
 
+#include <ntfs-browser/test/device-access/temp-dir.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/support/long-path-support.h>
+#include <ntfs-browser/test/support/name-support.h>
+#include <ntfs-browser/test/support/name-tree-support.h>
+#include <ntfs-browser/test/support/sample-run.h>
 #include <ntfs-browser/tool/ntfscompare/compare-engine.h>
 #include <ntfs-browser/tool/ntfscompare/entry.h>
 #include <ntfs-browser/tool/ntfscompare/library-walk.h>
 #include <ntfs-browser/tool/ntfscompare/os-api-walk.h>
 #include <ntfs-browser/tool/ntfscompare/std-filesystem-walk.h>
 #include <ntfs-browser/tool/ntfscompare/volume-open.h>
-
-#include "long-path-support.h"
-#include "name-support.h"
-#include "name-tree-support.h"
-#include "sample-run.h"
-#include "temp-dir.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Fs = std::filesystem;

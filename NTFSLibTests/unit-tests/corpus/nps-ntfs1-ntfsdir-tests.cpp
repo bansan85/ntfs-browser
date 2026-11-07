@@ -10,10 +10,9 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/namespace.h>
-
-#include "corpus-test-support.h"
-#include "nps-ntfs1-test-support.h"
-#include "sample-run.h"
+#include <ntfs-browser/test/corpus/corpus-test-support.h>
+#include <ntfs-browser/test/corpus/nps-ntfs1-test-support.h>
+#include <ntfs-browser/test/support/sample-run.h>
 
 using NTFS_BROWSER_NAMESPACE::Tests::RunSample;
 using NTFS_BROWSER_NAMESPACE::Tests::SampleRun;

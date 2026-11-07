@@ -9,8 +9,8 @@
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/lznt1/compression-test-constants.h>
 
-#include "compression-test-constants.h"
 #include "lznt1/decompress.h"
 
 namespace {

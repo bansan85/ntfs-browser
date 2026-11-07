@@ -1,5 +1,3 @@
-#include "test-log-sink.h"
-
 #include <memory>
 #include <string>
 #include <string_view>
@@ -7,6 +5,7 @@
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/log/sink.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/support/test-log-sink.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 namespace {

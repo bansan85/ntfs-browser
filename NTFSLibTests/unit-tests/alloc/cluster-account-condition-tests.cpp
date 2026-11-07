@@ -11,11 +11,11 @@
 #include <ntfs-browser/alloc/cluster-account.h>
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/alloc/alloc-test-support.h>
+#include <ntfs-browser/test/alloc/cluster-account-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "alloc-test-support.h"
-#include "cluster-account-support.h"
 #include "mft-tree-state-support.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;

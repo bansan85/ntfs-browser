@@ -28,10 +28,9 @@
 #include <catch2/generators/catch_generators.hpp>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/device-access/temp-dir.h>
 #include <ntfs-browser/tool/device-access/line-buffer.h>
 #include <ntfs-browser/tool/device-access/output.h>
-
-#include "temp-dir.h"
 
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 using NtfsDevice::Output;

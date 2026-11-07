@@ -22,12 +22,12 @@
 #include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/device-access/temp-dir.h>
+#include <ntfs-browser/test/support/bench-session-guard.h>
 #include <ntfs-browser/tuning/tuning.h>
 
-#include "bench-session-guard.h"
 #include "bench/recorder.h"
 #include "io/win32-disk-reader.h"
-#include "temp-dir.h"
 
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;

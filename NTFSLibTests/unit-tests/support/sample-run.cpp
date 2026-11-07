@@ -1,5 +1,3 @@
-#include "sample-run.h"
-
 #include <fstream>
 #include <iterator>
 #include <random>
@@ -9,6 +7,7 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/support/sample-run.h>
 
 #include "child-process.h"
 

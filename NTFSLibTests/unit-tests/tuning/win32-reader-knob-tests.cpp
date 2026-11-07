@@ -17,12 +17,12 @@
   #include <ntfs-browser/bench/bench.h>
   #include <ntfs-browser/disk-reader.h>
   #include <ntfs-browser/namespace.h>
+  #include <ntfs-browser/test/device-access/temp-dir.h>
+  #include <ntfs-browser/test/support/bench-session-guard.h>
   #include <ntfs-browser/tuning/tuning.h>
   #include <ntfs-browser/volume-options.h>
 
-  #include "bench-session-guard.h"
   #include "knob-effect-support.h"
-  #include "temp-dir.h"
 
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;

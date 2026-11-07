@@ -21,9 +21,9 @@
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/support/bench-session-guard.h>
 #include <ntfs-browser/tuning/tuning.h>
 
-#include "bench-session-guard.h"
 #include "io/file-reader.h"
 
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;

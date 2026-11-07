@@ -8,9 +8,9 @@
 
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/support/test-log-sink.h>
 
 #include "log/ntfs-common.h"
-#include "test-log-sink.h"
 
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;
 

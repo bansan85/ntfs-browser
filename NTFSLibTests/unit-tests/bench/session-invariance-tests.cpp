@@ -24,14 +24,14 @@
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/support/bench-session-guard.h>
+#include <ntfs-browser/test/support/scan-comparison.h>
+#include <ntfs-browser/test/support/test-log-sink.h>
+#include <ntfs-browser/test/support/walk-comparison.h>
 #include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "bench-session-guard.h"
 #include "io/file-reader.h"
-#include "scan-comparison.h"
-#include "test-log-sink.h"
-#include "walk-comparison.h"
 
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

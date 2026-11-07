@@ -6,8 +6,3 @@ target_sources(
     "block-cache-tests.cpp"
     "view-tests.cpp"
 )
-
-target_include_directories(
-  NtfsBrowserTests
-  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}"
-)

@@ -15,10 +15,9 @@
 #include <ntfs-browser/example/ntfsundel/ntfsundel-core.h>
 #include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/device-access/temp-dir.h>
+#include <ntfs-browser/test/support/long-path-support.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
-
-#include "long-path-support.h"
-#include "temp-dir.h"
 
 namespace Fs = std::filesystem;
 using NTFS_BROWSER_NAMESPACE::Tests::LongTempDir;

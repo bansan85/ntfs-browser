@@ -1,5 +1,3 @@
-#include "scan-comparison.h"
-
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
@@ -20,9 +18,10 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/record/carved-name.h>
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
+#include <ntfs-browser/test/support/scan-comparison.h>
+#include <ntfs-browser/test/support/test-log-sink.h>
 
 #include "mft/tree-testing.h"
-#include "test-log-sink.h"
 
 namespace NtfsBrowser {
 

@@ -16,8 +16,7 @@
 #include <gsl/narrow>
 
 #include <ntfs-browser/namespace.h>
-
-#include "corpus-test-support.h"
+#include <ntfs-browser/test/corpus/corpus-test-support.h>
 
 namespace {
 

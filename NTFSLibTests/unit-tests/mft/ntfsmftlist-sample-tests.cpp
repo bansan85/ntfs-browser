@@ -15,14 +15,14 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/alloc/cluster-account-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/support/sample-run.h>
 #include <ntfs-browser/tool/device-access/local-time.h>
 
-#include "cluster-account-support.h"
 #include "data/std-info-permission.h"
 #include "mft-tree-parent-support.h"
 #include "ntfsmftlist-sample-support.h"
-#include "sample-run.h"
 
 using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::Tests::sample_failure_exit_code;

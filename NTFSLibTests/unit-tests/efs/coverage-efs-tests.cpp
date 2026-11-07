@@ -13,8 +13,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/efs/efs-test-support.h>
 
-#include "efs-test-support.h"
 #include "efs/cipher-bcrypt.h"
 #include "efs/cipher-cryptopp.h"
 #include "efs/efs-stream.h"

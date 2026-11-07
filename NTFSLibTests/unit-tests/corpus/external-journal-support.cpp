@@ -25,12 +25,12 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/corpus/corpus-test-support.h>
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/usn/types.h>
 
-#include "corpus-test-support.h"
 #include "external-journal-samples.h"
 #include "external-mft-support.h"
 #include "usn-test-support.h"

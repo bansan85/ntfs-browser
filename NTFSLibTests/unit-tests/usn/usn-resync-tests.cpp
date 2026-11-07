@@ -15,10 +15,10 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/alloc/alloc-failure-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/usn/types.h>
 
-#include "alloc-failure-support.h"
 #include "usn-test-support.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
