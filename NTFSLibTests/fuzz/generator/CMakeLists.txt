@@ -92,6 +92,20 @@ add_library(
   "legacy-index-block-scenarios.cpp"
   "include/ntfs-browser/tool/fuzzgen/legacy-residency-scenarios.h"
   "legacy-residency-scenarios.cpp"
+  "include/ntfs-browser/tool/fuzzgen/data-run-lcn-scenarios.h"
+  "data-run-lcn-scenarios.cpp"
+  "include/ntfs-browser/tool/fuzzgen/root-index-edit.h"
+  "root-index-edit.cpp"
+  "include/ntfs-browser/tool/fuzzgen/efs-fixture-scenarios.h"
+  "efs-fixture-scenarios.cpp"
+  "include/ntfs-browser/tool/fuzzgen/compressed-file-scenarios.h"
+  "compressed-file-scenarios.cpp"
+  "include/ntfs-browser/tool/fuzzgen/legacy-volume-scenarios.h"
+  "legacy-volume-scenarios.cpp"
+  "include/ntfs-browser/tool/fuzzgen/legacy-record.h"
+  "legacy-record.cpp"
+  "include/ntfs-browser/tool/fuzzgen/mft-huge-scan-scenarios.h"
+  "mft-huge-scan-scenarios.cpp"
 )
 
 target_include_directories(
@@ -103,6 +117,11 @@ target_link_libraries(
   NtfsFuzzGenCore
   PUBLIC ${PROJECT_NAME} NtfsFuzzCore NtfsFakeImage NtfsTestDiskReaders
 )
+
+# The EFS inputs encrypt their data with the cipher of the unit tests.
+if(NTFS_BROWSER_EFS_MASTER)
+  target_link_libraries(NtfsFuzzGenCore PUBLIC NtfsEfsTestSupport)
+endif()
 
 # BuildFeatures tells what the build contains, the way fuzzer-expected-messages.h
 # does for the tests.

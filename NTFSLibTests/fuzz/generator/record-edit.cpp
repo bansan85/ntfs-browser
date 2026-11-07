@@ -1,5 +1,6 @@
 #include <ntfs-browser/win-types.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstring>
 #include <stdexcept>
@@ -169,6 +170,40 @@ void RecordEdit::SetRunList(std::vector<BYTE>& image, std::size_t attr,
       attr + Load<WORD>(image, attr + attr_data_run_offset_field);
   for (std::size_t i = 0; i < runs.size(); ++i) {
     Store<BYTE>(image, start + i, runs[i]);
+  }
+}
+
+void RecordEdit::ReplaceRunList(std::vector<BYTE>& image, std::size_t attr,
+                                const std::vector<BYTE>& runs) {
+  constexpr std::size_t alignment = 8;
+  const std::size_t runs_offset =
+      Load<WORD>(image, attr + attr_data_run_offset_field);
+  const std::size_t old_total =
+      Load<DWORD>(image, attr + attr_total_size_field);
+  const std::size_t new_total =
+      (runs_offset + runs.size() + alignment - 1) / alignment * alignment;
+  // The record keeps the bytes of its last sector word for the fixup.
+  const std::size_t record_end =
+      (attr / FakeImage::fake_cluster_size) * FakeImage::fake_cluster_size +
+      FakeImage::fake_file_record_size - 4;
+  const std::size_t tail_start = attr + old_total;
+  static_cast<void>(image.at(record_end));
+  if (attr + new_total > record_end) {
+    throw std::out_of_range("the run list does not fit in the record");
+  }
+  std::vector<BYTE> tail(
+      image.begin() + static_cast<std::ptrdiff_t>(tail_start),
+      image.begin() + static_cast<std::ptrdiff_t>(record_end));
+  std::fill(image.begin() + static_cast<std::ptrdiff_t>(attr + runs_offset),
+            image.begin() + static_cast<std::ptrdiff_t>(record_end), BYTE{0});
+  for (std::size_t i = 0; i < runs.size(); ++i) {
+    Store<BYTE>(image, attr + runs_offset + i, runs[i]);
+  }
+  Store<DWORD>(image, attr + attr_total_size_field,
+               static_cast<DWORD>(new_total));
+  const std::size_t room = record_end - (attr + new_total);
+  for (std::size_t i = 0; i < std::min(tail.size(), room); ++i) {
+    Store<BYTE>(image, attr + new_total + i, tail[i]);
   }
 }
 

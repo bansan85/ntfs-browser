@@ -93,6 +93,13 @@ class RecordEdit {
   static void SetRunList(std::vector<BYTE>& image, std::size_t attr,
                          const std::vector<BYTE>& runs);
 
+  // Replaces the run list of the non-resident attribute at attr, and gives the
+  // attribute the size of its header and the new list, rounded up to 8 bytes.
+  // The attributes after it move with it. Throws std::out_of_range when the
+  // record cannot hold them.
+  static void ReplaceRunList(std::vector<BYTE>& image, std::size_t attr,
+                             const std::vector<BYTE>& runs);
+
   // Puts a resident attribute after the last one of record idx, then moves
   // the end marker after it. The attribute is as long as its header and its
   // value, with no padding. Returns the offset of the attribute. Throws

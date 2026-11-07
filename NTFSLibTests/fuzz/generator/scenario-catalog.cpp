@@ -7,6 +7,9 @@
 #include <ntfs-browser/tool/fuzzgen/case-twin-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/cluster-bitmap-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/cluster-state-scenarios.h>
+#include <ntfs-browser/tool/fuzzgen/compressed-file-scenarios.h>
+#include <ntfs-browser/tool/fuzzgen/data-run-lcn-scenarios.h>
+#include <ntfs-browser/tool/fuzzgen/efs-fixture-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/file-record-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/index-fixture-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/index-slack-scenarios.h>
@@ -16,7 +19,9 @@
 #include <ntfs-browser/tool/fuzzgen/legacy-index-root-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/legacy-residency-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/legacy-root-record-scenarios.h>
+#include <ntfs-browser/tool/fuzzgen/legacy-volume-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/mft-fixture-scenarios.h>
+#include <ntfs-browser/tool/fuzzgen/mft-huge-scan-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/mft-scan-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/record-slack-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/run-list-scenarios.h>
@@ -58,6 +63,11 @@ ScenarioRegistry ScenarioCatalog::Build() {
   LegacyAttributeListScenarios::Register(registry);
   LegacyIndexBlockScenarios::Register(registry);
   LegacyResidencyScenarios::Register(registry);
+  MftHugeScanScenarios::Register(registry);
+  LegacyVolumeScenarios::Register(registry);
+  CompressedFileScenarios::Register(registry);
+  EfsFixtureScenarios::Register(registry);
+  DataRunLcnScenarios::Register(registry);
   return registry;
 }
 
