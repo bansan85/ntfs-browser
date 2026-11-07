@@ -59,9 +59,9 @@ target_compile_definitions(
   PRIVATE NTFS_BROWSER_EXPORT_INTERNALS_FOR_TESTS
 )
 
-# Crypto++: efs/efs-test-support.cpp's reference cipher for building EFS test
-# fixtures, and support/md5-test-support.cpp's MD5. Without it, both fall back to
-# BCrypt (Windows only, linked below). The cryptopp::cryptopp target only
+# Crypto++: support/md5-test-support.cpp's MD5 (the EFS test support has its
+# own link). Without it, the MD5 falls back to BCrypt (Windows only, linked
+# below). The cryptopp::cryptopp target only
 # exists when the root CMakeLists.txt configured Crypto++, that is when
 # NTFS_BROWSER_ENABLE_EFS_CRYPTOPP is on.
 if(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP)

@@ -13,11 +13,10 @@ if(NTFS_BROWSER_EFS_MASTER)
       "efs-pfx-tests.cpp"
       "efs-stream-limits-tests.cpp"
       "efs-stream-tests.cpp"
-      "efs-test-support.cpp"
-      "include/ntfs-browser/test/efs/efs-test-support.h"
       "include/ntfs-browser/test/efs/efs-tests-support.h"
       "nps-ntfs1-efs-tests.cpp"
   )
+  target_link_libraries(NtfsBrowserTests PRIVATE NtfsEfsTestSupport)
 endif()
 
 target_include_directories(
