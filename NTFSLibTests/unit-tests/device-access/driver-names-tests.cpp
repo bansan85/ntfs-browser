@@ -3,7 +3,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include "driver-names.h"
+#include <ntfs-browser/tool/device-access/driver-names.h>
 
 using NtfsDevice::DecodeDriverName;
 using NtfsDevice::IsDriverMappingKnown;

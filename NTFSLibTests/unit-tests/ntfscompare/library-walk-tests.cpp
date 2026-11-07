@@ -23,12 +23,12 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/tool/ntfscompare/compare-engine.h>
+#include <ntfs-browser/tool/ntfscompare/entry.h>
+#include <ntfs-browser/tool/ntfscompare/library-walk.h>
+#include <ntfs-browser/tool/ntfscompare/volume-open.h>
 
-#include "compare-engine.h"
-#include "entry.h"
-#include "library-walk.h"
 #include "optional-access.h"
-#include "volume-open.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 
@@ -39,8 +39,9 @@ struct VolumeOptions;
 #ifndef _WIN32
   #include <fstream>
 
-  #include "os-api-walk.h"
-  #include "std-filesystem-walk.h"
+  #include <ntfs-browser/tool/ntfscompare/os-api-walk.h>
+  #include <ntfs-browser/tool/ntfscompare/std-filesystem-walk.h>
+
   #include "temp-dir.h"
 #endif
 

@@ -14,12 +14,12 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tool/device-access/bench-options.h>
+#include <ntfs-browser/tool/device-access/json.h>
 #include <ntfs-browser/tuning/knobs.h>
 #include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "bench-options.h"
-#include "json.h"
 #include "temp-dir.h"
 
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;

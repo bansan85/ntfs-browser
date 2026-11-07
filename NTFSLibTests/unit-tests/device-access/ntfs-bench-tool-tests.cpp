@@ -24,9 +24,9 @@
 #include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/tool/device-access/json.h>
 #include <ntfs-browser/tuning/knobs.h>
 
-#include "json.h"
 #include "ntfsmftlist-sample-support.h"
 #include "sample-run.h"
 #include "temp-dir.h"

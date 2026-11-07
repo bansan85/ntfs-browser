@@ -1,5 +1,3 @@
-#include "text-convert.h"
-
 #include <algorithm>
 #include <cstddef>
 #include <filesystem>
@@ -9,6 +7,8 @@
 #include <string_view>
 
 #include <gsl/narrow>
+
+#include <ntfs-browser/tool/device-access/text-convert.h>
 
 namespace NtfsDevice {
 

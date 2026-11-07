@@ -34,28 +34,28 @@
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/tool/device-access/bench-options.h>
+#include <ntfs-browser/tool/device-access/bench-session.h>
+#include <ntfs-browser/tool/device-access/device-path.h>
+#include <ntfs-browser/tool/device-access/line-buffer.h>
+#include <ntfs-browser/tool/device-access/local-time.h>
+#include <ntfs-browser/tool/device-access/ordered-chunks.h>
+#include <ntfs-browser/tool/device-access/output.h>
+#include <ntfs-browser/tool/device-access/text-convert.h>
+#include <ntfs-browser/tool/device-access/tool-support.h>
 #include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/usn/types.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "arguments.h"
-#include "bench-options.h"
-#include "bench-session.h"
-#include "device-path.h"
 #include "display-paths.h"
-#include "line-buffer.h"
-#include "local-time.h"
-#include "ordered-chunks.h"
-#include "output.h"
-#include "text-convert.h"
-#include "tool-support.h"
 
 #ifdef _WIN32
   #include <cwctype>
 
 #else
-  #include "argv-wide.h"
-  #include "posix-device-disk-reader.h"
+  #include <ntfs-browser/tool/device-access/argv-wide.h>
+  #include <ntfs-browser/tool/device-access/posix-device-disk-reader.h>
 #endif
 
 using namespace NTFS_BROWSER_NAMESPACE;

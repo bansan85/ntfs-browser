@@ -6,8 +6,7 @@
 
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
-
-#include "tool-support.h"
+#include <ntfs-browser/tool/device-access/tool-support.h>
 
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;
 using NtfsDevice::IsLogOption;

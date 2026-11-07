@@ -1,7 +1,15 @@
 # The dump logic, with no MFC in it, so the unit tests can link it too
 # (unit-tests/io/ntfsdump-core-tests.cpp).
-add_library(NtfsDumpCore STATIC "ntfsdump-core.cpp")
-target_include_directories(NtfsDumpCore PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+add_library(
+  NtfsDumpCore
+  STATIC
+  "include/ntfs-browser/example/ntfsdump/ntfsdump-core.h"
+  "ntfsdump-core.cpp"
+)
+target_include_directories(
+  NtfsDumpCore
+  PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
 target_link_libraries(NtfsDumpCore PUBLIC ${PROJECT_NAME})
 
 # The MFC dialog app. clang-cl cannot build MFC: the root option turns it off.

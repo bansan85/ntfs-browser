@@ -7,7 +7,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include "local-time.h"
+#include <ntfs-browser/tool/device-access/local-time.h>
 
 using NtfsDevice::LocalTime;
 using NtfsDevice::UtcTicksToLocalTime;

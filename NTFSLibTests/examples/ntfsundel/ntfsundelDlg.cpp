@@ -10,10 +10,10 @@
 
 #include <gsl/narrow>
 
+#include <ntfs-browser/example/ntfsundel/ntfsundel-core.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
-#include "ntfsundel-core.h"
 #include "ntfsundel.h"
 #include "ntfsundelDlg.h"
 

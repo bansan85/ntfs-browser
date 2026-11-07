@@ -21,11 +21,11 @@
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/tool/device-access/device-path.h>
+#include <ntfs-browser/tool/device-access/json.h>
+#include <ntfs-browser/tool/device-access/text-convert.h>
 
 #include "bench-tool.h"
-#include "device-path.h"
-#include "json.h"
-#include "text-convert.h"
 
 #ifdef _WIN32
   #include <windows.h>
@@ -37,7 +37,7 @@
   #include <fcntl.h>
   #include <unistd.h>
 
-  #include "posix-device-disk-reader.h"
+  #include <ntfs-browser/tool/device-access/posix-device-disk-reader.h>
 #endif
 
 namespace NtfsBenchTool {

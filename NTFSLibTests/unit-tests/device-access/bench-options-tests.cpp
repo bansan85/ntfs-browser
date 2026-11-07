@@ -14,10 +14,9 @@
 
 #include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tool/device-access/bench-options.h>
 #include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
-
-#include "bench-options.h"
 
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;

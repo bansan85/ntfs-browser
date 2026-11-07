@@ -1,7 +1,15 @@
 # The listing logic, shared by both samples. Each sample picks the cache
 # strategy of its volume in its own wmain (main on POSIX).
-add_library(NtfsDirCore STATIC "ntfsdir-core.cpp")
-target_include_directories(NtfsDirCore PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+add_library(
+  NtfsDirCore
+  STATIC
+  "include/ntfs-browser/example/ntfsdir/ntfsdir-core.h"
+  "ntfsdir-core.cpp"
+)
+target_include_directories(
+  NtfsDirCore
+  PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
 target_link_libraries(NtfsDirCore PUBLIC ${PROJECT_NAME} NtfsDeviceAccess)
 
 add_executable(NtfsDir WIN32 "main.cpp")

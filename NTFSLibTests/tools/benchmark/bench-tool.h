@@ -10,8 +10,7 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
-
-#include "bench-options.h"
+#include <ntfs-browser/tool/device-access/bench-options.h>
 
 namespace NtfsDevice {
 

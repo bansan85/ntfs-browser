@@ -1,5 +1,3 @@
-#include "ntfsdump-core.h"
-
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -10,6 +8,7 @@
 #include <vector>
 
 #include <ntfs-browser/attr/base.h>
+#include <ntfs-browser/example/ntfsdump/ntfsdump-core.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>

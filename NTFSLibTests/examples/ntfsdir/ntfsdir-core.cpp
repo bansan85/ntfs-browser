@@ -1,5 +1,3 @@
-#include "ntfsdir-core.h"
-
 #include <ntfs-browser/win-types.h>
 
 #include <cerrno>
@@ -16,6 +14,7 @@
 #include <ntfs-browser/attr/mask.h>
 #include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/example/ntfsdir/ntfsdir-core.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/directory-read-ahead.h>
 #include <ntfs-browser/io/file-record.h>
@@ -23,16 +22,15 @@
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tool/device-access/bench-options.h>
+#include <ntfs-browser/tool/device-access/bench-session.h>
+#include <ntfs-browser/tool/device-access/device-path.h>
+#include <ntfs-browser/tool/device-access/local-time.h>
+#include <ntfs-browser/tool/device-access/output.h>
+#include <ntfs-browser/tool/device-access/text-convert.h>
+#include <ntfs-browser/tool/device-access/tool-support.h>
 #include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
-
-#include "bench-options.h"
-#include "bench-session.h"
-#include "device-path.h"
-#include "local-time.h"
-#include "output.h"
-#include "text-convert.h"
-#include "tool-support.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 
@@ -42,7 +40,7 @@ class NtfsVolume;
 }  // namespace NTFS_BROWSER_NAMESPACE
 
 #ifndef _WIN32
-  #include "posix-device-disk-reader.h"
+  #include <ntfs-browser/tool/device-access/posix-device-disk-reader.h>
 #endif
 
 using namespace NTFS_BROWSER_NAMESPACE;

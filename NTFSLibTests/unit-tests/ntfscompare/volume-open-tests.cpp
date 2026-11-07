@@ -10,9 +10,8 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/tool/ntfscompare/volume-open.h>
 #include <ntfs-browser/volume-options.h>
-
-#include "volume-open.h"
 
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::Cache::Strategy;
@@ -44,9 +43,10 @@ TEMPLATE_TEST_CASE_SIG(
   #include <filesystem>
   #include <string>
 
-  #include "device-path.h"
+  #include <ntfs-browser/tool/device-access/device-path.h>
+  #include <ntfs-browser/tool/device-access/text-convert.h>
+
   #include "temp-dir.h"
-  #include "text-convert.h"
 
 using NTFS_BROWSER_NAMESPACE::Tests::TempDir;
 using NTFS_BROWSER_NAMESPACE::Tests::WriteFakeNtfsImage;

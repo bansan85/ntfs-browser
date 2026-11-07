@@ -1,7 +1,5 @@
 #ifndef _WIN32
 
-  #include "host-media.h"
-
   #include <filesystem>
   #include <format>
   #include <fstream>
@@ -9,6 +7,8 @@
   #include <string>
   #include <system_error>
   #include <utility>
+
+  #include <ntfs-browser/tool/device-access/host-media.h>
 
 namespace NtfsDevice {
 

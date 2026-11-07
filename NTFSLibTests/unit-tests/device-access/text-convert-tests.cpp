@@ -5,9 +5,9 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tool/device-access/text-convert.h>
 
 #include "name-support.h"
-#include "text-convert.h"
 #include "utf/utf.h"
 
 using NtfsDevice::PathFromWide;

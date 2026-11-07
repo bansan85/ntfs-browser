@@ -3,7 +3,7 @@
   #include <cstdlib>
   #include <filesystem>
 
-  #include "host-media.h"
+  #include <ntfs-browser/tool/device-access/host-media.h>
 
 namespace {
 

@@ -1,5 +1,3 @@
-#include "sparse-capture.h"
-
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
@@ -13,6 +11,7 @@
 #include <sys/types.h>
 
 #include <ntfs-browser/io/extended-path.h>
+#include <ntfs-browser/tool/device-access/sparse-capture.h>
 
 #ifdef _WIN32
   #include <windows.h>

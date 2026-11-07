@@ -1,5 +1,3 @@
-#include "bench-options.h"
-
 #include <array>
 #include <charconv>
 #include <cmath>
@@ -16,13 +14,13 @@
 
 #include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/io/extended-path.h>
+#include <ntfs-browser/tool/device-access/bench-options.h>
+#include <ntfs-browser/tool/device-access/disk-identity.h>
+#include <ntfs-browser/tool/device-access/json.h>
+#include <ntfs-browser/tool/device-access/text-convert.h>
 #include <ntfs-browser/tuning/knobs.h>
 #include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
-
-#include "disk-identity.h"
-#include "json.h"
-#include "text-convert.h"
 
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;

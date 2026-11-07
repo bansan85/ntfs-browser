@@ -8,10 +8,9 @@
 #include <ntfs-browser/alloc/cluster-account.h>
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
-
-#include "bench-options.h"
-#include "text-convert.h"
-#include "tool-support.h"
+#include <ntfs-browser/tool/device-access/bench-options.h>
+#include <ntfs-browser/tool/device-access/text-convert.h>
+#include <ntfs-browser/tool/device-access/tool-support.h>
 
 using namespace NTFS_BROWSER_NAMESPACE;
 

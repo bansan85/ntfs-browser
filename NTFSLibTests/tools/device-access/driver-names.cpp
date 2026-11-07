@@ -1,13 +1,12 @@
 #ifndef _WIN32
 
-  #include "driver-names.h"
-
   #include <algorithm>
   #include <optional>
   #include <string>
   #include <string_view>
 
-  #include "text-convert.h"
+  #include <ntfs-browser/tool/device-access/driver-names.h>
+  #include <ntfs-browser/tool/device-access/text-convert.h>
 
 namespace NtfsDevice {
 

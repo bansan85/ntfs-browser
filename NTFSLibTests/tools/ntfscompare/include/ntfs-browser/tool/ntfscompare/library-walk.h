@@ -17,8 +17,7 @@
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
-
-#include "entry.h"
+#include <ntfs-browser/tool/ntfscompare/entry.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Cache {
 

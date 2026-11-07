@@ -3,7 +3,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include "argv-wide.h"
+#include <ntfs-browser/tool/device-access/argv-wide.h>
 
 using NtfsDevice::ArgumentPointers;
 using NtfsDevice::ArgumentsAsWide;

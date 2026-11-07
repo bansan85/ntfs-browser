@@ -13,8 +13,7 @@
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
-
-#include "text-convert.h"
+#include <ntfs-browser/tool/device-access/text-convert.h>
 
 using namespace NTFS_BROWSER_NAMESPACE;
 

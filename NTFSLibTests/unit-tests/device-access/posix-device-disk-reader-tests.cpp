@@ -13,10 +13,10 @@
 #include <unistd.h>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tool/device-access/posix-device-disk-reader.h>
+#include <ntfs-browser/tool/device-access/text-convert.h>
 
-#include "posix-device-disk-reader.h"
 #include "temp-dir.h"
-#include "text-convert.h"
 
 using NTFS_BROWSER_NAMESPACE::Tests::TempDir;
 using NtfsDevice::PosixDeviceDiskReader;

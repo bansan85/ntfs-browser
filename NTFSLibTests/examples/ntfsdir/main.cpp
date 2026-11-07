@@ -5,9 +5,8 @@
 // eg. ntfsdir /dev/sda1/Windows
 // eg. ntfsdir ./disk.img/Windows
 
+#include <ntfs-browser/example/ntfsdir/ntfsdir-core.h>
 #include <ntfs-browser/namespace.h>
-
-#include "ntfsdir-core.h"
 
 #ifdef _WIN32
 
@@ -22,7 +21,7 @@ int wmain(int argc, wchar_t* argv[]) {
   #include <string>
   #include <vector>
 
-  #include "argv-wide.h"
+  #include <ntfs-browser/tool/device-access/argv-wide.h>
 
 int main(int argc, char* argv[]) {
   std::vector<std::wstring> wide = NtfsDevice::ArgumentsAsWide(argc, argv);

@@ -27,6 +27,7 @@
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/disk-reader.h>
+#include <ntfs-browser/example/ntfsdir/ntfsdir-core.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/directory-read-ahead.h>
 #include <ntfs-browser/io/file-record.h>
@@ -43,7 +44,6 @@
 
 #include "io/directory-read-ahead-testing.h"
 #include "log/ntfs-common.h"
-#include "ntfsdir-core.h"
 #include "test-log-sink.h"
 
 namespace NtfsBrowser {

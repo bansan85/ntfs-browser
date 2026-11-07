@@ -1,5 +1,3 @@
-#include "library-walk.h"
-
 #include <ntfs-browser/win-types.h>
 
 #include <span>
@@ -7,6 +5,7 @@
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tool/ntfscompare/library-walk.h>
 
 #include "time-convert.h"
 

@@ -29,17 +29,17 @@
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tool/device-access/device-path.h>
+#include <ntfs-browser/tool/device-access/text-convert.h>
+#include <ntfs-browser/tool/device-access/tool-support.h>
+#include <ntfs-browser/tool/ntfscompare/compare-engine.h>
+#include <ntfs-browser/tool/ntfscompare/entry.h>
+#include <ntfs-browser/tool/ntfscompare/library-walk.h>
+#include <ntfs-browser/tool/ntfscompare/os-api-walk.h>
+#include <ntfs-browser/tool/ntfscompare/std-filesystem-walk.h>
+#include <ntfs-browser/tool/ntfscompare/volume-open.h>
 
-#include "compare-engine.h"
 #include "console.h"
-#include "device-path.h"
-#include "entry.h"
-#include "library-walk.h"
-#include "os-api-walk.h"
-#include "std-filesystem-walk.h"
-#include "text-convert.h"
-#include "tool-support.h"
-#include "volume-open.h"
 
 using NTFS_BROWSER_NAMESPACE::Mft::MftTree;
 using NtfsCompare::Listing;

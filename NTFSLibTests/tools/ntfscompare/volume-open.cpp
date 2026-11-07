@@ -1,5 +1,3 @@
-#include "volume-open.h"
-
 #include <array>
 #include <string>
 #include <system_error>
@@ -9,9 +7,10 @@
 #include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/tool/device-access/device-path.h>
+#include <ntfs-browser/tool/ntfscompare/volume-open.h>
 
 #include "console.h"
-#include "device-path.h"
 
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
@@ -86,8 +85,8 @@ std::optional<VolumeHandles>
 
   #include <mntent.h>
 
-  #include "posix-device-disk-reader.h"
-  #include "text-convert.h"
+  #include <ntfs-browser/tool/device-access/posix-device-disk-reader.h>
+  #include <ntfs-browser/tool/device-access/text-convert.h>
 
 namespace NtfsCompare {
 

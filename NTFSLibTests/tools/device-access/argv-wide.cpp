@@ -1,7 +1,5 @@
 #ifndef _WIN32
 
-  #include "argv-wide.h"
-
   #include <cstddef>
   #include <span>
   #include <string>
@@ -10,7 +8,8 @@
 
   #include <gsl/narrow>
 
-  #include "text-convert.h"
+  #include <ntfs-browser/tool/device-access/argv-wide.h>
+  #include <ntfs-browser/tool/device-access/text-convert.h>
 
 namespace NtfsDevice {
 

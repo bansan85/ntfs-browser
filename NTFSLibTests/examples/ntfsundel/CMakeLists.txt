@@ -1,7 +1,15 @@
 # The search and recovery logic, with no MFC in it, so the unit tests can
 # link it too (unit-tests/io/ntfsundel-*-tests.cpp).
-add_library(NtfsUndelCore STATIC "ntfsundel-core.cpp")
-target_include_directories(NtfsUndelCore PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+add_library(
+  NtfsUndelCore
+  STATIC
+  "include/ntfs-browser/example/ntfsundel/ntfsundel-core.h"
+  "ntfsundel-core.cpp"
+)
+target_include_directories(
+  NtfsUndelCore
+  PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
 target_link_libraries(NtfsUndelCore PUBLIC ${PROJECT_NAME})
 
 # The MFC dialog app. clang-cl cannot build MFC: the root option turns it off.

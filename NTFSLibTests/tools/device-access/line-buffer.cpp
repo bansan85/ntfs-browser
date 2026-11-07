@@ -1,8 +1,7 @@
-#include "line-buffer.h"
-
 #include <string_view>
 
-#include "text-convert.h"
+#include <ntfs-browser/tool/device-access/line-buffer.h>
+#include <ntfs-browser/tool/device-access/text-convert.h>
 
 namespace NtfsDevice {
 

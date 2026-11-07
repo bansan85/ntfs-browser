@@ -6,7 +6,7 @@
 #include <string>
 #include <utility>
 
-#include "text-convert.h"
+#include <ntfs-browser/tool/device-access/text-convert.h>
 
 namespace NtfsCompare {
 

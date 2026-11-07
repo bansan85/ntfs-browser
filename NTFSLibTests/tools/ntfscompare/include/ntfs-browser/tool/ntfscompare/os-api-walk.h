@@ -2,7 +2,7 @@
 
 #include <filesystem>
 
-#include "entry.h"
+#include <ntfs-browser/tool/ntfscompare/entry.h>
 
 namespace NtfsCompare {
 

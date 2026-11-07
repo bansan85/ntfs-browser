@@ -13,13 +13,13 @@
 
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/example/ntfsundel/ntfsundel-core.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 
 #include "alloc-test-support.h"
-#include "ntfsundel-core.h"
 
 namespace {
 

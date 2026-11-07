@@ -9,7 +9,7 @@
 #include <thread>
 #include <utility>
 
-#include "line-buffer.h"
+#include <ntfs-browser/tool/device-access/line-buffer.h>
 
 namespace NtfsDevice {
 

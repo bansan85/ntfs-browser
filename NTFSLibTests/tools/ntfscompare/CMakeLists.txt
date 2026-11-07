@@ -7,21 +7,24 @@
 add_library(
   NtfsCompareCore
   STATIC
-  "compare-engine.h"
+  "include/ntfs-browser/tool/ntfscompare/compare-engine.h"
   "compare-engine.cpp"
   "console.h"
-  "entry.h"
+  "include/ntfs-browser/tool/ntfscompare/entry.h"
   "time-convert.h"
-  "std-filesystem-walk.h"
+  "include/ntfs-browser/tool/ntfscompare/std-filesystem-walk.h"
   "std-filesystem-walk.cpp"
-  "library-walk.h"
+  "include/ntfs-browser/tool/ntfscompare/library-walk.h"
   "library-walk.cpp"
-  "os-api-walk.h"
+  "include/ntfs-browser/tool/ntfscompare/os-api-walk.h"
   "os-api-walk.cpp"
-  "volume-open.h"
+  "include/ntfs-browser/tool/ntfscompare/volume-open.h"
   "volume-open.cpp"
 )
-target_include_directories(NtfsCompareCore PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_include_directories(
+  NtfsCompareCore
+  PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
 target_link_libraries(NtfsCompareCore PUBLIC ${PROJECT_NAME} NtfsDeviceAccess)
 
 add_executable(NtfsCompare "main.cpp")

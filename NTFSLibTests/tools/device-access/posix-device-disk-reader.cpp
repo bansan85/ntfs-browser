@@ -1,7 +1,5 @@
 #ifndef _WIN32
 
-  #include "posix-device-disk-reader.h"
-
   #include <cerrno>
   #include <cstdint>
   #include <cstdlib>
@@ -19,6 +17,8 @@
   #include <sys/types.h>
   #include <unistd.h>
 
+  #include <ntfs-browser/tool/device-access/posix-device-disk-reader.h>
+
   #ifdef __linux__
     #include <linux/fs.h>
     #include <sys/sysmacros.h>
@@ -27,11 +27,10 @@
   #include <ntfs-browser/win-types.h>
 
   #include <ntfs-browser/namespace.h>
+  #include <ntfs-browser/tool/device-access/disk-identity.h>
+  #include <ntfs-browser/tool/device-access/host-media.h>
+  #include <ntfs-browser/tool/device-access/text-convert.h>
   #include <ntfs-browser/tuning/tuning.h>
-
-  #include "disk-identity.h"
-  #include "host-media.h"
-  #include "text-convert.h"
 
 namespace NtfsDevice {
 

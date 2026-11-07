@@ -8,11 +8,11 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tool/device-access/device-path.h>
+#include <ntfs-browser/tool/device-access/text-convert.h>
 
-#include "device-path.h"
 #include "long-path-support.h"
 #include "temp-dir.h"
-#include "text-convert.h"
 
 using NTFS_BROWSER_NAMESPACE::Tests::TempDir;
 using NtfsDevice::SplitDeviceTarget;

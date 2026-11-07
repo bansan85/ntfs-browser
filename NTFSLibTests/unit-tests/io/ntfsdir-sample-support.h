@@ -14,8 +14,8 @@
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/tool/device-access/local-time.h>
 
-#include "local-time.h"
 #include "sample-run.h"
 
 // What the tests of NtfsDir share: how to run it, the image it lists, and the

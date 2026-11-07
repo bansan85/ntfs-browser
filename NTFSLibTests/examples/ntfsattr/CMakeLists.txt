@@ -1,7 +1,15 @@
 # The attribute dump logic, with no MFC in it, so the unit tests can link it
 # too (unit-tests/io/ntfsattr-core-tests.cpp).
-add_library(NtfsAttrCore STATIC "ntfsattr-core.cpp")
-target_include_directories(NtfsAttrCore PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+add_library(
+  NtfsAttrCore
+  STATIC
+  "include/ntfs-browser/example/ntfsattr/ntfsattr-core.h"
+  "ntfsattr-core.cpp"
+)
+target_include_directories(
+  NtfsAttrCore
+  PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
 target_link_libraries(NtfsAttrCore PUBLIC ${PROJECT_NAME})
 
 # The MFC dialog app. clang-cl cannot build MFC: the root option turns it off.

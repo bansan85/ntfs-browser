@@ -1,5 +1,3 @@
-#include "ntfsattr-core.h"
-
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -11,6 +9,7 @@
 #include <vector>
 
 #include <ntfs-browser/attr/base.h>
+#include <ntfs-browser/example/ntfsattr/ntfsattr-core.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>

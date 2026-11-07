@@ -9,14 +9,13 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/example/ntfsundel/ntfsundel-core.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/volume-options.h>
-
-#include "ntfsundel-core.h"
 
 namespace {
 

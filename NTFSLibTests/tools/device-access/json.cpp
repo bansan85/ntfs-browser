@@ -1,5 +1,3 @@
-#include "json.h"
-
 #include <array>
 #include <charconv>
 #include <cmath>
@@ -10,6 +8,8 @@
 #include <string_view>
 #include <system_error>
 #include <utility>
+
+#include <ntfs-browser/tool/device-access/json.h>
 
 namespace NtfsDevice {
 

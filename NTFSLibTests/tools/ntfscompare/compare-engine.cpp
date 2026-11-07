@@ -1,5 +1,3 @@
-#include "compare-engine.h"
-
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
@@ -13,11 +11,13 @@
 #include <utility>
 #include <vector>
 
+#include <ntfs-browser/tool/device-access/text-convert.h>
+#include <ntfs-browser/tool/ntfscompare/compare-engine.h>
+
 #include "console.h"
-#include "text-convert.h"
 
 #ifndef _WIN32
-  #include "driver-names.h"
+  #include <ntfs-browser/tool/device-access/driver-names.h>
 #endif
 
 namespace NtfsCompare {

@@ -1,5 +1,3 @@
-#include "ntfsundel-core.h"
-
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -16,6 +14,7 @@
 
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/attr/base.h>
+#include <ntfs-browser/example/ntfsundel/ntfsundel-core.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/io/file-record.h>

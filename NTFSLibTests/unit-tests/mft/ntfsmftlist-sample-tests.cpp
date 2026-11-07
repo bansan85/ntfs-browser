@@ -16,10 +16,10 @@
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/tool/device-access/local-time.h>
 
 #include "cluster-account-support.h"
 #include "data/std-info-permission.h"
-#include "local-time.h"
 #include "mft-tree-parent-support.h"
 #include "ntfsmftlist-sample-support.h"
 #include "sample-run.h"

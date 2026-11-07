@@ -1,9 +1,9 @@
-#include "tool-support.h"
-
 #include <cstdio>
 #include <filesystem>
 #include <string>
 #include <string_view>
+
+#include <ntfs-browser/tool/device-access/tool-support.h>
 
 #ifdef _WIN32
   #include <windows.h>
@@ -11,8 +11,7 @@
 
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
-
-#include "text-convert.h"
+#include <ntfs-browser/tool/device-access/text-convert.h>
 
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;
 

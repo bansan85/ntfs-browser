@@ -26,17 +26,17 @@
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tool/device-access/bench-options.h>
+#include <ntfs-browser/tool/device-access/device-path.h>
+#include <ntfs-browser/tool/device-access/json.h>
+#include <ntfs-browser/tool/device-access/text-convert.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "bench-options.h"
 #include "bench-tool.h"
-#include "device-path.h"
-#include "json.h"
-#include "text-convert.h"
 
 #ifndef _WIN32
-  #include "argv-wide.h"
-  #include "posix-device-disk-reader.h"
+  #include <ntfs-browser/tool/device-access/argv-wide.h>
+  #include <ntfs-browser/tool/device-access/posix-device-disk-reader.h>
 #endif
 
 namespace NtfsBenchTool {

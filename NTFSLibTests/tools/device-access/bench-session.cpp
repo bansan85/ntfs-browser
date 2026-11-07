@@ -1,5 +1,3 @@
-#include "bench-session.h"
-
 #include <array>
 #include <cstdint>
 #include <cstdio>
@@ -15,11 +13,11 @@
 
 #include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/io/extended-path.h>
+#include <ntfs-browser/tool/device-access/bench-session.h>
+#include <ntfs-browser/tool/device-access/json.h>
+#include <ntfs-browser/tool/device-access/sparse-capture.h>
 #include <ntfs-browser/tuning/knobs.h>
 #include <ntfs-browser/tuning/tuning.h>
-
-#include "json.h"
-#include "sparse-capture.h"
 
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;

@@ -3,10 +3,10 @@
 
 #include "StdAfx.h"
 
+#include <ntfs-browser/example/ntfsattr/ntfsattr-core.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
-#include "ntfsattr-core.h"
 #include "ntfsattr.h"
 #include "ntfsattrDlg.h"
 

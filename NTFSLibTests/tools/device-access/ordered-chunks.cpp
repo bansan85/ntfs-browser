@@ -1,5 +1,3 @@
-#include "ordered-chunks.h"
-
 #include <algorithm>
 #include <condition_variable>
 #include <cstddef>
@@ -11,6 +9,7 @@
 
 #include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tool/device-access/ordered-chunks.h>
 
 namespace NtfsDevice {
 

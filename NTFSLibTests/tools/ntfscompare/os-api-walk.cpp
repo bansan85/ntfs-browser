@@ -1,5 +1,3 @@
-#include "os-api-walk.h"
-
 #include <ntfs-browser/win-types.h>
 
 #include <array>
@@ -13,6 +11,8 @@
 #include <vector>
 
 #include <gsl/narrow>
+
+#include <ntfs-browser/tool/ntfscompare/os-api-walk.h>
 
 #ifdef _WIN32
   #include <windows.h>
@@ -28,7 +28,7 @@
     #include <sys/xattr.h>
   #endif
 
-  #include "text-convert.h"
+  #include <ntfs-browser/tool/device-access/text-convert.h>
 #endif
 
 #include "time-convert.h"

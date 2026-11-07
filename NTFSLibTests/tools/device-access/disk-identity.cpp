@@ -1,10 +1,10 @@
-#include "disk-identity.h"
-
 #include <cstddef>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <system_error>
+
+#include <ntfs-browser/tool/device-access/disk-identity.h>
 
 #ifdef _WIN32
   #include <cwctype>
@@ -12,13 +12,13 @@
   #include <windows.h>
   #include <winioctl.h>
 
-  #include "device-path.h"
+  #include <ntfs-browser/tool/device-access/device-path.h>
 #else
   #include <filesystem>
   #include <fstream>
 #endif
 
-#include "text-convert.h"
+#include <ntfs-browser/tool/device-access/text-convert.h>
 
 namespace NtfsDevice {
 

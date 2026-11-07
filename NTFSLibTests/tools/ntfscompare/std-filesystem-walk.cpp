@@ -1,5 +1,3 @@
-#include "std-filesystem-walk.h"
-
 #include <ntfs-browser/win-types.h>
 
 #include <chrono>
@@ -11,9 +9,10 @@
 
 #include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tool/device-access/text-convert.h>
+#include <ntfs-browser/tool/ntfscompare/std-filesystem-walk.h>
 
 #include "console.h"
-#include "text-convert.h"
 #include "time-convert.h"
 
 namespace NtfsCompare {

@@ -1,9 +1,9 @@
 #include "StdAfx.h"
 
+#include <ntfs-browser/example/ntfsdump/ntfsdump-core.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 
-#include "ntfsdump-core.h"
 #include "ntfsdump.h"
 #include "ntfsdumpDlg.h"
 

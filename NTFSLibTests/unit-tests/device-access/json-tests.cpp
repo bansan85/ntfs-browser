@@ -11,7 +11,7 @@
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
-#include "json.h"
+#include <ntfs-browser/tool/device-access/json.h>
 
 using Catch::Matchers::ContainsSubstring;
 using NtfsDevice::JsonValue;

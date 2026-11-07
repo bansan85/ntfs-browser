@@ -1,5 +1,3 @@
-#include "output.h"
-
 #include <algorithm>
 #include <cstdio>
 #include <mutex>
@@ -7,6 +5,7 @@
 #include <thread>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tool/device-access/output.h>
 
 #ifdef _WIN32
   #include <cstddef>

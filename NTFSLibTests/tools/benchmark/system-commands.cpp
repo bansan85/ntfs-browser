@@ -19,14 +19,14 @@
 #include <sys/types.h>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tool/device-access/device-path.h>
+#include <ntfs-browser/tool/device-access/disk-identity.h>
+#include <ntfs-browser/tool/device-access/json.h>
+#include <ntfs-browser/tool/device-access/text-convert.h>
 #include <ntfs-browser/tuning/knobs.h>
 #include <ntfs-browser/tuning/tuning.h>
 
 #include "bench-tool.h"
-#include "device-path.h"
-#include "disk-identity.h"
-#include "json.h"
-#include "text-convert.h"
 
 #ifdef _WIN32
   #include <windows.h>

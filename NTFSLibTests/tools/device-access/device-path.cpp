@@ -1,5 +1,3 @@
-#include "device-path.h"
-
 #include <algorithm>
 #include <cstddef>
 #include <filesystem>
@@ -12,8 +10,8 @@
 
 #include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
-
-#include "text-convert.h"
+#include <ntfs-browser/tool/device-access/device-path.h>
+#include <ntfs-browser/tool/device-access/text-convert.h>
 
 namespace NtfsDevice {
 

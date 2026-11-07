@@ -15,9 +15,8 @@
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/tool/device-access/bench-options.h>
 #include <ntfs-browser/volume-options.h>
-
-#include "bench-options.h"
 
 // Prints command-line usage help.
 void Usage();

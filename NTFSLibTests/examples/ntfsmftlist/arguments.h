@@ -5,9 +5,8 @@
 
 #include <ntfs-browser/alloc/cluster-account.h>
 #include <ntfs-browser/log/log.h>
+#include <ntfs-browser/tool/device-access/bench-options.h>
 #include <ntfs-browser/volume-options.h>
-
-#include "bench-options.h"
 
 namespace MftList {
 
