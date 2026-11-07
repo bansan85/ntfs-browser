@@ -25,6 +25,13 @@ add_library(
   "scenario-registry.cpp"
   "include/ntfs-browser/tool/fuzzgen/stream-comparator.h"
   "stream-comparator.cpp"
+  # The scenario families, one per group of saved inputs.
+  "include/ntfs-browser/tool/fuzzgen/case-twin-scenarios.h"
+  "case-twin-scenarios.cpp"
+  "include/ntfs-browser/tool/fuzzgen/mft-scan-scenarios.h"
+  "mft-scan-scenarios.cpp"
+  "include/ntfs-browser/tool/fuzzgen/run-list-scenarios.h"
+  "run-list-scenarios.cpp"
 )
 
 target_include_directories(
@@ -114,3 +121,12 @@ add_custom_target(
   VERBATIM
 )
 add_dependencies(NtfsFuzzGenData NtfsFuzzGen)
+
+# Each scenario the generator has must stay identical to its committed file (or
+# be the start of the stream that the library reads today).
+add_test(
+  NAME NtfsFuzzGenVerify
+  COMMAND
+    NtfsFuzzGen --verify "${CMAKE_CURRENT_SOURCE_DIR}/../data" --resources
+    "${NTFS_FUZZGEN_RESOURCES_DIR}"
+)
