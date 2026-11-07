@@ -28,7 +28,7 @@
 namespace Fs = std::filesystem;
 
 using NTFS_BROWSER_NAMESPACE::Efs::MakePfxKeyProvider;
-using NTFS_BROWSER_NAMESPACE::Tests::Algorithm;
+using NTFS_BROWSER_NAMESPACE::Test::Efs::Algorithm;
 
 namespace {
 
@@ -90,7 +90,7 @@ std::vector<BYTE> ExpectedFek() {
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     key[i] = gsl::narrow<BYTE>((i + 1) * 3);
   }
-  return NTFS_BROWSER_NAMESPACE::Tests::MakeFekBlob(Algorithm::Aes256, key);
+  return NTFS_BROWSER_NAMESPACE::Test::Efs::MakeFekBlob(Algorithm::Aes256, key);
 }
 
 }  // namespace
@@ -177,19 +177,19 @@ TEMPLATE_TEST_CASE_SIG("A stream decrypts end to end with a PFX key provider",
     const std::vector<BYTE> blob = ExpectedFek();
     const std::vector<BYTE> key(blob.begin() + 16, blob.end());
     const std::vector<BYTE> plaintext =
-        NTFS_BROWSER_NAMESPACE::Tests::PlaintextPattern(1500);
+        NTFS_BROWSER_NAMESPACE::Test::Efs::PlaintextPattern(1500);
 
-    NTFS_BROWSER_NAMESPACE::Tests::TestEfsEntry user;
+    NTFS_BROWSER_NAMESPACE::Test::Efs::TestEfsEntry user;
     const std::vector<BYTE> thumbprint = Thumbprint(pfx);
     std::copy(thumbprint.begin(), thumbprint.end(), user.thumbprint.begin());
     user.wrapped_fek = WrappedFek(pfx);
 
     NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeEncryptedFile file;
     file.efs_stream =
-        NTFS_BROWSER_NAMESPACE::Tests::MakeEfsStream(std::span(&user, 1));
+        NTFS_BROWSER_NAMESPACE::Test::Efs::MakeEfsStream(std::span(&user, 1));
     file.streams.push_back(
         {.runs = {{30, 2}},
-         .cluster_bytes = NTFS_BROWSER_NAMESPACE::Tests::EfsEncrypt(
+         .cluster_bytes = NTFS_BROWSER_NAMESPACE::Test::Efs::EfsEncrypt(
              Algorithm::Aes256, key, plaintext),
          .real_size = plaintext.size()});
 

@@ -16,7 +16,7 @@
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
-namespace AllocSupport = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
 using TestFakeImage::FakeUsnRecord;
 
@@ -27,8 +27,8 @@ constexpr std::string_view unusable_message = "$UsnJrnl is not usable";
 
 template <Cache::Strategy S>
 void CheckAnUnreadableStreamIsNullAndNotRetried() {
-  const auto sink = std::make_shared<AllocSupport::LevelSink>();
-  const AllocSupport::ScopedSink scoped(sink);
+  const auto sink = std::make_shared<TestAlloc::LevelSink>();
+  const TestAlloc::ScopedSink scoped(sink);
   const auto opened = Support::OpenVolume<S>(Support::JournalImage(
       {.records = {FakeUsnRecord{.name = L"a.txt"}}, .unreadable_data = true}));
 

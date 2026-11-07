@@ -21,7 +21,7 @@
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 using Alloc::ClusterState;
 using TestFakeImage::FakeBitmapOptions;
 using TestFakeImage::FakeBitmapShape;
@@ -60,7 +60,7 @@ void CheckEveryClusterIsAnsweredFromOneWindow() {
   // The volume grows to four windows before the bitmap sees it.
   TestFakeImage::PutClusterBitmap(image, bits,
                                   {.volume_clusters = four_window_volume});
-  const auto opened = Support::OpenVolume<S>(image);
+  const auto opened = TestAlloc::OpenVolume<S>(image);
 
   size_t answered = 0;
   for (ULONGLONG lcn = 0; lcn < four_window_volume; lcn++) {
@@ -96,7 +96,7 @@ TwoCalls BitmapCostOfTwoCalls(ULONGLONG keep_bytes) {
   TestFakeImage::PutClusterBitmap(image, bits,
                                   {.volume_clusters = four_window_volume});
   const ULONGLONG end = image.size();
-  const auto opened = Support::OpenVolume<Cache::Strategy::NoCache>(image);
+  const auto opened = TestAlloc::OpenVolume<Cache::Strategy::NoCache>(image);
   opened.volume->KeepBitmapWindows(keep_bytes);
 
   for (int call = 0; call < 2; call++) {
@@ -110,7 +110,7 @@ TwoCalls BitmapCostOfTwoCalls(ULONGLONG keep_bytes) {
     }
   }
   return {.reads =
-              opened.counter->ReadsInRange(Support::bitmap_data_offset, end),
+              opened.counter->ReadsInRange(TestAlloc::bitmap_data_offset, end),
           .peak_bytes = Alloc::PeakBitmapBytesHeld()};
 }
 

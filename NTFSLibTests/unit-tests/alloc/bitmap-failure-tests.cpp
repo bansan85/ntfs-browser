@@ -33,11 +33,11 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 using Alloc::ClusterState;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Support::ThrowingCallback;
+using TestAlloc::ThrowingCallback;
 using TestFakeImage::FakeBitmapOptions;
 using TestFakeImage::FakeBitmapShape;
 using TestFakeImage::FakeDataRun;
@@ -95,7 +95,7 @@ class FailingRangeReader final : public NTFS_BROWSER_NAMESPACE::IDiskReader {
 std::vector<BYTE> TreeWithBitmap(const FakeBitmapOptions& options = {}) {
   const std::vector<FakeDataRun> allocated{
       FakeDataRun{.lcn = 40, .clusters = 2}};
-  return Support::WithBitmap(
+  return TestAlloc::WithBitmap(
       TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(), allocated, options);
 }
 
@@ -113,14 +113,14 @@ void CheckEveryAnswerIsUnknown(const NtfsVolume<S>& volume, ULONGLONG first,
 template <Cache::Strategy S>
 void CheckNothingIsReadBeforeAQuery() {
   const std::vector<BYTE> image = TreeWithBitmap();
-  const auto opened = Support::OpenVolume<S>(image);
-  const auto record = Support::ParsedRecord(
+  const auto opened = TestAlloc::OpenVolume<S>(image);
+  const auto record = TestAlloc::ParsedRecord(
       *opened.volume, static_cast<ULONGLONG>(TestFakeImage::mft_tree_docs_idx));
 
-  CHECK(opened.counter->ReadsInRange(Support::bitmap_data_offset,
+  CHECK(opened.counter->ReadsInRange(TestAlloc::bitmap_data_offset,
                                      image.size()) == 0);
   CHECK(opened.volume->GetClusterState(40) == ClusterState::Allocated);
-  CHECK(opened.counter->ReadsInRange(Support::bitmap_data_offset,
+  CHECK(opened.counter->ReadsInRange(TestAlloc::bitmap_data_offset,
                                      image.size()) > 0);
 }
 
@@ -128,8 +128,8 @@ template <Cache::Strategy S>
 void CheckAMissingBitmapIsUnknownAndLoggedOnce(bool recover,
                                                Log::Level expected) {
   // Record 6 is zero-filled in the freed tree.
-  const Support::CapturedLevels log;
-  const auto opened = Support::OpenVolume<S>(
+  const TestAlloc::CapturedLevels log;
+  const auto opened = TestAlloc::OpenVolume<S>(
       TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(),
       VolumeOptions{.include_deleted = true, .recover_errors = recover});
 
@@ -148,14 +148,14 @@ void CheckACutRunList() {
                       .volume_clusters = two_cluster_volume});
 
   SECTION("strict mode rejects the whole bitmap") {
-    const auto opened = Support::OpenVolume<S>(image);
+    const auto opened = TestAlloc::OpenVolume<S>(image);
 
     CHECK(opened.volume->GetClusterState(40) == ClusterState::Unknown);
     CHECK_FALSE(opened.volume->GetSpaceSummary());
   }
 
   SECTION("recover mode answers the clusters before the cut") {
-    const auto opened = Support::OpenVolume<S>(
+    const auto opened = TestAlloc::OpenVolume<S>(
         image, VolumeOptions{.include_deleted = true, .recover_errors = true});
 
     CHECK(opened.volume->GetClusterState(39) == ClusterState::Free);
@@ -171,7 +171,7 @@ void CheckAFailedWindowOnly() {
   const ULONGLONG second_cluster =
       (two_cluster_data_lcn + 1) * TestFakeImage::fake_cluster_size;
 
-  const Support::CapturedLevels log;
+  const TestAlloc::CapturedLevels log;
   Alloc::SetBitmapWindowBytesForTests(one_cluster_window);
   auto counter = std::make_unique<TestDiskReaders::CountingDiskReader>(
       std::make_unique<FailingRangeReader>(
@@ -207,8 +207,8 @@ void CheckAShortBitmapLogsOnce() {
       image, four_bytes,
       {.shape = FakeBitmapShape::Resident, .pad_to_volume = false});
 
-  const Support::CapturedLevels log;
-  const auto opened = Support::OpenVolume<S>(image);
+  const TestAlloc::CapturedLevels log;
+  const auto opened = TestAlloc::OpenVolume<S>(image);
 
   CHECK(opened.volume->GetClusterState(10) == ClusterState::Free);
   CHECK(opened.volume->GetClusterState(40) == ClusterState::Unknown);
@@ -218,7 +218,7 @@ void CheckAShortBitmapLogsOnce() {
 
 template <Cache::Strategy S>
 void CheckAThrowingCallbackIsContained() {
-  const auto opened = Support::OpenVolume<S>(TreeWithBitmap());
+  const auto opened = TestAlloc::OpenVolume<S>(TreeWithBitmap());
   REQUIRE(opened.volume->InstallAttrRawCB(Attr::Type::Data, &ThrowingCallback));
 
   CheckEveryAnswerIsUnknown(*opened.volume, 40, 2);

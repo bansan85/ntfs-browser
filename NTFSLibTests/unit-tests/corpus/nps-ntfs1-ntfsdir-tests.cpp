@@ -46,7 +46,7 @@ struct ImageHead final {
   std::vector<char> bytes;
 
   ImageHead() {
-    std::ifstream in(NTFS_BROWSER_NAMESPACE::Tests::ntfs1_image,
+    std::ifstream in(NTFS_BROWSER_NAMESPACE::Test::Corpus::ntfs1_image,
                      std::ios::binary);
     REQUIRE(in.is_open());
     bytes.resize(image_head_bytes);
@@ -146,12 +146,13 @@ constexpr std::string_view live_logo_line = "\t  NIST_logo.jpg\n";
 
 TEST_CASE("NtfsDir --deleted marks no file of the intact NPS ntfs1 image",
           "[nps][integration]") {
-  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(
-      NTFS_BROWSER_NAMESPACE::Tests::ntfs1_image);
+  NTFS_BROWSER_NAMESPACE::Test::Corpus::RequireCorpusImage(
+      NTFS_BROWSER_NAMESPACE::Test::Corpus::ntfs1_image);
 
-  const SampleRun run = RunSample(
-      NTFS_DIR_EXE, {L"--recursive", L"--deleted",
-                     NTFS_BROWSER_NAMESPACE::Tests::ntfs1_image.wstring()});
+  const SampleRun run =
+      RunSample(NTFS_DIR_EXE,
+                {L"--recursive", L"--deleted",
+                 NTFS_BROWSER_NAMESPACE::Test::Corpus::ntfs1_image.wstring()});
 
   CHECK(run.exit_code == 0);
   CHECK(run.out.ends_with("Files: 19, Directories: 4\n"));
@@ -161,8 +162,8 @@ TEST_CASE("NtfsDir --deleted marks no file of the intact NPS ntfs1 image",
 
 TEST_CASE("NtfsDir --deleted shows a file freed in the NPS ntfs1 image",
           "[nps][integration]") {
-  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(
-      NTFS_BROWSER_NAMESPACE::Tests::ntfs1_image);
+  NTFS_BROWSER_NAMESPACE::Test::Corpus::RequireCorpusImage(
+      NTFS_BROWSER_NAMESPACE::Test::Corpus::ntfs1_image);
 
   ImageHead image;
   REQUIRE(FreeFirstFileNamed(image.bytes, logo_name));

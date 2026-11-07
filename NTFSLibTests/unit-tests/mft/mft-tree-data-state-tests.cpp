@@ -27,11 +27,11 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 namespace TreeSupport = NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport;
 using Alloc::DataState;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Support::stale_size;
+using TestAlloc::stale_size;
 using TestFakeImage::FakeDataRun;
 using TreeSupport::CheckNoEntryIsAnnotated;
 using TreeSupport::ScannedVolume;
@@ -45,7 +45,7 @@ const std::vector<FakeDataRun> stale_runs{
 // The freed tree with a non-resident stale file, and a bitmap that marks
 // allocated_runs.
 std::vector<BYTE> Image(std::span<const FakeDataRun> allocated_runs) {
-  return Support::WithBitmap(
+  return TestAlloc::WithBitmap(
       TestFakeImage::BuildFakeNtfsImageWithFreedNonResidentFile(stale_size,
                                                                 stale_runs),
       allocated_runs);
@@ -84,7 +84,7 @@ void CheckNothingIsAnnotatedWithoutIncludeDeleted() {
   CHECK(scanned.tree.Stats().data_intact == 0);
   CHECK(scanned.tree.Stats().data_reallocated == 0);
   CHECK(scanned.tree.Stats().data_unknown == 0);
-  CHECK(scanned.opened.counter->ReadsInRange(Support::bitmap_data_offset,
+  CHECK(scanned.opened.counter->ReadsInRange(TestAlloc::bitmap_data_offset,
                                              image.size()) == 0);
 }
 
@@ -106,11 +106,11 @@ void CheckDeletedEntriesGetTheirState(bool reused) {
 template <Cache::Strategy S>
 void CheckTheAnnotationCanBeTurnedOff() {
   const std::vector<BYTE> image = Image({});
-  const ScannedVolume<S> scanned(image, Support::DeletedOptions(),
+  const ScannedVolume<S> scanned(image, TestAlloc::DeletedOptions(),
                                  {.annotate_data_state = false});
 
   CheckNoEntryIsAnnotated(scanned.tree);
-  CHECK(scanned.opened.counter->ReadsInRange(Support::bitmap_data_offset,
+  CHECK(scanned.opened.counter->ReadsInRange(TestAlloc::bitmap_data_offset,
                                              image.size()) == 0);
 }
 
@@ -150,9 +150,9 @@ void CheckAMissingBitmapDoesNotStopTheScan() {
   const std::vector<BYTE> image =
       TestFakeImage::BuildFakeNtfsImageWithFreedNonResidentFile(stale_size,
                                                                 stale_runs);
-  const ScannedVolume<S> annotated(image, Support::DeletedOptions(),
+  const ScannedVolume<S> annotated(image, TestAlloc::DeletedOptions(),
                                    {.annotate_data_state = true});
-  const ScannedVolume<S> plain(image, Support::DeletedOptions(),
+  const ScannedVolume<S> plain(image, TestAlloc::DeletedOptions(),
                                {.annotate_data_state = false});
 
   CHECK(annotated.tree.Entries().size() == plain.tree.Entries().size());

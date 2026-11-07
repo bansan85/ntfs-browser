@@ -17,7 +17,7 @@
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 using Alloc::ClusterState;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using TestFakeImage::FakeBitmapOptions;
@@ -32,16 +32,16 @@ const std::vector<FakeDataRun> allocated_runs{
     FakeDataRun{.lcn = 50, .clusters = 1}};
 
 std::vector<BYTE> ImageFor(FakeBitmapShape shape) {
-  return Support::WithBitmap(
+  return TestAlloc::WithBitmap(
       TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(), allocated_runs,
       FakeBitmapOptions{.shape = shape});
 }
 
 // Opens the volume whose bitmap has the given shape.
 template <Cache::Strategy S>
-Support::Opened<S>
+TestAlloc::Opened<S>
     OpenWithShape(FakeBitmapShape shape = FakeBitmapShape::NonResident) {
-  return Support::OpenVolume<S>(ImageFor(shape));
+  return TestAlloc::OpenVolume<S>(ImageFor(shape));
 }
 
 template <Cache::Strategy S>
@@ -63,7 +63,7 @@ void CheckFirstBitmapClusterIsAllocated() {
   const auto opened = OpenWithShape<S>();
 
   // The bitmap's own cluster follows the 64 clusters of the base image.
-  CHECK(opened.volume->GetClusterState(Support::base_volume_clusters) ==
+  CHECK(opened.volume->GetClusterState(TestAlloc::base_volume_clusters) ==
         ClusterState::Allocated);
 }
 
@@ -85,7 +85,7 @@ void CheckOptionsDoNotChangeTheAnswer() {
 
   for (const bool include_deleted : {false, true}) {
     for (const bool recover : {false, true}) {
-      const auto opened = Support::OpenVolume<S>(
+      const auto opened = TestAlloc::OpenVolume<S>(
           image, VolumeOptions{.include_deleted = include_deleted,
                                .recover_errors = recover});
       CHECK(opened.volume->GetClusterState(40) == ClusterState::Allocated);

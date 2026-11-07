@@ -19,7 +19,7 @@
 #include <ntfs-browser/test/mft/mft-tree-state-support.h>
 #include <ntfs-browser/volume-options.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests::AccountSupport {
+namespace NTFS_BROWSER_NAMESPACE::Test::Alloc {
 
 // First record slot a test file may take: the freed and live files of the
 // 26-slot MftTree base all sit at 17 and above, and the test files replace
@@ -37,7 +37,7 @@ struct Volume {
   // The clusters the bitmap marks allocated.
   std::vector<Test::FakeImage::FakeDataRun> allocated;
   // The clusters $BadClus lists.
-  std::vector<Alloc::Extent> bad;
+  std::vector<NTFS_BROWSER_NAMESPACE::Alloc::Extent> bad;
   // False leaves $Bitmap out: nothing is known of the allocation.
   bool with_bitmap = true;
   // How the bitmap is written, and how large the volume is.
@@ -52,11 +52,10 @@ struct Volume {
   [[nodiscard]] std::vector<BYTE> Build() const {
     std::vector<BYTE> built = image;
     if (with_bitmap) {
-      built =
-          AllocSupport::WithBitmap(std::move(built), allocated, bitmap_options);
+      built = WithBitmap(std::move(built), allocated, bitmap_options);
     }
     if (!bad.empty()) {
-      built = AllocSupport::WithBadClusters(std::move(built), bad);
+      built = WithBadClusters(std::move(built), bad);
     }
     return built;
   }
@@ -92,10 +91,12 @@ inline Test::FakeImage::FakeAccountFile
 }
 
 // Options that list freed records, and account for clusters at level.
-inline Mft::MftTree::ScanOptions
-    Scan(Alloc::ClusterAccountLevel level = Alloc::ClusterAccountLevel::Counts,
-         Alloc::DataCheckMode check = Alloc::DataCheckMode::Off) {
-  Mft::MftTree::ScanOptions options;
+inline NTFS_BROWSER_NAMESPACE::Mft::MftTree::ScanOptions
+    Scan(NTFS_BROWSER_NAMESPACE::Alloc::ClusterAccountLevel level =
+             NTFS_BROWSER_NAMESPACE::Alloc::ClusterAccountLevel::Counts,
+         NTFS_BROWSER_NAMESPACE::Alloc::DataCheckMode check =
+             NTFS_BROWSER_NAMESPACE::Alloc::DataCheckMode::Off) {
+  NTFS_BROWSER_NAMESPACE::Mft::MftTree::ScanOptions options;
   options.cluster_account = level;
   options.verify_data = check;
   return options;
@@ -107,25 +108,34 @@ inline VolumeOptions DeletedAndRecover() {
 }
 
 // The account of record, which the test cannot go on without.
-inline const Alloc::ClusterAccount& AccountOf(const Mft::MftTree& tree,
-                                              ULONGLONG record) {
-  static_cast<void>(MftTreeSupport::RequiredEntry(tree, record));
-  const Alloc::ClusterAccount* const account = tree.ClusterAccountOf(record);
+inline const NTFS_BROWSER_NAMESPACE::Alloc::ClusterAccount&
+    AccountOf(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
+              ULONGLONG record) {
+  static_cast<void>(
+      NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport::RequiredEntry(tree,
+                                                                   record));
+  const NTFS_BROWSER_NAMESPACE::Alloc::ClusterAccount* const account =
+      tree.ClusterAccountOf(record);
   REQUIRE(account != nullptr);
   return *account;
 }
 
 // Clusters of record counted under condition.
-inline ULONGLONG CountOf(const Mft::MftTree& tree, ULONGLONG record,
-                         Alloc::ClusterCondition condition) {
+inline ULONGLONG
+    CountOf(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree, ULONGLONG record,
+            NTFS_BROWSER_NAMESPACE::Alloc::ClusterCondition condition) {
   return AccountOf(tree, record).tally.Count(condition);
 }
 
 // Calls body once for each cache strategy, with the strategy as a constant.
 template <typename Body>
 void ForEachStrategy(const Body& body) {
-  body(std::integral_constant<Cache::Strategy, Cache::Strategy::NoCache>{});
-  body(std::integral_constant<Cache::Strategy, Cache::Strategy::FullCache>{});
+  body(std::integral_constant<
+       NTFS_BROWSER_NAMESPACE::Cache::Strategy,
+       NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>{});
+  body(std::integral_constant<
+       NTFS_BROWSER_NAMESPACE::Cache::Strategy,
+       NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>{});
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests::AccountSupport
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Alloc

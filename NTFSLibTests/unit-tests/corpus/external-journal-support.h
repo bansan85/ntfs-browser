@@ -12,28 +12,14 @@
 #include <string_view>
 #include <vector>
 
+#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/usn/types.h>
+#include <ntfs-browser/volume-options.h>
 
 #include "external-journal-samples.h"
 
-namespace NTFS_BROWSER_NAMESPACE {
-
-namespace Cache {
-
-enum class Strategy : std::uint8_t;
-
-}  // namespace Cache
-
-}  // namespace NTFS_BROWSER_NAMESPACE
-
-namespace NTFS_BROWSER_NAMESPACE {
-
-struct VolumeOptions;
-
-}  // namespace NTFS_BROWSER_NAMESPACE
-
-namespace NTFS_BROWSER_NAMESPACE::Tests::RealJournal {
+namespace NTFS_BROWSER_NAMESPACE::Test::Corpus {
 
 // Which kept project holds a fixture.
 enum class Project : unsigned char { DfirNtfs, DfirMuseum };
@@ -70,9 +56,10 @@ struct Fixture {
 // hole, and reads its journal with options. Empty when the volume gives none,
 // which is what strict mode does. Fails the running test when the volume does
 // not open. sparse_head_bytes MUST be a multiple of the fake cluster size.
-[[nodiscard]] std::optional<Usn::Journal>
+[[nodiscard]] std::optional<NTFS_BROWSER_NAMESPACE::Usn::Journal>
     ReadJournalOf(std::span<const BYTE> stream, ULONGLONG sparse_head_bytes,
-                  Cache::Strategy strategy, const VolumeOptions& options);
+                  NTFS_BROWSER_NAMESPACE::Cache::Strategy strategy,
+                  const VolumeOptions& options);
 
 // A record of the text `fsutil usn readjournal` prints.
 struct FsutilRecord {
@@ -108,4 +95,4 @@ struct FsutilListing {
 [[nodiscard]] FsutilListing
     ParseFsutilListing(const std::filesystem::path& file);
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests::RealJournal
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Corpus

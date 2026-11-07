@@ -19,35 +19,39 @@
 
 #include "external-mft-support.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Corpus {
 
 namespace {
 
 // Whether two names of one record link to their parent alike. A strict scan
 // drops the damaged parent of a name, so when strict_left is true the name may
 // be linked to its parent only on the right.
-bool SameParentLink(const Mft::MftTree::Name& left,
-                    const Mft::MftTree::Name& right, bool strict_left) {
+bool SameParentLink(const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Name& left,
+                    const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Name& right,
+                    bool strict_left) {
   const bool only_on_right =
       strict_left && !left.parent_valid && right.parent_valid;
   return left.parent_valid == right.parent_valid || only_on_right;
 }
 
 // Whether two names of one record agree on everything a name holds.
-bool SameName(const Mft::MftTree::Name& left, const Mft::MftTree::Name& right,
+bool SameName(const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Name& left,
+              const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Name& right,
               bool strict_left) {
-  const auto fields = [](const Mft::MftTree::Name& name) {
-    return std::tie(name.name, name.parent_record, name.parent_sequence,
-                    name.dos_only);
-  };
+  const auto fields =
+      [](const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Name& name) {
+        return std::tie(name.name, name.parent_record, name.parent_sequence,
+                        name.dos_only);
+      };
   return fields(left) == fields(right) &&
          SameParentLink(left, right, strict_left);
 }
 
 // Index of the first name two entries of the same name count disagree on.
-std::optional<std::size_t> FirstDifferentName(const Mft::MftTree::Entry& left,
-                                              const Mft::MftTree::Entry& right,
-                                              bool strict_left) {
+std::optional<std::size_t>
+    FirstDifferentName(const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& left,
+                       const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& right,
+                       bool strict_left) {
   for (std::size_t index = 0; index < left.names.size(); index++) {
     if (!SameName(left.names.at(index), right.names.at(index), strict_left)) {
       return index;
@@ -57,8 +61,8 @@ std::optional<std::size_t> FirstDifferentName(const Mft::MftTree::Entry& left,
 }
 
 // Whether two entries carry the same four times, as ticks.
-bool SameEntryTimes(const Mft::MftTree::Entry& left,
-                    const Mft::MftTree::Entry& right) {
+bool SameEntryTimes(const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& left,
+                    const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& right) {
   return FileTimeToTicks(left.create_time) ==
              FileTimeToTicks(right.create_time) &&
          FileTimeToTicks(left.write_time) ==
@@ -70,13 +74,14 @@ bool SameEntryTimes(const Mft::MftTree::Entry& left,
 }
 
 // The attribute flags of an entry.
-auto AttributeFlags(const Mft::MftTree::Entry& entry) {
+auto AttributeFlags(const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry) {
   return std::tie(entry.read_only, entry.hidden, entry.system, entry.archive,
                   entry.compressed, entry.encrypted, entry.sparse);
 }
 
 // The counters of a scan.
-auto ScanCounters(const Mft::MftTree::ScanStats& stats) {
+auto ScanCounters(
+    const NTFS_BROWSER_NAMESPACE::Mft::MftTree::ScanStats& stats) {
   return std::tie(stats.slots, stats.in_use, stats.deleted, stats.extensions,
                   stats.unreadable, stats.skipped, stats.damaged,
                   stats.unreachable, stats.complete, stats.data_intact,
@@ -85,7 +90,8 @@ auto ScanCounters(const Mft::MftTree::ScanStats& stats) {
 
 // Whether entry has a name, other than a DOS alias, whose path is the path of
 // line.
-bool HasListedName(const Mft::MftTree& tree, const Mft::MftTree::Entry& entry,
+bool HasListedName(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
+                   const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry,
                    const FlsLine& line) {
   for (std::size_t index = 0; index < entry.names.size(); index++) {
     if (!entry.names.at(index).dos_only &&
@@ -97,8 +103,9 @@ bool HasListedName(const Mft::MftTree& tree, const Mft::MftTree::Entry& entry,
 }
 
 // Notes each field of line that entry, the record it names, disagrees with.
-void CompareLineFields(const Mft::MftTree::Entry& entry, const FlsLine& line,
-                       const std::string& where, ListingReport& report) {
+void CompareLineFields(const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry,
+                       const FlsLine& line, const std::string& where,
+                       ListingReport& report) {
   const std::array<std::uint64_t, 4> times = {
       EntryUtcSeconds(entry.write_time), EntryUtcSeconds(entry.access_time),
       EntryUtcSeconds(entry.change_time), EntryUtcSeconds(entry.create_time)};
@@ -116,12 +123,13 @@ void CompareLineFields(const Mft::MftTree::Entry& entry, const FlsLine& line,
 }
 
 // Compares one listing line with the tree, and counts it when its name exists.
-void CompareLine(const Mft::MftTree& tree, const FlsLine& line,
-                 ListingReport& report) {
+void CompareLine(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
+                 const FlsLine& line, ListingReport& report) {
   const std::string where =
       std::to_string(line.record) + " " + line.path + ": ";
 
-  const Mft::MftTree::Entry* entry = tree.Find(line.record);
+  const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry* entry =
+      tree.Find(line.record);
   if (entry == nullptr) {
     report.Note(where + "no entry");
     return;
@@ -137,11 +145,13 @@ void CompareLine(const Mft::MftTree& tree, const FlsLine& line,
 // Notes each name of the tree, but the root's and the DOS aliases, that no
 // listing line mentions.
 void NoteUnlistedNames(
-    const Mft::MftTree& tree,
+    const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
     const std::set<std::pair<ULONGLONG, std::string>>& listed,
     ListingReport& report) {
-  const ULONGLONG root = static_cast<ULONGLONG>(Mft::Idx::Root);
-  for (const Mft::MftTree::Entry& entry : tree.Entries()) {
+  const ULONGLONG root =
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root);
+  for (const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry :
+       tree.Entries()) {
     if (entry.record == root) {
       continue;
     }
@@ -156,9 +166,10 @@ void NoteUnlistedNames(
 }
 
 // The first difference in what an entry is: its record, flags and names.
-std::string FirstIdentityDifference(const Mft::MftTree::Entry& left,
-                                    const Mft::MftTree::Entry& right,
-                                    bool strict_left) {
+std::string FirstIdentityDifference(
+    const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& left,
+    const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& right,
+    bool strict_left) {
   if (left.record != right.record) {
     return "record";
   }
@@ -179,8 +190,9 @@ std::string FirstIdentityDifference(const Mft::MftTree::Entry& left,
 }
 
 // The first difference in what an entry holds: sizes, times and data.
-std::string FirstContentDifference(const Mft::MftTree::Entry& left,
-                                   const Mft::MftTree::Entry& right) {
+std::string FirstContentDifference(
+    const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& left,
+    const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& right) {
   if (std::tie(left.size, left.allocated_size) !=
       std::tie(right.size, right.allocated_size)) {
     return "size";
@@ -202,9 +214,10 @@ std::string FirstContentDifference(const Mft::MftTree::Entry& left,
 
 }  // namespace
 
-std::string FirstDifference(const Mft::MftTree::Entry& left,
-                            const Mft::MftTree::Entry& right,
-                            bool strict_left) {
+std::string
+    FirstDifference(const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& left,
+                    const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& right,
+                    bool strict_left) {
   if (std::string field = FirstIdentityDifference(left, right, strict_left);
       !field.empty()) {
     return field;
@@ -212,8 +225,8 @@ std::string FirstDifference(const Mft::MftTree::Entry& left,
   return FirstContentDifference(left, right);
 }
 
-std::string FirstDifference(const Mft::MftTree& left,
-                            const Mft::MftTree& right) {
+std::string FirstDifference(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& left,
+                            const NTFS_BROWSER_NAMESPACE::Mft::MftTree& right) {
   if (ScanCounters(left.Stats()) != ScanCounters(right.Stats())) {
     return "stats";
   }
@@ -238,8 +251,9 @@ void ListingReport::Note(const std::string& message) {
   }
 }
 
-ListingReport CompareWithListing(const Mft::MftTree& tree,
-                                 const std::vector<FlsLine>& lines) {
+ListingReport
+    CompareWithListing(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
+                       const std::vector<FlsLine>& lines) {
   ListingReport report;
   std::set<std::pair<ULONGLONG, std::string>> listed;
   for (const FlsLine& line : lines) {
@@ -253,4 +267,4 @@ ListingReport CompareWithListing(const Mft::MftTree& tree,
   return report;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Corpus

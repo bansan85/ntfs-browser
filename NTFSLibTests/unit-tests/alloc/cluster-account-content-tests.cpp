@@ -22,17 +22,16 @@
 #include "alloc/content-check.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
-namespace AllocSupport = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AccountSupport;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace TreeSupport = NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport;
 using Alloc::ClusterCondition;
 using Alloc::DataCheckMode;
-using Support::CountOf;
-using Support::Freed;
-using Support::Stream;
+using TestAlloc::CountOf;
+using TestAlloc::Freed;
+using TestAlloc::Stream;
 using TestFakeImage::FakeAccountFile;
 using TestFakeImage::FakeDataRun;
 
@@ -58,8 +57,8 @@ void FillWithData(std::vector<BYTE>& image, ULONGLONG lcn) {
 
 // The subject: four clusters at 40 to 43, of which the first is zeros, the
 // second starts a file record in its second sector, and the others are data.
-Support::Volume Subject() {
-  Support::Volume volume;
+TestAlloc::Volume Subject() {
+  TestAlloc::Volume volume;
   volume.Put(subject, Freed(100, Stream({{first_cluster, 4}}, 4 * cluster)));
   PutAt(volume.image, 41, 512, "FILE");
   FillWithData(volume.image, 42);
@@ -68,11 +67,11 @@ Support::Volume Subject() {
 }
 
 template <Cache::Strategy S>
-TreeSupport::ScannedVolume<S> Check(const Support::Volume& volume,
+TreeSupport::ScannedVolume<S> Check(const TestAlloc::Volume& volume,
                                     DataCheckMode mode) {
   return TreeSupport::ScannedVolume<S>(
-      volume.Build(), AllocSupport::DeletedOptions(),
-      Support::Scan(Alloc::ClusterAccountLevel::CountsAndMap, mode));
+      volume.Build(), TestAlloc::DeletedOptions(),
+      TestAlloc::Scan(Alloc::ClusterAccountLevel::CountsAndMap, mode));
 }
 
 }  // namespace
@@ -104,12 +103,12 @@ TEST_CASE("a cluster is classified by what it holds",
 
 TEST_CASE("the full content check tells zeros, metadata and data",
           "[alloc][cluster][check]") {
-  Support::ForEachStrategy([](auto strategy) {
+  TestAlloc::ForEachStrategy([](auto strategy) {
     const auto scanned =
         Check<decltype(strategy)::value>(Subject(), DataCheckMode::Full);
 
     const Alloc::ClusterAccount& account =
-        Support::AccountOf(scanned.tree, subject);
+        TestAlloc::AccountOf(scanned.tree, subject);
     CHECK(account.tally.Count(ClusterCondition::Zeroed) == 1);
     CHECK(account.tally.Count(ClusterCondition::OverwrittenByMetadata) == 1);
     CHECK(account.tally.Count(ClusterCondition::IntactChecked) == 2);
@@ -126,12 +125,12 @@ TEST_CASE("the full content check tells zeros, metadata and data",
 
 TEST_CASE("the sample reads the first cluster of each stream",
           "[alloc][cluster][check]") {
-  Support::ForEachStrategy([](auto strategy) {
+  TestAlloc::ForEachStrategy([](auto strategy) {
     const auto scanned =
         Check<decltype(strategy)::value>(Subject(), DataCheckMode::Sample);
 
     const Alloc::ClusterAccount& account =
-        Support::AccountOf(scanned.tree, subject);
+        TestAlloc::AccountOf(scanned.tree, subject);
     CHECK(account.tally.Count(ClusterCondition::Zeroed) == 1);
     CHECK(account.tally.Count(ClusterCondition::Intact) == 3);
     CHECK(account.tally.Count(ClusterCondition::IntactChecked) == 0);
@@ -139,20 +138,20 @@ TEST_CASE("the sample reads the first cluster of each stream",
 }
 
 TEST_CASE("the content check implies the counts", "[alloc][cluster][check]") {
-  Support::ForEachStrategy([](auto strategy) {
+  TestAlloc::ForEachStrategy([](auto strategy) {
     const TreeSupport::ScannedVolume<decltype(strategy)::value> scanned(
-        Subject().Build(), AllocSupport::DeletedOptions(),
-        Support::Scan(Alloc::ClusterAccountLevel::Off, DataCheckMode::Full));
+        Subject().Build(), TestAlloc::DeletedOptions(),
+        TestAlloc::Scan(Alloc::ClusterAccountLevel::Off, DataCheckMode::Full));
 
     CHECK(CountOf(scanned.tree, subject, ClusterCondition::Zeroed) == 1);
-    CHECK(Support::AccountOf(scanned.tree, subject).streams.empty());
+    CHECK(TestAlloc::AccountOf(scanned.tree, subject).streams.empty());
   });
 }
 
 TEST_CASE("the content check skips an encrypted stream, and what is not intact",
           "[alloc][cluster][check]") {
-  Support::ForEachStrategy([](auto strategy) {
-    Support::Volume volume = Subject();
+  TestAlloc::ForEachStrategy([](auto strategy) {
+    TestAlloc::Volume volume = Subject();
     TestFakeImage::FakeAccountStream encrypted =
         Stream({{first_cluster, 4}}, 4 * cluster);
     encrypted.encrypted = true;
@@ -164,7 +163,7 @@ TEST_CASE("the content check skips an encrypted stream, and what is not intact",
     CHECK(CountOf(scanned.tree, subject, ClusterCondition::Zeroed) == 0);
 
     // A bad cluster is not read: the check keeps to what it presumed intact.
-    Support::Volume bad = Subject();
+    TestAlloc::Volume bad = Subject();
     bad.bad = {Alloc::Extent{.lcn = 40, .clusters = 1}};
     bad.allocated = {FakeDataRun{.lcn = 40, .clusters = 1}};
     const auto with_bad =
@@ -176,18 +175,18 @@ TEST_CASE("the content check skips an encrypted stream, and what is not intact",
 
 TEST_CASE("the content check reads in order, announced, and nothing else",
           "[alloc][cluster][check]") {
-  const Support::Volume volume = Subject();
+  const TestAlloc::Volume volume = Subject();
   const std::vector<BYTE> image = volume.Build();
   const auto data_first = first_cluster * cluster;
   const auto data_last = (first_cluster + 4) * cluster;
 
   const TreeSupport::ScannedVolume<Cache::Strategy::NoCache> counts(
-      image, AllocSupport::DeletedOptions(), Support::Scan());
+      image, TestAlloc::DeletedOptions(), TestAlloc::Scan());
   CHECK(counts.opened.counter->ReadsInRange(data_first, data_last) == 0);
 
   const TreeSupport::ScannedVolume<Cache::Strategy::NoCache> full(
-      image, AllocSupport::DeletedOptions(),
-      Support::Scan(Alloc::ClusterAccountLevel::Counts, DataCheckMode::Full));
+      image, TestAlloc::DeletedOptions(),
+      TestAlloc::Scan(Alloc::ClusterAccountLevel::Counts, DataCheckMode::Full));
   CHECK(full.opened.counter->ReadsInRange(data_first, data_last) == 1);
 
   // The hint comes before the read it announces.

@@ -20,13 +20,13 @@
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AccountSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Support::Freed;
-using Support::Live;
-using Support::Stream;
+using TestAlloc::Freed;
+using TestAlloc::Live;
+using TestAlloc::Stream;
 using TestFakeImage::FakeAccountFile;
 using TestFakeImage::FakeAccountStream;
 using TestFakeImage::FakeDataRun;
@@ -56,7 +56,7 @@ FakeAccountFile SubjectWithShortValidData() {
 // A freed file over a live file's cluster, a freed file that was freed later,
 // a bad cluster, and a file's own valid data length that stops short.
 std::vector<BYTE> FreedClaims() {
-  Support::Volume volume;
+  TestAlloc::Volume volume;
   volume.Put(22, SubjectWithShortValidData());
   volume.Put(23, Freed(200, Stream({{41, 1}}, cluster)));
   volume.Put(17, Live(Stream({{42, 1}}, cluster)));
@@ -68,12 +68,12 @@ std::vector<BYTE> FreedClaims() {
 // A freed file whose run list is cut, a damaged live file over free clusters,
 // and a run past the volume.
 std::vector<BYTE> CutRunLists() {
-  Support::Volume volume;
+  TestAlloc::Volume volume;
   FakeAccountFile cut = Freed(100, Stream({{40, 2}, {50, 2}}, 4 * cluster));
   cut.streams.front().cut_after_runs = 1;
   volume.Put(22, cut);
   FakeAccountFile damaged =
-      Live(Stream({{44, 2}, {Support::far_lcn, 2}}, 4 * cluster));
+      Live(Stream({{44, 2}, {TestAlloc::far_lcn, 2}}, 4 * cluster));
   damaged.streams.front().cut_after_runs = 2;
   volume.Put(17, damaged);
   return volume.Build();
@@ -82,7 +82,7 @@ std::vector<BYTE> CutRunLists() {
 // A compressed freed stream with a unit another file rewrote, and sparse
 // holes.
 std::vector<BYTE> CompressedMap() {
-  Support::Volume volume;
+  TestAlloc::Volume volume;
   FakeAccountStream stream =
       Stream({{40, 2},
               FakeDataRun{.lcn = std::nullopt, .clusters = 2},
@@ -99,7 +99,7 @@ std::vector<BYTE> CompressedMap() {
 // Files whose attributes sit in extension records that their $ATTRIBUTE_LIST
 // names: a freed $DATA, and a live $INDEX_ALLOCATION over one of its clusters.
 std::vector<BYTE> ExtensionClaims() {
-  Support::Volume volume;
+  TestAlloc::Volume volume;
   FakeAccountFile freed = Freed(100, Stream({}, 0));
   freed.streams.clear();
   freed.extension_idx = 24;
@@ -119,7 +119,7 @@ std::vector<BYTE> ExtensionClaims() {
 
 // A freed file on a volume with no $Bitmap: nothing is known of the clusters.
 std::vector<BYTE> NoBitmap() {
-  Support::Volume volume;
+  TestAlloc::Volume volume;
   volume.with_bitmap = false;
   volume.Put(22, Subject());
   return volume.Build();
@@ -128,7 +128,7 @@ std::vector<BYTE> NoBitmap() {
 // A sparse stream, a named one, and an encrypted one that the content check
 // leaves alone.
 std::vector<BYTE> Streams() {
-  Support::Volume volume;
+  TestAlloc::Volume volume;
   FakeAccountFile file =
       Freed(100, Stream({{40, 2},
                          FakeDataRun{.lcn = std::nullopt, .clusters = 3},

@@ -12,6 +12,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <ntfs-browser/alloc/types.h>
+#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
@@ -21,46 +23,7 @@
 #include <ntfs-browser/test/support/test-log-sink.h>
 #include <ntfs-browser/volume-options.h>
 
-namespace NTFS_BROWSER_NAMESPACE {
-namespace Alloc {
-
-struct BadClusters;
-
-}  // namespace Alloc
-}  // namespace NTFS_BROWSER_NAMESPACE
-
-namespace NTFS_BROWSER_NAMESPACE {
-namespace Alloc {
-
-struct Extent;
-
-}  // namespace Alloc
-
-namespace Cache {
-
-enum class Strategy : std::uint8_t;
-
-}  // namespace Cache
-
-namespace Io {
-
-template <Cache::Strategy S>
-class FileRecord;
-
-}  // namespace Io
-
-namespace Test::DiskReaders {
-
-class CountingDiskReader;
-class MemoryDiskReader;
-
-}  // namespace Test::DiskReaders
-template <Cache::Strategy S>
-class NtfsVolume;
-
-}  // namespace NTFS_BROWSER_NAMESPACE
-
-namespace NTFS_BROWSER_NAMESPACE::Tests::AllocSupport {
+namespace NTFS_BROWSER_NAMESPACE::Test::Alloc {
 
 // First cluster of the bitmap data an image gets from PutClusterBitmap() when
 // the image is the 64 KiB base: the clusters before it are the volume's own.
@@ -75,7 +38,7 @@ inline constexpr ULONGLONG bitmap_data_offset =
 inline constexpr ULONGLONG stale_size = 4 * Test::FakeImage::fake_cluster_size;
 
 // The volume opened over an image, and the counting reader under it.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 struct Opened {
   std::unique_ptr<NtfsVolume<S>> volume;
   // Owned by volume.
@@ -88,7 +51,7 @@ inline VolumeOptions DeletedOptions() {
 }
 
 // Opens image as a volume whose reader counts every call.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 Opened<S> OpenVolume(std::vector<BYTE> image,
                      const VolumeOptions& options = DeletedOptions()) {
   auto counter = std::make_unique<Test::DiskReaders::CountingDiskReader>(
@@ -115,7 +78,8 @@ inline std::vector<BYTE>
 // image with record 8 rewritten as $BadClus naming bad_extents. Call it after
 // WithBitmap(): the bitmap grows the image, and $Bad declares its size.
 inline std::vector<BYTE> WithBadClusters(
-    std::vector<BYTE> image, std::span<const Alloc::Extent> bad_extents,
+    std::vector<BYTE> image,
+    std::span<const NTFS_BROWSER_NAMESPACE::Alloc::Extent> bad_extents,
     const Test::FakeImage::FakeBadClusterOptions& options = {}) {
   Test::FakeImage::PutBadClusterList(image, bad_extents, options);
   return image;
@@ -123,9 +87,9 @@ inline std::vector<BYTE> WithBadClusters(
 
 // allocated plus the runs of extents: a bitmap that marks the bad clusters
 // allocated, as NTFS does.
-inline std::vector<Test::FakeImage::FakeDataRun>
-    WithBadRuns(std::vector<Test::FakeImage::FakeDataRun> allocated,
-                std::span<const Alloc::Extent> extents) {
+inline std::vector<Test::FakeImage::FakeDataRun> WithBadRuns(
+    std::vector<Test::FakeImage::FakeDataRun> allocated,
+    std::span<const NTFS_BROWSER_NAMESPACE::Alloc::Extent> extents) {
   for (const Test::FakeImage::FakeDataRun& run :
        Test::FakeImage::ExtentsAsRuns(extents)) {
     allocated.push_back(run);
@@ -134,32 +98,36 @@ inline std::vector<Test::FakeImage::FakeDataRun>
 }
 
 // A file record parsed and its attributes read, from a volume.
-template <Cache::Strategy S>
-std::unique_ptr<Io::FileRecord<S>> ParsedRecord(const NtfsVolume<S>& volume,
-                                                ULONGLONG idx) {
-  auto record = std::make_unique<Io::FileRecord<S>>(volume);
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
+std::unique_ptr<NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>>
+    ParsedRecord(const NtfsVolume<S>& volume, ULONGLONG idx) {
+  auto record =
+      std::make_unique<NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>>(volume);
   REQUIRE(record->ParseFileRecord(idx));
   REQUIRE(record->ParseAttrs());
   return record;
 }
 
 // The bad list of volume, which the test cannot go on without.
-template <Cache::Strategy S>
-const Alloc::BadClusters& RequiredBadList(const NtfsVolume<S>& volume) {
-  const Alloc::BadClusters* list = volume.GetBadClusters();
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
+const NTFS_BROWSER_NAMESPACE::Alloc::BadClusters&
+    RequiredBadList(const NtfsVolume<S>& volume) {
+  const NTFS_BROWSER_NAMESPACE::Alloc::BadClusters* list =
+      volume.GetBadClusters();
   REQUIRE(list != nullptr);
   return *list;
 }
 
 // The stale file's record, parsed with its attributes.
-template <Cache::Strategy S>
-std::unique_ptr<Io::FileRecord<S>> ParsedStale(const Opened<S>& opened) {
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
+std::unique_ptr<NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>>
+    ParsedStale(const Opened<S>& opened) {
   return ParsedRecord(*opened.volume,
                       Test::FakeImage::mft_tree_stale_child_idx);
 }
 
 // Reads the whole stale stream.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 std::vector<BYTE> ReadStale(const Opened<S>& opened) {
   const auto record = ParsedStale(opened);
   std::vector<BYTE> out(stale_size);
@@ -171,7 +139,7 @@ std::vector<BYTE> ReadStale(const Opened<S>& opened) {
 
 // Opens image, reads the whole stale stream, and returns what the library
 // logged from then on.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 std::string LogOfReadingStale(std::vector<BYTE> image,
                               const VolumeOptions& options) {
   const auto opened = OpenVolume<S>(std::move(image), options);
@@ -189,4 +157,4 @@ inline void FillStaleClusters(std::vector<BYTE>& image, size_t step) {
   }
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests::AllocSupport
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Alloc

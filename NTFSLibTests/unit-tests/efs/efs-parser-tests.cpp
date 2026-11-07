@@ -36,8 +36,8 @@ using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 using NTFS_BROWSER_NAMESPACE::Efs::CipherBackend;
 using NTFS_BROWSER_NAMESPACE::Efs::Fek;
-using NTFS_BROWSER_NAMESPACE::Tests::Algorithm;
-using NTFS_BROWSER_NAMESPACE::Tests::TestEfsEntry;
+using NTFS_BROWSER_NAMESPACE::Test::Efs::Algorithm;
+using NTFS_BROWSER_NAMESPACE::Test::Efs::TestEfsEntry;
 
 namespace {
 
@@ -125,7 +125,7 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::FullCache) {
   const TestEfsEntry user = TestUser();
   const std::vector<BYTE> valid =
-      NTFS_BROWSER_NAMESPACE::Tests::MakeEfsStream(std::span(&user, 1));
+      NTFS_BROWSER_NAMESPACE::Test::Efs::MakeEfsStream(std::span(&user, 1));
   REQUIRE(NTFS_BROWSER_NAMESPACE::Efs::ParseEfsStream(valid).has_value());
 
   std::vector<std::vector<BYTE>> hostile;
@@ -186,7 +186,7 @@ TEST_CASE("A $EFS stream with random damage never crashes the parser",
           "[efs]") {
   const std::array<TestEfsEntry, 2> users{TestUser(1), TestUser(2)};
   const std::vector<BYTE> valid =
-      NTFS_BROWSER_NAMESPACE::Tests::MakeEfsStream(users, users);
+      NTFS_BROWSER_NAMESPACE::Test::Efs::MakeEfsStream(users, users);
 
   // A fixed seed keeps the damage reproducible.
   // NOLINTNEXTLINE(bugprone-random-generator-seed,cert-msc32-c,cert-msc51-cpp)
@@ -215,7 +215,7 @@ TEST_CASE("The $EFS parser reads the users out of a well-formed stream",
       TestUser(3, std::vector<BYTE>(10, 3))};
 
   const auto parsed = NTFS_BROWSER_NAMESPACE::Efs::ParseEfsStream(
-      NTFS_BROWSER_NAMESPACE::Tests::MakeEfsStream(users, recovery));
+      NTFS_BROWSER_NAMESPACE::Test::Efs::MakeEfsStream(users, recovery));
   REQUIRE(parsed.has_value());
   REQUIRE(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(parsed).size() == 3);
 
@@ -242,17 +242,17 @@ TEST_CASE("The $EFS parser reads the users out of a well-formed stream",
 
   CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(
             NTFS_BROWSER_NAMESPACE::Efs::ParseEfsStream(
-                NTFS_BROWSER_NAMESPACE::Tests::MakeEfsStream({}, {})))
+                NTFS_BROWSER_NAMESPACE::Test::Efs::MakeEfsStream({}, {})))
             .empty());
 }
 
 TEST_CASE("An $EFS entry keeps its thumbprint and its largest wrapped FEK",
           "[efs]") {
   const TestEfsEntry user{
-      NTFS_BROWSER_NAMESPACE::Tests::TestThumbprint(7),
-      NTFS_BROWSER_NAMESPACE::Tests::PlaintextPattern(largest_wrapped_fek)};
+      NTFS_BROWSER_NAMESPACE::Test::Efs::TestThumbprint(7),
+      NTFS_BROWSER_NAMESPACE::Test::Efs::PlaintextPattern(largest_wrapped_fek)};
   const auto parsed = NTFS_BROWSER_NAMESPACE::Efs::ParseEfsStream(
-      NTFS_BROWSER_NAMESPACE::Tests::MakeEfsStream(std::span(&user, 1)));
+      NTFS_BROWSER_NAMESPACE::Test::Efs::MakeEfsStream(std::span(&user, 1)));
   REQUIRE(parsed.has_value());
   REQUIRE(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(parsed).size() == 1);
 
@@ -267,7 +267,7 @@ TEST_CASE("An $EFS entry keeps its thumbprint and its largest wrapped FEK",
 TEST_CASE("An $EFS entry with one bad field is rejected", "[efs]") {
   const TestEfsEntry user = TestUser();
   const std::vector<BYTE> valid =
-      NTFS_BROWSER_NAMESPACE::Tests::MakeEfsStream(std::span(&user, 1));
+      NTFS_BROWSER_NAMESPACE::Test::Efs::MakeEfsStream(std::span(&user, 1));
   REQUIRE(NTFS_BROWSER_NAMESPACE::Efs::ParseEfsStream(valid).has_value());
 
   const auto rejects = [](const std::vector<BYTE>& stream) {
@@ -325,11 +325,11 @@ TEST_CASE("An $EFS entry with one bad field is rejected", "[efs]") {
 
 TEST_CASE("A FEK blob is checked against its algorithm", "[efs]") {
   for (const Algorithm algorithm :
-       NTFS_BROWSER_NAMESPACE::Tests::all_algorithms) {
+       NTFS_BROWSER_NAMESPACE::Test::Efs::all_algorithms) {
     const std::vector<BYTE> key =
-        NTFS_BROWSER_NAMESPACE::Tests::TestKey(algorithm);
+        NTFS_BROWSER_NAMESPACE::Test::Efs::TestKey(algorithm);
     const std::vector<BYTE> blob =
-        NTFS_BROWSER_NAMESPACE::Tests::MakeFekBlob(algorithm, key);
+        NTFS_BROWSER_NAMESPACE::Test::Efs::MakeFekBlob(algorithm, key);
 
     const std::optional<Fek> fek = Fek::Parse(blob);
     REQUIRE(fek.has_value());
@@ -341,9 +341,9 @@ TEST_CASE("A FEK blob is checked against its algorithm", "[efs]") {
         key.begin(), key.end()));
   }
 
-  const std::vector<BYTE> good = NTFS_BROWSER_NAMESPACE::Tests::MakeFekBlob(
+  const std::vector<BYTE> good = NTFS_BROWSER_NAMESPACE::Test::Efs::MakeFekBlob(
       Algorithm::Aes256,
-      NTFS_BROWSER_NAMESPACE::Tests::TestKey(Algorithm::Aes256));
+      NTFS_BROWSER_NAMESPACE::Test::Efs::TestKey(Algorithm::Aes256));
 
   CHECK_FALSE(Fek::Parse({}).has_value());
   CHECK_FALSE(Fek::Parse(std::span(good).first(15)).has_value());
@@ -367,12 +367,12 @@ TEST_CASE("A DESX FEK carries a 16-byte key, not a 24-byte one", "[efs]") {
   const std::vector<BYTE> twenty_four(24, 0x42);
 
   const std::optional<Fek> fek = Fek::Parse(
-      NTFS_BROWSER_NAMESPACE::Tests::MakeFekBlob(Algorithm::Desx, sixteen));
+      NTFS_BROWSER_NAMESPACE::Test::Efs::MakeFekBlob(Algorithm::Desx, sixteen));
   REQUIRE(fek.has_value());
   CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(fek).GetKey().size() ==
         16);
 
-  CHECK_FALSE(Fek::Parse(NTFS_BROWSER_NAMESPACE::Tests::MakeFekBlob(
+  CHECK_FALSE(Fek::Parse(NTFS_BROWSER_NAMESPACE::Test::Efs::MakeFekBlob(
                              Algorithm::Desx, twenty_four))
                   .has_value());
 }
@@ -402,10 +402,11 @@ TEST_CASE("The cipher backend is selectable per volume, Crypto++ by default",
        {CipherBackend::CryptoPp, CipherBackend::BCrypt}) {
     const CipherBackend before = volume.GetEfsCipherBackend();
     CHECK(volume.SetEfsCipherBackend(backend) ==
-          NTFS_BROWSER_NAMESPACE::Tests::BackendAvailable(backend));
+          NTFS_BROWSER_NAMESPACE::Test::Efs::BackendAvailable(backend));
     CHECK(volume.GetEfsCipherBackend() ==
-          (NTFS_BROWSER_NAMESPACE::Tests::BackendAvailable(backend) ? backend
-                                                                    : before));
+          (NTFS_BROWSER_NAMESPACE::Test::Efs::BackendAvailable(backend)
+               ? backend
+               : before));
   }
 }
 
@@ -483,7 +484,7 @@ TEST_CASE("Sector decryption matches the published block-cipher vectors",
   for (const KnownAnswer& answer : answers) {
     for (const CipherBackend backend :
          {CipherBackend::CryptoPp, CipherBackend::BCrypt}) {
-      if (!NTFS_BROWSER_NAMESPACE::Tests::BackendAvailable(backend)) {
+      if (!NTFS_BROWSER_NAMESPACE::Test::Efs::BackendAvailable(backend)) {
         continue;
       }
       INFO("algorithm 0x" << std::hex << static_cast<DWORD>(answer.algorithm)
@@ -491,8 +492,9 @@ TEST_CASE("Sector decryption matches the published block-cipher vectors",
 
       // CBC: the first block decrypts to (block cipher output) xor IV. So a
       // ciphertext block that is the published one must give plaintext xor IV.
-      const std::vector<BYTE> blob = NTFS_BROWSER_NAMESPACE::Tests::MakeFekBlob(
-          answer.algorithm, answer.key);
+      const std::vector<BYTE> blob =
+          NTFS_BROWSER_NAMESPACE::Test::Efs::MakeFekBlob(answer.algorithm,
+                                                         answer.key);
       const std::optional<Fek> fek = Fek::Parse(blob);
       REQUIRE(fek.has_value());
 

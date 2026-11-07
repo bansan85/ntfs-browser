@@ -30,15 +30,15 @@
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestEfs = NTFS_BROWSER_NAMESPACE::Test::Efs;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using NTFS_BROWSER_NAMESPACE::Tests::Algorithm;
-using NTFS_BROWSER_NAMESPACE::Tests::TestEfsEntry;
-using NTFS_BROWSER_NAMESPACE::Tests::TestKeyProvider;
+using NTFS_BROWSER_NAMESPACE::Test::Efs::Algorithm;
+using NTFS_BROWSER_NAMESPACE::Test::Efs::TestEfsEntry;
+using NTFS_BROWSER_NAMESPACE::Test::Efs::TestKeyProvider;
 
 namespace {
 
@@ -63,17 +63,17 @@ struct Encrypted {
 
 Encrypted MakeEncrypted() {
   Encrypted encrypted;
-  encrypted.plaintext = Tests::PlaintextPattern(file_size);
-  const std::vector<BYTE> key = Tests::TestKey(Algorithm::Aes256);
+  encrypted.plaintext = TestEfs::PlaintextPattern(file_size);
+  const std::vector<BYTE> key = TestEfs::TestKey(Algorithm::Aes256);
   const TestEfsEntry user = TestUser();
   encrypted.provider = std::make_shared<TestKeyProvider>();
   encrypted.provider->Add(user.thumbprint, user.wrapped_fek,
-                          Tests::MakeFekBlob(Algorithm::Aes256, key));
-  encrypted.file.efs_stream = Tests::MakeEfsStream(std::span(&user, 1));
+                          TestEfs::MakeFekBlob(Algorithm::Aes256, key));
+  encrypted.file.efs_stream = TestEfs::MakeEfsStream(std::span(&user, 1));
   encrypted.file.streams.push_back(
       {.runs = {{first_stream_lcn, 1}},
        .cluster_bytes =
-           Tests::EfsEncrypt(Algorithm::Aes256, key, encrypted.plaintext),
+           TestEfs::EfsEncrypt(Algorithm::Aes256, key, encrypted.plaintext),
        .real_size = file_size});
   return encrypted;
 }

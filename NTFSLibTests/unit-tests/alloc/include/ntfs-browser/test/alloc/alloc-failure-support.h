@@ -9,34 +9,29 @@
 #include <utility>
 #include <vector>
 
+#include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/log/sink.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/support/test-log-sink.h>
 
-namespace NTFS_BROWSER_NAMESPACE {
-namespace Attr {
-
-struct HeaderCommon;
-
-}  // namespace Attr
-}  // namespace NTFS_BROWSER_NAMESPACE
-
-namespace NTFS_BROWSER_NAMESPACE::Tests::AllocSupport {
+namespace NTFS_BROWSER_NAMESPACE::Test::Alloc {
 
 // Records each message of the library with its level.
-class LevelSink final : public Log::ISink {
+class LevelSink final : public NTFS_BROWSER_NAMESPACE::Log::ISink {
  public:
   struct Line {
-    Log::Level level;
+    NTFS_BROWSER_NAMESPACE::Log::Level level;
     std::string text;
   };
 
-  [[nodiscard]] bool ShouldLog(Log::Level level) const override {
-    return level != Log::Level::Off;
+  [[nodiscard]] bool
+      ShouldLog(NTFS_BROWSER_NAMESPACE::Log::Level level) const override {
+    return level != NTFS_BROWSER_NAMESPACE::Log::Level::Off;
   }
 
-  void Write(Log::Level level, std::string_view message) override {
+  void Write(NTFS_BROWSER_NAMESPACE::Log::Level level,
+             std::string_view message) override {
     lines.push_back({level, std::string(message)});
   }
 
@@ -52,7 +47,8 @@ class LevelSink final : public Log::ISink {
   }
 
   // Level of the first line that holds text.
-  [[nodiscard]] std::optional<Log::Level> LevelOf(std::string_view text) const {
+  [[nodiscard]] std::optional<NTFS_BROWSER_NAMESPACE::Log::Level>
+      LevelOf(std::string_view text) const {
     for (const Line& line : lines) {
       if (line.text.find(text) != std::string::npos) {
         return line.level;
@@ -70,7 +66,8 @@ class ScopedSink {
  public:
   explicit ScopedSink(std::shared_ptr<LevelSink> sink)
       : sink_(std::move(sink)) {
-    Log::SetSinks({Test::Support::CaptureSinkHandle(), sink_});
+    NTFS_BROWSER_NAMESPACE::Log::SetSinks(
+        {Test::Support::CaptureSinkHandle(), sink_});
   }
 
   ScopedSink(const ScopedSink&) = delete;
@@ -93,7 +90,8 @@ class CapturedLevels {
   }
 
   // Level of the first line that holds text.
-  [[nodiscard]] std::optional<Log::Level> LevelOf(std::string_view text) const {
+  [[nodiscard]] std::optional<NTFS_BROWSER_NAMESPACE::Log::Level>
+      LevelOf(std::string_view text) const {
     return sink_->LevelOf(text);
   }
 
@@ -103,9 +101,10 @@ class CapturedLevels {
 };
 
 // A raw attribute callback that throws, as a user callback can.
-inline void ThrowingCallback(const Attr::HeaderCommon& /*header*/,
-                             bool& /*discard*/) {
+inline void ThrowingCallback(
+    const NTFS_BROWSER_NAMESPACE::Attr::HeaderCommon& /*header*/,
+    bool& /*discard*/) {
   throw std::runtime_error("callback failed");
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests::AllocSupport
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Alloc

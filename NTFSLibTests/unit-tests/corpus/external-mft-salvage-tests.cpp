@@ -39,16 +39,16 @@ namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
-using NTFS_BROWSER_NAMESPACE::Tests::DfirMuseumDir;
-using NTFS_BROWSER_NAMESPACE::Tests::DfirNtfsDir;
-using NTFS_BROWSER_NAMESPACE::Tests::OpenStandaloneMftVolume;
-using NTFS_BROWSER_NAMESPACE::Tests::ReadCorpusFile;
-using NTFS_BROWSER_NAMESPACE::Tests::RecoveringOptions;
-using NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusFile;
-using NTFS_BROWSER_NAMESPACE::Tests::ScanStandaloneMft;
-using NTFS_BROWSER_NAMESPACE::Tests::StandaloneMftScan;
-using NTFS_BROWSER_NAMESPACE::Tests::StrictOptions;
-using NTFS_BROWSER_NAMESPACE::Tests::TempFile;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::DfirMuseumDir;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::DfirNtfsDir;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::OpenStandaloneMftVolume;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::ReadCorpusFile;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::RecoveringOptions;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::RequireCorpusFile;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::ScanStandaloneMft;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::StandaloneMftScan;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::StrictOptions;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::TempFile;
 
 // Bytes of a record in the $MFT files used here.
 constexpr std::size_t record_size = 1024;

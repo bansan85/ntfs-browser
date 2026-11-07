@@ -44,17 +44,17 @@ namespace {
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestCorpus = NTFS_BROWSER_NAMESPACE::Test::Corpus;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::IDiskReader;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
+using TestCorpus::DfirNtfsDir;
+using TestCorpus::ReadCorpusFile;
+using TestCorpus::RequireCorpusFile;
 using TestDiskReaders::StandaloneMftDiskReader;
-using Tests::DfirNtfsDir;
-using Tests::ReadCorpusFile;
-using Tests::RequireCorpusFile;
 
 // Logged when a record comes from $MFTMirr.
 constexpr std::string_view fallback_message = "using its copy in $MFTMirr";
@@ -336,7 +336,7 @@ TEST_CASE("The records of a real $MFTMirr copy are the system files 0 to 3",
   const std::string_view copy = GENERATE("boot.mftmirr", "4k-large.mftmirr");
   CAPTURE(copy);
   const auto volume =
-      Tests::OpenStandaloneMftVolume(Fixture(copy), VolumeOptions{});
+      TestCorpus::OpenStandaloneMftVolume(Fixture(copy), VolumeOptions{});
 
   for (ULONGLONG record = 0; record < system_file_names.size(); ++record) {
     CHECK(NameOfRecord(*volume, record) ==

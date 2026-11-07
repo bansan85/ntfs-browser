@@ -31,7 +31,7 @@
 
 #include "utf/utf.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Corpus {
 
 namespace {
 
@@ -141,7 +141,7 @@ const std::string& ProcessTag() {
 }
 
 // Opens file as a standalone $MFT volume of strategy S, and scans it.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 StandaloneMftScan ScanWith(const std::filesystem::path& file,
                            const VolumeOptions& options, bool repair_extent) {
   auto standalone =
@@ -161,7 +161,7 @@ StandaloneMftScan ScanWith(const std::filesystem::path& file,
   INFO("log of the volume open: " << Test::Support::TakeCapturedLog());
   REQUIRE(volume.IsVolumeOK());
 
-  StandaloneMftScan scan{.tree = Mft::MftTree(volume),
+  StandaloneMftScan scan{.tree = NTFS_BROWSER_NAMESPACE::Mft::MftTree(volume),
                          .held_bytes = volume.GetCacheStats().held_bytes,
                          .largest_read = 0,
                          .record_size = record_size,
@@ -196,17 +196,18 @@ TempFile::~TempFile() {
   std::filesystem::remove(path_, error);
 }
 
-StandaloneMftScan ScanStandaloneMft(const std::filesystem::path& file,
-                                    Cache::Strategy strategy,
-                                    const VolumeOptions& options,
-                                    bool repair_extent) {
-  return strategy == Cache::Strategy::NoCache
-             ? ScanWith<Cache::Strategy::NoCache>(file, options, repair_extent)
-             : ScanWith<Cache::Strategy::FullCache>(file, options,
-                                                    repair_extent);
+StandaloneMftScan
+    ScanStandaloneMft(const std::filesystem::path& file,
+                      NTFS_BROWSER_NAMESPACE::Cache::Strategy strategy,
+                      const VolumeOptions& options, bool repair_extent) {
+  return strategy == NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache
+             ? ScanWith<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>(
+                   file, options, repair_extent)
+             : ScanWith<NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>(
+                   file, options, repair_extent);
 }
 
-std::unique_ptr<NtfsVolume<Cache::Strategy::NoCache>>
+std::unique_ptr<NtfsVolume<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>>
     OpenStandaloneMftVolume(const std::filesystem::path& file,
                             const VolumeOptions& options, bool repair_extent) {
   auto standalone =
@@ -216,7 +217,8 @@ std::unique_ptr<NtfsVolume<Cache::Strategy::NoCache>>
   INFO("StandaloneMftDiskReader::Open: " << standalone->Failure());
   REQUIRE(opened);
   static_cast<void>(Test::Support::TakeCapturedLog());
-  auto volume = std::make_unique<NtfsVolume<Cache::Strategy::NoCache>>(
+  auto volume = std::make_unique<
+      NtfsVolume<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>>(
       std::move(standalone), options);
   INFO("log of the volume open: " << Test::Support::TakeCapturedLog());
   REQUIRE(volume->IsVolumeOK());
@@ -328,7 +330,7 @@ std::string ListingPath(const std::wstring& tree_path) {
   if (!path.empty() && path.front() == L'/') {
     path.erase(0, 1);
   }
-  return Utf::WideToUtf8(path);
+  return NTFS_BROWSER_NAMESPACE::Utf::WideToUtf8(path);
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Corpus

@@ -33,11 +33,11 @@ TEST_CASE(
     "STANDARD_INFORMATION and $I30 FILE_NAME disagree on /test/1.txt's last "
     "access time (ntfs-lastaccess.raw)",
     "[ntfs-samples][integration][timestamps]") {
-  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(lastaccess_image,
-                                                    "ntfs-lastaccess");
+  NTFS_BROWSER_NAMESPACE::Test::Corpus::RequireCorpusImage(lastaccess_image,
+                                                           "ntfs-lastaccess");
 
   const NtfsVolume<Cache::Strategy::NoCache> volume(
-      NTFS_BROWSER_NAMESPACE::Tests::OpenCorpusImage(
+      NTFS_BROWSER_NAMESPACE::Test::Corpus::OpenCorpusImage(
           lastaccess_image, small_image_partition_offset, "ntfs-lastaccess"));
   REQUIRE(volume.IsVolumeOK());
 
@@ -71,11 +71,11 @@ TEST_CASE(
     "STANDARD_INFORMATION, FILE_NAME and $I30 FILE_NAME each carry a "
     "different creation date for /test/test.txt (ntfs-si-vs-fn.raw)",
     "[ntfs-samples][integration][timestamps]") {
-  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(si_vs_fn_image,
-                                                    "ntfs-si-vs-fn");
+  NTFS_BROWSER_NAMESPACE::Test::Corpus::RequireCorpusImage(si_vs_fn_image,
+                                                           "ntfs-si-vs-fn");
 
   const NtfsVolume<Cache::Strategy::NoCache> volume(
-      NTFS_BROWSER_NAMESPACE::Tests::OpenCorpusImage(
+      NTFS_BROWSER_NAMESPACE::Test::Corpus::OpenCorpusImage(
           si_vs_fn_image, small_image_partition_offset, "ntfs-si-vs-fn"));
   REQUIRE(volume.IsVolumeOK());
 
@@ -123,8 +123,8 @@ TEST_CASE(
     "STANDARD_INFORMATION and $I30 FILE_NAME disagree on two files' last "
     "access time (ntfs.raw)",
     "[ntfs-samples][integration][timestamps]") {
-  NTFS_BROWSER_NAMESPACE::Tests::RequireUnfetchedCorpusImage(ntfs_image,
-                                                             "ntfs");
+  NTFS_BROWSER_NAMESPACE::Test::Corpus::RequireUnfetchedCorpusImage(ntfs_image,
+                                                                    "ntfs");
 
   // This image also documents two VSS shadow copies (one hidden from
   // "vssadmin list shadows") and a stray $I30 entry surviving in $MFT record
@@ -132,7 +132,7 @@ TEST_CASE(
   // and ParseFileRecord()/ParseAttrs() only ever read a record's real,
   // in-use attribute area, never its unused slack bytes.
   NtfsVolume<Cache::Strategy::NoCache> volume(
-      NTFS_BROWSER_NAMESPACE::Tests::OpenCorpusImage(
+      NTFS_BROWSER_NAMESPACE::Test::Corpus::OpenCorpusImage(
           ntfs_image, large_image_partition_offset, "ntfs"));
   REQUIRE(volume.IsVolumeOK());
 

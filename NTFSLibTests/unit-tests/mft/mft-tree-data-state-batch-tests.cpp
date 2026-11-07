@@ -25,7 +25,7 @@ namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 using Alloc::DataState;
 using TestFakeImage::FakeDataRun;
 
@@ -94,7 +94,7 @@ struct Scanned {
 
 Scanned Scan(const Fixture& fixture) {
   const auto opened =
-      Support::OpenVolume<Cache::Strategy::NoCache>(fixture.image);
+      TestAlloc::OpenVolume<Cache::Strategy::NoCache>(fixture.image);
   const Mft::MftTree tree(*opened.volume);
 
   Scanned scanned;
@@ -172,7 +172,7 @@ TEST_CASE("annotation bitmap reads", "[.benchmark]") {
 
   const auto count_reads = [&](size_t pending_cap) {
     const Overrides overrides(benchmark_window, pending_cap);
-    const auto opened = Support::OpenVolume<Cache::Strategy::NoCache>(image);
+    const auto opened = TestAlloc::OpenVolume<Cache::Strategy::NoCache>(image);
     const Mft::MftTree tree(*opened.volume);
     return opened.counter->ReadsInRange(data_offset, image.size());
   };

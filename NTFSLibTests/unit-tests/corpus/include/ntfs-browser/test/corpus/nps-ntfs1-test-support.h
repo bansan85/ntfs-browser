@@ -13,7 +13,7 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/corpus/corpus-test-support.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Corpus {
 
 // The NPS Test Disk Image "nps-2009-ntfs1" (Digital Corpora), generation 2: a
 // real NTFS volume with RAW, Compressed, and Encrypted directories, each
@@ -79,4 +79,4 @@ void OpenFile(NTFS_BROWSER_NAMESPACE::Io::FileRecord<
                  NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>& dir,
              std::string_view name);
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Corpus

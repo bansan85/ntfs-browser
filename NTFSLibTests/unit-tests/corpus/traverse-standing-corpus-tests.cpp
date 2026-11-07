@@ -29,10 +29,10 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 using NTFS_BROWSER_NAMESPACE::IDiskReader;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::DfirNtfsDir;
 using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
 using NTFS_BROWSER_NAMESPACE::Test::Support::WalkResult;
 using NTFS_BROWSER_NAMESPACE::Test::Support::WalkVolume;
-using NTFS_BROWSER_NAMESPACE::Tests::DfirNtfsDir;
 
 namespace {
 
@@ -72,10 +72,10 @@ TEMPLATE_TEST_CASE_SIG(
     "The batched walk matches the default walk on the NPS image",
     "[corpus][traverse-standing]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(
-      NTFS_BROWSER_NAMESPACE::Tests::ntfs1_image);
+  NTFS_BROWSER_NAMESPACE::Test::Corpus::RequireCorpusImage(
+      NTFS_BROWSER_NAMESPACE::Test::Corpus::ntfs1_image);
 
-  CheckImageWalks<S>(NTFS_BROWSER_NAMESPACE::Tests::OpenNtfs1Image);
+  CheckImageWalks<S>(NTFS_BROWSER_NAMESPACE::Test::Corpus::OpenNtfs1Image);
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -84,10 +84,10 @@ TEMPLATE_TEST_CASE_SIG(
     "[corpus][traverse-standing]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const std::filesystem::path image =
-      NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusFile(
+      NTFS_BROWSER_NAMESPACE::Test::Corpus::RequireCorpusFile(
           DfirNtfsDir() / "test_data" / "ntfs3_attrlist.raw");
   const std::vector<BYTE> bytes =
-      NTFS_BROWSER_NAMESPACE::Tests::ReadCorpusFile(image);
+      NTFS_BROWSER_NAMESPACE::Test::Corpus::ReadCorpusFile(image);
 
   CheckImageWalks<S>(
       [&bytes] { return std::make_unique<MemoryDiskReader>(bytes); });

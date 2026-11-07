@@ -25,7 +25,7 @@ namespace Log = NTFS_BROWSER_NAMESPACE::Log;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Usn = NTFS_BROWSER_NAMESPACE::Usn;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
-namespace AllocSupport = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 using TestFakeImage::FakeUsnRecord;
 
 namespace {
@@ -212,8 +212,8 @@ void CheckDamageIsLoggedOncePerVolume() {
          .bytes = {static_cast<BYTE>(unknown_version), 0x00}});
   }
 
-  const auto sink = std::make_shared<AllocSupport::LevelSink>();
-  const AllocSupport::ScopedSink scoped(sink);
+  const auto sink = std::make_shared<TestAlloc::LevelSink>();
+  const TestAlloc::ScopedSink scoped(sink);
   const auto opened = Support::OpenVolume<S>(Support::JournalImage(options));
 
   const Usn::Journal* result = opened.volume->GetUsnJournal();

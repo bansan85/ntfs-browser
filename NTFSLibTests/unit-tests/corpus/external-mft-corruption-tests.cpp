@@ -32,15 +32,15 @@ namespace {
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using NTFS_BROWSER_NAMESPACE::Tests::DfirMuseumDir;
-using NTFS_BROWSER_NAMESPACE::Tests::DfirNtfsDir;
-using NTFS_BROWSER_NAMESPACE::Tests::ReadCorpusFile;
-using NTFS_BROWSER_NAMESPACE::Tests::RecoveringOptions;
-using NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusFile;
-using NTFS_BROWSER_NAMESPACE::Tests::ScanStandaloneMft;
-using NTFS_BROWSER_NAMESPACE::Tests::StandaloneMftScan;
-using NTFS_BROWSER_NAMESPACE::Tests::StrictOptions;
-using NTFS_BROWSER_NAMESPACE::Tests::TempFile;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::DfirMuseumDir;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::DfirNtfsDir;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::ReadCorpusFile;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::RecoveringOptions;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::RequireCorpusFile;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::ScanStandaloneMft;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::StandaloneMftScan;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::StrictOptions;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::TempFile;
 
 // Records from the start of the $MFT that stay intact: the volume metadata
 // files, without which the file does not open as a volume.

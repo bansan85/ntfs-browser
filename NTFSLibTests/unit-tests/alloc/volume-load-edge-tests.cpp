@@ -30,7 +30,7 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 using Alloc::ClusterState;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
@@ -54,7 +54,7 @@ std::unique_ptr<NtfsVolume<S>> OpenScripted(std::vector<BYTE> image,
       std::make_unique<TestSupport::ScriptedDiskReader>(std::move(image));
   script(*reader);
   return std::make_unique<NtfsVolume<S>>(std::move(reader),
-                                         Support::DeletedOptions());
+                                         TestAlloc::DeletedOptions());
 }
 
 }  // namespace
@@ -66,7 +66,7 @@ TEMPLATE_TEST_CASE_SIG(
   const NtfsVolume<S> volume(
       std::make_unique<TestDiskReaders::MemoryDiskReader>(
           TestFakeImage::BuildFakeNtfsImage()),
-      Support::DeletedOptions());
+      TestAlloc::DeletedOptions());
   REQUIRE(volume.IsVolumeOK());
 
   CHECK(volume.GetClusterState(0) == ClusterState::Unknown);
@@ -81,7 +81,7 @@ TEMPLATE_TEST_CASE_SIG("a $Bitmap record without an unnamed $DATA is unusable",
   const NtfsVolume<S> volume(
       std::make_unique<TestDiskReaders::MemoryDiskReader>(
           TestFakeImage::BuildFakeNtfsImageWithAttributeListDirectory()),
-      Support::DeletedOptions());
+      TestAlloc::DeletedOptions());
   REQUIRE(volume.IsVolumeOK());
 
   CHECK(volume.GetClusterState(0) == ClusterState::Unknown);
@@ -91,12 +91,12 @@ TEMPLATE_TEST_CASE_SIG("a $Bitmap record without an unnamed $DATA is unusable",
 TEMPLATE_TEST_CASE_SIG("a bitmap read that throws leaves the clusters unknown",
                        "[alloc][volume]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  std::vector<BYTE> image = Support::WithBitmap(
+  std::vector<BYTE> image = TestAlloc::WithBitmap(
       TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(), allocated_runs);
   const ULONGLONG image_size = image.size();
   const auto volume = OpenScripted<S>(
       std::move(image), [image_size](TestSupport::ScriptedDiskReader& reader) {
-        reader.FaultRange(Support::bitmap_data_offset, image_size,
+        reader.FaultRange(TestAlloc::bitmap_data_offset, image_size,
                           TestSupport::ScriptedDiskReader::Fault::Throw);
       });
   REQUIRE(volume->IsVolumeOK());

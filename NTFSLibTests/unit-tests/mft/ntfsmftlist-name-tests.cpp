@@ -204,13 +204,13 @@ TEST_CASE("NtfsMftList puts the cluster lines under a path of 32767 units",
 
 TEST_CASE("NtfsMftList prints the name of a stream in every exotic form",
           "[mft][sample][name][cluster]") {
-  namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AccountSupport;
+  namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
   for (const auto& exotic : ExoticNames()) {
     INFO(exotic.label);
-    Support::Volume volume;
-    auto stream = Support::Stream({{40, 4}}, 4096);
+    TestAlloc::Volume volume;
+    auto stream = TestAlloc::Stream({{40, 4}}, 4096);
     stream.name = exotic.name;
-    volume.Put(22, Support::Freed(100, stream));
+    volume.Put(22, TestAlloc::Freed(100, stream));
     const TempTreeImage image(volume.Build());
 
     const SampleRun run =
@@ -224,13 +224,13 @@ TEST_CASE("NtfsMftList prints the name of a stream in every exotic form",
 
 TEST_CASE("NtfsMftList prints the name of a long stream",
           "[mft][sample][name][cluster]") {
-  namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AccountSupport;
   // As long as a record of the fixture holds before its first sector ends.
   const std::wstring name = FillerName(60, L's', L'é');
-  Support::Volume volume;
-  auto stream = Support::Stream({{40, 4}}, 4096);
+  namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
+  TestAlloc::Volume volume;
+  auto stream = TestAlloc::Stream({{40, 4}}, 4096);
   stream.name = name;
-  volume.Put(22, Support::Freed(100, stream));
+  volume.Put(22, TestAlloc::Freed(100, stream));
   const TempTreeImage image(volume.Build());
 
   const SampleRun run =

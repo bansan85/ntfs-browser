@@ -19,7 +19,7 @@
 #include <ntfs-browser/test/disk-readers/recording-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/sequential-disk-reader.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Corpus {
 
 // Bits in a DWORD: where a FILETIME's high half starts.
 constexpr unsigned dword_bits = 32;
@@ -190,4 +190,4 @@ std::tuple<WORD, WORD, WORD>
           static_cast<WORD>(month), static_cast<WORD>(day)};
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Corpus

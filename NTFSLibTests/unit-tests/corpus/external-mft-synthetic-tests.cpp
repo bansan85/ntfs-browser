@@ -22,8 +22,8 @@
 
 namespace {
 
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::TempFile;
 using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::StandaloneMftDiskReader;
-using NTFS_BROWSER_NAMESPACE::Tests::TempFile;
 
 // Writes value at offset of bytes, little endian.
 template <typename T>

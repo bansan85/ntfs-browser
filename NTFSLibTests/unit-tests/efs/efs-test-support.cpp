@@ -40,7 +40,7 @@
 
 #endif
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Efs {
 
 namespace {
 
@@ -552,4 +552,4 @@ std::optional<std::vector<BYTE>>
   return std::nullopt;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Efs

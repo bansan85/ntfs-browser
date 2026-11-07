@@ -31,11 +31,11 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 namespace TreeSupport = NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport;
 using Alloc::DataState;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Support::stale_size;
+using TestAlloc::stale_size;
 using TestFakeImage::FakeDataRun;
 using TreeSupport::CheckNoEntryIsAnnotated;
 using TreeSupport::RequiredEntry;
@@ -53,11 +53,11 @@ const std::vector<Alloc::Extent> one_bad{{.lcn = 41, .clusters = 1}};
 // The freed tree with a non-resident stale file, a bitmap that marks the bad
 // cluster, and, when with_list is set, the bad list.
 std::vector<BYTE> Image(bool with_list = true) {
-  std::vector<BYTE> image = Support::WithBitmap(
+  std::vector<BYTE> image = TestAlloc::WithBitmap(
       TestFakeImage::BuildFakeNtfsImageWithFreedNonResidentFile(stale_size,
                                                                 stale_runs),
-      Support::WithBadRuns({}, one_bad));
-  return with_list ? Support::WithBadClusters(std::move(image), one_bad)
+      TestAlloc::WithBadRuns({}, one_bad));
+  return with_list ? TestAlloc::WithBadClusters(std::move(image), one_bad)
                    : image;
 }
 
@@ -66,11 +66,11 @@ std::vector<BYTE> Image(bool with_list = true) {
 // scan reads record 8 itself like any other record, so its reads cannot tell
 // whether the list was loaded. That message can.
 std::vector<BYTE> UnusableListImage() {
-  return Support::WithBadClusters(
-      Support::WithBitmap(
+  return TestAlloc::WithBadClusters(
+      TestAlloc::WithBitmap(
           TestFakeImage::BuildFakeNtfsImageWithFreedNonResidentFile(stale_size,
                                                                     stale_runs),
-          Support::WithBadRuns({}, one_bad)),
+          TestAlloc::WithBadRuns({}, one_bad)),
       one_bad, {.omit_bad_stream = true});
 }
 
@@ -119,14 +119,14 @@ void CheckNoBadListIsLoadedWhenNothingIsAnnotated() {
   const std::vector<BYTE> image = UnusableListImage();
 
   for (const bool include_deleted : {false, true}) {
-    const Support::CapturedLevels log;
+    const TestAlloc::CapturedLevels log;
     const ScannedVolume<S> scanned(
         image, VolumeOptions{.include_deleted = include_deleted},
         {.annotate_data_state = false});
 
     CheckNoEntryIsAnnotated(scanned.tree);
     CHECK(scanned.tree.Stats().data_bad == 0);
-    CHECK(scanned.opened.counter->ReadsInRange(Support::bitmap_data_offset,
+    CHECK(scanned.opened.counter->ReadsInRange(TestAlloc::bitmap_data_offset,
                                                image.size()) == 0);
     CHECK(log.Count(unusable_message) == 0);
   }
@@ -134,7 +134,7 @@ void CheckNoBadListIsLoadedWhenNothingIsAnnotated() {
 
 template <Cache::Strategy S>
 void CheckWithoutIncludeDeletedNoBadListIsLoaded() {
-  const Support::CapturedLevels log;
+  const TestAlloc::CapturedLevels log;
   const ScannedVolume<S> scanned(UnusableListImage(),
                                  VolumeOptions{.include_deleted = false});
 
@@ -144,7 +144,7 @@ void CheckWithoutIncludeDeletedNoBadListIsLoaded() {
 
 template <Cache::Strategy S>
 void CheckAnAnnotatedScanLoadsTheBadListOnce() {
-  const Support::CapturedLevels log;
+  const TestAlloc::CapturedLevels log;
   const ScannedVolume<S> scanned(UnusableListImage());
 
   // The bitmap alone answers: the bad cluster is marked allocated in it.
@@ -174,12 +174,12 @@ void CheckSeveralFlushesGiveTheSameStates() {
     bad.push_back({.lcn = built.lcns[i], .clusters = 1});
   }
   std::vector<BYTE> image =
-      Support::WithBitmap(built.image, Support::WithBadRuns(marked, bad));
-  image = Support::WithBadClusters(std::move(image), bad);
+      TestAlloc::WithBitmap(built.image, TestAlloc::WithBadRuns(marked, bad));
+  image = TestAlloc::WithBadClusters(std::move(image), bad);
 
   const auto states_with_cap = [&](size_t cap) {
     Mft::SetMaxPendingRangesForTests(cap);
-    const auto opened = Support::OpenVolume<S>(image);
+    const auto opened = TestAlloc::OpenVolume<S>(image);
     const Mft::MftTree tree(*opened.volume);
     Mft::SetMaxPendingRangesForTests(0);
     std::vector<std::optional<DataState>> states;

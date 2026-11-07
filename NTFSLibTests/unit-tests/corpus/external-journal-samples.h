@@ -9,7 +9,7 @@
 
 #include <ntfs-browser/namespace.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests::RealJournal {
+namespace NTFS_BROWSER_NAMESPACE::Test::Corpus {
 
 // One journal record as an independent reader (a small Python parser that
 // never ran this library) decoded it from a real $J. Every field is a fact
@@ -278,4 +278,4 @@ inline constexpr std::array<JournalSample, sample_count> dfir_samples = {{
      0x20, "$TxfLog.blf"},
 }};
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests::RealJournal
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Corpus

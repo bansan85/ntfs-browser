@@ -479,10 +479,10 @@ namespace {
 // The tree image with a freed file whose cluster 42 a live file took, and
 // another freed file whose clusters hold zeros.
 std::vector<BYTE> ImageWithClusters() {
-  namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AccountSupport;
-  Support::Volume volume;
-  volume.Put(22, Support::Freed(100, Support::Stream({{40, 4}}, 4096)));
-  volume.Put(17, Support::Live(Support::Stream({{42, 1}}, 1024)));
+  namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
+  TestAlloc::Volume volume;
+  volume.Put(22, TestAlloc::Freed(100, TestAlloc::Stream({{40, 4}}, 4096)));
+  volume.Put(17, TestAlloc::Live(TestAlloc::Stream({{42, 1}}, 1024)));
   volume.allocated = {NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeDataRun{
       .lcn = 42, .clusters = 1}};
   return volume.Build();

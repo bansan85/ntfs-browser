@@ -28,10 +28,10 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Support::ReadStale;
-using Support::stale_size;
+using TestAlloc::ReadStale;
+using TestAlloc::stale_size;
 using TestFakeImage::FakeDataRun;
 
 namespace {
@@ -49,18 +49,18 @@ std::vector<BYTE> LiveImage(std::span<const FakeDataRun> allocated_runs,
   std::vector<BYTE> image =
       TestFakeImage::BuildFakeNtfsImageWithFreedNonResidentFile(
           stale_size, {FakeDataRun{.lcn = 40, .clusters = 4}});
-  Support::FillStaleClusters(image, 13);
+  TestAlloc::FillStaleClusters(image, 13);
   TestFakeImage::SetRecordInUse(image, TestFakeImage::mft_tree_stale_child_idx,
                                 in_use);
-  return Support::WithBitmap(std::move(image), allocated_runs);
+  return TestAlloc::WithBitmap(std::move(image), allocated_runs);
 }
 
 template <Cache::Strategy S>
 void CheckAFreeClusterIsLogged() {
-  const auto strict_opened = Support::OpenVolume<S>(LiveImage({}), strict);
+  const auto strict_opened = TestAlloc::OpenVolume<S>(LiveImage({}), strict);
   const std::vector<BYTE> expected = ReadStale(strict_opened);
 
-  const auto opened = Support::OpenVolume<S>(LiveImage({}), recovering);
+  const auto opened = TestAlloc::OpenVolume<S>(LiveImage({}), recovering);
   (void)TestSupport::TakeCapturedLog();
 
   CHECK(ReadStale(opened) == expected);
@@ -72,7 +72,7 @@ void CheckAPartlyFreeRunIsLogged() {
   const std::array<FakeDataRun, 1> one_used{
       FakeDataRun{.lcn = 41, .clusters = 1}};
   const std::string log =
-      Support::LogOfReadingStale<S>(LiveImage(one_used), recovering);
+      TestAlloc::LogOfReadingStale<S>(LiveImage(one_used), recovering);
 
   CHECK_THAT(log, ContainsSubstring(free_message));
   CHECK_THAT(log, ContainsSubstring("3 clusters"));
@@ -83,7 +83,7 @@ void CheckAHealthyFileIsNotLogged() {
   const std::array<FakeDataRun, 1> all_used{
       FakeDataRun{.lcn = 40, .clusters = 4}};
   const std::string log =
-      Support::LogOfReadingStale<S>(LiveImage(all_used), recovering);
+      TestAlloc::LogOfReadingStale<S>(LiveImage(all_used), recovering);
 
   CHECK_THAT(log, !ContainsSubstring(free_message));
 }
@@ -91,21 +91,21 @@ void CheckAHealthyFileIsNotLogged() {
 template <Cache::Strategy S>
 void CheckStrictModeReadsNoBitmap() {
   const std::vector<BYTE> image = LiveImage({});
-  const auto opened = Support::OpenVolume<S>(image, strict);
+  const auto opened = TestAlloc::OpenVolume<S>(image, strict);
   (void)TestSupport::TakeCapturedLog();
   opened.counter->Reset();
 
   (void)ReadStale(opened);
 
   CHECK_THAT(TestSupport::TakeCapturedLog(), !ContainsSubstring(free_message));
-  CHECK(opened.counter->ReadsInRange(Support::bitmap_data_offset,
+  CHECK(opened.counter->ReadsInRange(TestAlloc::bitmap_data_offset,
                                      image.size()) == 0);
 }
 
 template <Cache::Strategy S>
 void CheckTheCheckRunsOnce() {
-  const auto opened = Support::OpenVolume<S>(LiveImage({}), recovering);
-  const auto record = Support::ParsedStale(opened);
+  const auto opened = TestAlloc::OpenVolume<S>(LiveImage({}), recovering);
+  const auto record = TestAlloc::ParsedStale(opened);
   std::vector<BYTE> out(stale_size);
   const auto* const stream = record->FindStream({});
   (void)TestSupport::TakeCapturedLog();
@@ -121,7 +121,7 @@ void CheckTheCheckRunsOnce() {
 
 template <Cache::Strategy S>
 void CheckADeletedFileIsNotChecked() {
-  const std::string log = Support::LogOfReadingStale<S>(
+  const std::string log = TestAlloc::LogOfReadingStale<S>(
       LiveImage({}, /*in_use=*/false),
       VolumeOptions{.include_deleted = true, .recover_errors = true});
 
@@ -131,16 +131,16 @@ void CheckADeletedFileIsNotChecked() {
 template <Cache::Strategy S>
 void CheckTheVolumesOwnMetadataIsNotChecked() {
   const std::vector<BYTE> image = LiveImage({});
-  const auto opened = Support::OpenVolume<S>(image, recovering);
+  const auto opened = TestAlloc::OpenVolume<S>(image, recovering);
   (void)TestSupport::TakeCapturedLog();
   opened.counter->Reset();
 
-  const auto mft = Support::ParsedRecord(*opened.volume,
-                                         static_cast<ULONGLONG>(Mft::Idx::Mft));
+  const auto mft = TestAlloc::ParsedRecord(
+      *opened.volume, static_cast<ULONGLONG>(Mft::Idx::Mft));
   std::vector<BYTE> mft_bytes(TestFakeImage::fake_cluster_size);
   CHECK(mft->FindStream({})->ReadData(0, mft_bytes));
 
-  const auto bitmap = Support::ParsedRecord(
+  const auto bitmap = TestAlloc::ParsedRecord(
       *opened.volume, static_cast<ULONGLONG>(Mft::Idx::Bitmap));
   std::vector<BYTE> bitmap_bytes(8);
   CHECK(bitmap->FindStream({})->ReadData(0, bitmap_bytes));
@@ -157,9 +157,9 @@ std::vector<BYTE> FragmentedLiveImage(std::span<const FakeDataRun> allocated,
                        FakeDataRun{.lcn = 50, .clusters = 2}});
   TestFakeImage::SetRecordInUse(image, TestFakeImage::mft_tree_stale_child_idx,
                                 true);
-  image = Support::WithBitmap(std::move(image), allocated);
+  image = TestAlloc::WithBitmap(std::move(image), allocated);
   if (!bad.empty()) {
-    image = Support::WithBadClusters(std::move(image), bad);
+    image = TestAlloc::WithBadClusters(std::move(image), bad);
   }
   return image;
 }
@@ -167,8 +167,8 @@ std::vector<BYTE> FragmentedLiveImage(std::span<const FakeDataRun> allocated,
 template <Cache::Strategy S>
 void CheckEveryFragmentIsCounted() {
   SECTION("free clusters of two fragments") {
-    const std::string log =
-        Support::LogOfReadingStale<S>(FragmentedLiveImage({}, {}), recovering);
+    const std::string log = TestAlloc::LogOfReadingStale<S>(
+        FragmentedLiveImage({}, {}), recovering);
 
     CHECK_THAT(log, ContainsSubstring("4 clusters of a data stream are free in "
                                       "$Bitmap, from the run at LCN 40"));
@@ -177,8 +177,8 @@ void CheckEveryFragmentIsCounted() {
   SECTION("bad clusters of two fragments") {
     const std::vector<Alloc::Extent> bad{{.lcn = 40, .clusters = 2},
                                          {.lcn = 50, .clusters = 2}};
-    const std::string log = Support::LogOfReadingStale<S>(
-        FragmentedLiveImage(Support::WithBadRuns({}, bad), bad), recovering);
+    const std::string log = TestAlloc::LogOfReadingStale<S>(
+        FragmentedLiveImage(TestAlloc::WithBadRuns({}, bad), bad), recovering);
 
     CHECK_THAT(log,
                ContainsSubstring("4 clusters of a data stream are marked bad "

@@ -51,24 +51,24 @@ namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::CivilTime;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::CompareWithListing;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::DfirMuseumDir;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::DfirNtfsDir;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::EntryUtcTicks;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::FirstDifference;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::FlsLine;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::ListingReport;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::OpenStandaloneMftVolume;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::ParseFlsListing;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::RecoveringOptions;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::RequireCorpusFile;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::ScanStandaloneMft;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::StandaloneMftScan;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::StrictOptions;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::TempFile;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::UtcTicks;
 using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::StandaloneMftDiskReader;
-using NTFS_BROWSER_NAMESPACE::Tests::CivilTime;
-using NTFS_BROWSER_NAMESPACE::Tests::CompareWithListing;
-using NTFS_BROWSER_NAMESPACE::Tests::DfirMuseumDir;
-using NTFS_BROWSER_NAMESPACE::Tests::DfirNtfsDir;
-using NTFS_BROWSER_NAMESPACE::Tests::EntryUtcTicks;
-using NTFS_BROWSER_NAMESPACE::Tests::FirstDifference;
-using NTFS_BROWSER_NAMESPACE::Tests::FlsLine;
-using NTFS_BROWSER_NAMESPACE::Tests::ListingReport;
-using NTFS_BROWSER_NAMESPACE::Tests::OpenStandaloneMftVolume;
-using NTFS_BROWSER_NAMESPACE::Tests::ParseFlsListing;
-using NTFS_BROWSER_NAMESPACE::Tests::RecoveringOptions;
-using NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusFile;
-using NTFS_BROWSER_NAMESPACE::Tests::ScanStandaloneMft;
-using NTFS_BROWSER_NAMESPACE::Tests::StandaloneMftScan;
-using NTFS_BROWSER_NAMESPACE::Tests::StrictOptions;
-using NTFS_BROWSER_NAMESPACE::Tests::TempFile;
-using NTFS_BROWSER_NAMESPACE::Tests::UtcTicks;
 
 // Which kept project holds a fixture.
 enum class Project : unsigned char { DfirNtfs, DfirMuseum };
@@ -182,7 +182,8 @@ ULONGLONG CountDirectories(const Mft::MftTree& tree) {
 
 // The first `count` bytes of file.
 std::vector<BYTE> Head(const std::filesystem::path& file, std::size_t count) {
-  std::vector<BYTE> bytes = NTFS_BROWSER_NAMESPACE::Tests::ReadCorpusFile(file);
+  std::vector<BYTE> bytes =
+      NTFS_BROWSER_NAMESPACE::Test::Corpus::ReadCorpusFile(file);
   bytes.resize(std::min(count, bytes.size()));
   return bytes;
 }

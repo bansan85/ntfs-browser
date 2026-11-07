@@ -30,12 +30,14 @@ template <Cache::Strategy S>
 struct ScannedVolume {
   explicit ScannedVolume(
       std::vector<BYTE> image,
-      const VolumeOptions& options = AllocSupport::DeletedOptions(),
+      const VolumeOptions& options =
+          NTFS_BROWSER_NAMESPACE::Test::Alloc::DeletedOptions(),
       const Mft::MftTree::ScanOptions& scan = {})
-      : opened(AllocSupport::OpenVolume<S>(std::move(image), options)),
+      : opened(NTFS_BROWSER_NAMESPACE::Test::Alloc::OpenVolume<S>(
+            std::move(image), options)),
         tree(*opened.volume, scan) {}
 
-  AllocSupport::Opened<S> opened;
+  NTFS_BROWSER_NAMESPACE::Test::Alloc::Opened<S> opened;
   Mft::MftTree tree;
 };
 

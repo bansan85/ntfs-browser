@@ -22,11 +22,11 @@
 #include "efs/sector-cipher.h"
 
 namespace Efs = NTFS_BROWSER_NAMESPACE::Efs;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestEfs = NTFS_BROWSER_NAMESPACE::Test::Efs;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 using Catch::Matchers::ContainsSubstring;
-using Tests::Algorithm;
-using Tests::TestKeyProvider;
+using TestEfs::Algorithm;
+using TestEfs::TestKeyProvider;
 
 namespace {
 
@@ -39,17 +39,17 @@ constexpr Efs::CipherBackend backend =
 #endif
 
 // The user the entries name, and the FEK wrapped for them.
-const std::vector<BYTE> user_thumbprint(Tests::thumbprint_size_value, 0x11);
+const std::vector<BYTE> user_thumbprint(TestEfs::thumbprint_size_value, 0x11);
 const std::vector<BYTE> user_wrapped_fek{0xAA, 0xBB, 0xCC};
 
 // A context for one entry, whose provider hands out an AES-256 key.
 Efs::Context MakeContext() {
   auto provider = std::make_shared<TestKeyProvider>();
-  std::array<BYTE, Tests::thumbprint_size_value> thumbprint{};
+  std::array<BYTE, TestEfs::thumbprint_size_value> thumbprint{};
   std::ranges::copy(user_thumbprint, thumbprint.begin());
-  provider->Add(
-      thumbprint, user_wrapped_fek,
-      Tests::MakeFekBlob(Algorithm::Aes256, Tests::TestKey(Algorithm::Aes256)));
+  provider->Add(thumbprint, user_wrapped_fek,
+                TestEfs::MakeFekBlob(Algorithm::Aes256,
+                                     TestEfs::TestKey(Algorithm::Aes256)));
   return Efs::Context(
       {Efs::WrappedFek{.thumbprint = user_thumbprint,
                        .wrapped_fek = user_wrapped_fek}},
@@ -83,10 +83,10 @@ TEST_CASE("A context decrypts whole sectors at a sector start",
           "[efs][efs-context]") {
   const Efs::Context context = MakeContext();
   const std::vector<BYTE> plaintext =
-      Tests::PlaintextPattern(2 * Efs::sector_size);
-  std::vector<BYTE> data =
-      Tests::EfsEncrypt(Algorithm::Aes256, Tests::TestKey(Algorithm::Aes256),
-                        plaintext, Efs::sector_size);
+      TestEfs::PlaintextPattern(2 * Efs::sector_size);
+  std::vector<BYTE> data = TestEfs::EfsEncrypt(
+      Algorithm::Aes256, TestEfs::TestKey(Algorithm::Aes256), plaintext,
+      Efs::sector_size);
 
   REQUIRE(context.Decrypt(Efs::sector_size, data));
   CHECK(data == plaintext);

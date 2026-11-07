@@ -154,22 +154,22 @@ Fixture MakeSpanningFixture(
         runs) {
   Fixture fixture;
   fixture.plaintext =
-      NTFS_BROWSER_NAMESPACE::Tests::PlaintextPattern(spanning_size);
+      NTFS_BROWSER_NAMESPACE::Test::Efs::PlaintextPattern(spanning_size);
   const std::vector<BYTE> key =
-      NTFS_BROWSER_NAMESPACE::Tests::TestKey(Algorithm::Aes256);
+      NTFS_BROWSER_NAMESPACE::Test::Efs::TestKey(Algorithm::Aes256);
 
   const TestEfsEntry user = TestUser();
   fixture.provider = std::make_shared<TestKeyProvider>();
   fixture.provider->Add(
       user.thumbprint, user.wrapped_fek,
-      NTFS_BROWSER_NAMESPACE::Tests::MakeFekBlob(Algorithm::Aes256, key));
+      NTFS_BROWSER_NAMESPACE::Test::Efs::MakeFekBlob(Algorithm::Aes256, key));
 
   NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeEncryptedFile file;
   file.efs_stream =
-      NTFS_BROWSER_NAMESPACE::Tests::MakeEfsStream(std::span(&user, 1));
+      NTFS_BROWSER_NAMESPACE::Test::Efs::MakeEfsStream(std::span(&user, 1));
   file.streams.push_back(
       {.runs = runs,
-       .cluster_bytes = NTFS_BROWSER_NAMESPACE::Tests::EfsEncrypt(
+       .cluster_bytes = NTFS_BROWSER_NAMESPACE::Test::Efs::EfsEncrypt(
            Algorithm::Aes256, key, fixture.plaintext),
        .real_size = spanning_size});
   fixture.image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::

@@ -65,9 +65,9 @@ using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Efs::CipherBackend;
 using NTFS_BROWSER_NAMESPACE::Efs::IEfsKeyProvider;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-using NTFS_BROWSER_NAMESPACE::Tests::Algorithm;
-using NTFS_BROWSER_NAMESPACE::Tests::TestEfsEntry;
-using NTFS_BROWSER_NAMESPACE::Tests::TestKeyProvider;
+using NTFS_BROWSER_NAMESPACE::Test::Efs::Algorithm;
+using NTFS_BROWSER_NAMESPACE::Test::Efs::TestEfsEntry;
+using NTFS_BROWSER_NAMESPACE::Test::Efs::TestKeyProvider;
 
 namespace {
 
@@ -102,18 +102,18 @@ constexpr DWORD first_stream_lcn = 30;
 // The user every fixture encrypts for.
 inline TestEfsEntry TestUser(BYTE seed = 1,
                              std::vector<BYTE> wrapped = wrapped_fek) {
-  return {NTFS_BROWSER_NAMESPACE::Tests::TestThumbprint(seed),
+  return {NTFS_BROWSER_NAMESPACE::Test::Efs::TestThumbprint(seed),
           std::move(wrapped)};
 }
 
 // A key provider that knows one key: the FEK of entry, for algorithm.
 inline std::shared_ptr<TestKeyProvider>
     ProviderFor(const TestEfsEntry& entry,
-                NTFS_BROWSER_NAMESPACE::Tests::Algorithm algorithm,
+                NTFS_BROWSER_NAMESPACE::Test::Efs::Algorithm algorithm,
                 const std::vector<BYTE>& key) {
   auto provider = std::make_shared<TestKeyProvider>();
   provider->Add(entry.thumbprint, entry.wrapped_fek,
-                NTFS_BROWSER_NAMESPACE::Tests::MakeFekBlob(algorithm, key));
+                NTFS_BROWSER_NAMESPACE::Test::Efs::MakeFekBlob(algorithm, key));
   return provider;
 }
 
@@ -134,19 +134,19 @@ struct Fixture {
 inline Fixture MakeFixture(Algorithm algorithm,
                            size_t size = default_file_size) {
   Fixture fixture;
-  fixture.plaintext = NTFS_BROWSER_NAMESPACE::Tests::PlaintextPattern(size);
+  fixture.plaintext = NTFS_BROWSER_NAMESPACE::Test::Efs::PlaintextPattern(size);
   const std::vector<BYTE> key =
-      NTFS_BROWSER_NAMESPACE::Tests::TestKey(algorithm);
+      NTFS_BROWSER_NAMESPACE::Test::Efs::TestKey(algorithm);
 
   const TestEfsEntry user = TestUser();
   fixture.provider = ProviderFor(user, algorithm, key);
 
   NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeEncryptedFile file;
   file.efs_stream =
-      NTFS_BROWSER_NAMESPACE::Tests::MakeEfsStream(std::span(&user, 1));
+      NTFS_BROWSER_NAMESPACE::Test::Efs::MakeEfsStream(std::span(&user, 1));
   file.streams.push_back(
       {.runs = {{first_stream_lcn, ClustersFor(size)}},
-       .cluster_bytes = NTFS_BROWSER_NAMESPACE::Tests::EfsEncrypt(
+       .cluster_bytes = NTFS_BROWSER_NAMESPACE::Test::Efs::EfsEncrypt(
            algorithm, key, fixture.plaintext),
        .real_size = size});
   fixture.image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::

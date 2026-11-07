@@ -20,10 +20,10 @@
 
 namespace {
 
-using NTFS_BROWSER_NAMESPACE::Tests::DfirMuseumDir;
-using NTFS_BROWSER_NAMESPACE::Tests::DfirNtfsDir;
-using NTFS_BROWSER_NAMESPACE::Tests::ReadCorpusFile;
-using NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusFile;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::DfirMuseumDir;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::DfirNtfsDir;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::ReadCorpusFile;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::RequireCorpusFile;
 
 // Bytes of a signature: the first four of a $LogFile page.
 using Signature = std::array<BYTE, 4>;

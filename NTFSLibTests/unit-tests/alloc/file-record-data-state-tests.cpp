@@ -19,10 +19,10 @@
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 using Alloc::DataState;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Support::stale_size;
+using TestAlloc::stale_size;
 using TestFakeImage::FakeDataRun;
 
 namespace {
@@ -35,7 +35,7 @@ const std::vector<FakeDataRun> stale_runs{
 std::vector<BYTE> StaleImage(std::span<const FakeDataRun> allocated_runs,
                              const std::vector<FakeDataRun>& runs = stale_runs,
                              ULONGLONG real_size = stale_size) {
-  return Support::WithBitmap(
+  return TestAlloc::WithBitmap(
       TestFakeImage::BuildFakeNtfsImageWithFreedNonResidentFile(real_size,
                                                                 runs),
       allocated_runs);
@@ -44,9 +44,9 @@ std::vector<BYTE> StaleImage(std::span<const FakeDataRun> allocated_runs,
 template <Cache::Strategy S>
 std::optional<DataState>
     StateOfStale(const std::vector<BYTE>& image,
-                 const VolumeOptions& options = Support::DeletedOptions()) {
-  const auto opened = Support::OpenVolume<S>(image, options);
-  return Support::ParsedStale(opened)->GetDataState();
+                 const VolumeOptions& options = TestAlloc::DeletedOptions()) {
+  const auto opened = TestAlloc::OpenVolume<S>(image, options);
+  return TestAlloc::ParsedStale(opened)->GetDataState();
 }
 
 template <Cache::Strategy S>
@@ -65,11 +65,11 @@ void CheckAnAllocatedClusterIsReallocated() {
 
   // Fill the file's clusters, so a read returns something to compare.
   for (std::vector<BYTE>* image : {&without, &with}) {
-    Support::FillStaleClusters(*image, 7);
+    TestAlloc::FillStaleClusters(*image, 7);
   }
 
   const auto bytes_of = [](const std::vector<BYTE>& image) {
-    return Support::ReadStale(Support::OpenVolume<S>(image));
+    return TestAlloc::ReadStale(TestAlloc::OpenVolume<S>(image));
   };
 
   CHECK(StateOfStale<S>(with) == DataState::Reallocated);
@@ -96,10 +96,10 @@ template <Cache::Strategy S>
 void CheckResidentDataIsIntact() {
   const std::array<FakeDataRun, 1> reused{
       FakeDataRun{.lcn = 40, .clusters = 4}};
-  const std::vector<BYTE> image = Support::WithBitmap(
+  const std::vector<BYTE> image = TestAlloc::WithBitmap(
       TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(), reused);
-  const auto opened = Support::OpenVolume<S>(image);
-  const auto record = Support::ParsedRecord(
+  const auto opened = TestAlloc::OpenVolume<S>(image);
+  const auto record = TestAlloc::ParsedRecord(
       *opened.volume, TestFakeImage::mft_tree_deleted_file_idx);
 
   CHECK(record->GetDataState() == DataState::Intact);
@@ -110,12 +110,12 @@ void CheckALiveFileIsIntactWithoutTheBitmap() {
   std::vector<BYTE> image = StaleImage(stale_runs);
   TestFakeImage::SetRecordInUse(image, TestFakeImage::mft_tree_stale_child_idx,
                                 true);
-  const auto opened = Support::OpenVolume<S>(image);
-  const auto record = Support::ParsedStale(opened);
+  const auto opened = TestAlloc::OpenVolume<S>(image);
+  const auto record = TestAlloc::ParsedStale(opened);
   opened.counter->Reset();
 
   CHECK(record->GetDataState() == DataState::Intact);
-  CHECK(opened.counter->ReadsInRange(Support::bitmap_data_offset,
+  CHECK(opened.counter->ReadsInRange(TestAlloc::bitmap_data_offset,
                                      image.size()) == 0);
 }
 
@@ -147,8 +147,8 @@ void CheckAnExtentPastTheEndOfTheVolume() {
 
 template <Cache::Strategy S>
 void CheckAStreamThatDoesNotExist() {
-  const auto opened = Support::OpenVolume<S>(StaleImage({}));
-  const auto record = Support::ParsedStale(opened);
+  const auto opened = TestAlloc::OpenVolume<S>(StaleImage({}));
+  const auto record = TestAlloc::ParsedStale(opened);
 
   CHECK_FALSE(record->GetDataState(L"no-such-stream"));
 }
@@ -170,7 +170,7 @@ void CheckACutRunListInRecoverMode() {
         {.real_size = 6 * TestFakeImage::fake_cluster_size,
          .runs = declared,
          .raw_runs = raw});
-    return Support::WithBitmap(std::move(image), allocated);
+    return TestAlloc::WithBitmap(std::move(image), allocated);
   };
   const VolumeOptions recover{.include_deleted = true, .recover_errors = true};
 

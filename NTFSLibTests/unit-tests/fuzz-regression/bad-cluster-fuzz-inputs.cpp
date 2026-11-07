@@ -25,7 +25,7 @@
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 using TestFakeImage::FakeBadClusterOptions;
 using TestFakeImage::FakeDataRun;
 
@@ -80,10 +80,10 @@ std::vector<Variant> Variants() {
 // $BadClus.
 std::vector<BYTE> ImageOf(const Variant& variant) {
   const std::vector<FakeDataRun> marked{FakeDataRun{.lcn = 40, .clusters = 2}};
-  std::vector<BYTE> image = Support::WithBitmap(
+  std::vector<BYTE> image = TestAlloc::WithBitmap(
       TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(), marked);
-  return Support::WithBadClusters(std::move(image), variant.bad,
-                                  variant.options);
+  return TestAlloc::WithBadClusters(std::move(image), variant.bad,
+                                    variant.options);
 }
 
 // Bytes of the boot sector read a NoCache volume issues first, and how far the

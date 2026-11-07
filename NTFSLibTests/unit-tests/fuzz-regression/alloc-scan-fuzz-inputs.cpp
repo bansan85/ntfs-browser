@@ -22,7 +22,7 @@
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using TestFakeImage::FakeDataRun;
 using TestFakeImage::FakeMftBitmap;
@@ -73,11 +73,11 @@ std::vector<BYTE> LiveStream() {
   TestFakeImage::SetRecordInUse(image, TestFakeImage::mft_tree_stale_child_idx,
                                 true);
   const std::array<FakeDataRun, 1> used{FakeDataRun{.lcn = 41, .clusters = 2}};
-  image = Support::WithBitmap(std::move(image), used);
+  image = TestAlloc::WithBitmap(std::move(image), used);
   const std::array<Alloc::Extent, 2> bad{
       Alloc::Extent{.lcn = 43, .clusters = 1},
       Alloc::Extent{.lcn = 100, .clusters = 2}};
-  return Support::WithBadClusters(std::move(image), bad);
+  return TestAlloc::WithBadClusters(std::move(image), bad);
 }
 
 // A bitmap that covers 32 of the volume's 256 clusters, and a bad list with an
@@ -98,7 +98,7 @@ std::vector<BYTE> ShortBitmapWithBadList() {
       Alloc::Extent{.lcn = 10, .clusters = 2},
       Alloc::Extent{.lcn = 30, .clusters = 6},
       Alloc::Extent{.lcn = 100, .clusters = 3}};
-  return Support::WithBadClusters(std::move(image), bad);
+  return TestAlloc::WithBadClusters(std::move(image), bad);
 }
 
 // The inputs, one per way a hostile volume can be wrong about its clusters.

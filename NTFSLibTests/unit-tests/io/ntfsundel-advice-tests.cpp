@@ -27,7 +27,7 @@ namespace {
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 using ExampleNtfsUndel::RecoverError;
 using ExampleNtfsUndel::RecoveryAdvice;
 using ExampleNtfsUndel::RecoveryCause;
@@ -83,21 +83,22 @@ std::vector<BYTE> FourStatesImage() {
 
   const std::vector<FakeDataRun> other_files{
       FakeDataRun{.lcn = reallocated_lcn + 1, .clusters = 1}};
-  image = Support::WithBitmap(std::move(image),
-                              Support::WithBadRuns(other_files, bad_cluster));
-  return Support::WithBadClusters(std::move(image), bad_cluster);
+  image = TestAlloc::WithBitmap(
+      std::move(image), TestAlloc::WithBadRuns(other_files, bad_cluster));
+  return TestAlloc::WithBadClusters(std::move(image), bad_cluster);
 }
 
 using Volume = NTFS_BROWSER_NAMESPACE::NtfsVolume<Cache::Strategy::NoCache>;
 
 // A freed record, parsed with its data attributes.
 struct Opened {
-  Support::Opened<Cache::Strategy::NoCache> volume;
+  TestAlloc::Opened<Cache::Strategy::NoCache> volume;
   ExampleNtfsUndel::OpenedRecord record;
 };
 
 Opened Open(const std::vector<BYTE>& image, std::uint64_t reference) {
-  Opened opened{.volume = Support::OpenVolume<Cache::Strategy::NoCache>(image),
+  Opened opened{.volume =
+                    TestAlloc::OpenVolume<Cache::Strategy::NoCache>(image),
                 .record = {}};
   opened.record =
       ExampleNtfsUndel::OpenDeletedFile(*opened.volume.volume, reference);
@@ -234,7 +235,8 @@ TEST_CASE("a freed file whose state is unknown warns and the copy runs",
 TEST_CASE("a freed record with no unnamed stream goes ahead",
           "[undel][advice]") {
   const std::vector<BYTE> image = FourStatesImage();
-  Opened opened{.volume = Support::OpenVolume<Cache::Strategy::NoCache>(image),
+  Opened opened{.volume =
+                    TestAlloc::OpenVolume<Cache::Strategy::NoCache>(image),
                 .record = {}};
   opened.record =
       ExampleNtfsUndel::OpenDeletedFile(*opened.volume.volume, freed_dir_ref);

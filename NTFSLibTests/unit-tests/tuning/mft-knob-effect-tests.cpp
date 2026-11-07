@@ -39,7 +39,7 @@ namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using TestSupport::ScanResult;
 using namespace Tests::KnobEffect;
@@ -304,7 +304,7 @@ TEST_CASE(
     return flush == report.phases.end() ? 0U : flush->count;
   };
 
-  const VolumeOptions deleted = Support::DeletedOptions();
+  const VolumeOptions deleted = TestAlloc::DeletedOptions();
   const std::uint32_t whole = flushes(deleted);
   const std::uint32_t one_by_one =
       flushes(Tuned(deleted, {{"mft.max_pending_ranges", 1}}));
@@ -333,7 +333,7 @@ TEST_CASE("mft.max_kept_bitmap_bytes sets the bitmap windows a scan keeps",
   };
 
   const VolumeOptions one_by_one =
-      Tuned(Support::DeletedOptions(), {{"mft.max_pending_ranges", 1}});
+      Tuned(TestAlloc::DeletedOptions(), {{"mft.max_pending_ranges", 1}});
   const size_t kept = bitmap_reads(one_by_one);
   const size_t dropped =
       bitmap_reads(Tuned(one_by_one, {{"mft.max_kept_bitmap_bytes", 0}}));

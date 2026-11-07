@@ -27,10 +27,10 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Support::ReadStale;
-using Support::stale_size;
+using TestAlloc::ReadStale;
+using TestAlloc::stale_size;
 using TestFakeImage::FakeDataRun;
 
 namespace {
@@ -57,16 +57,16 @@ std::vector<BYTE> LiveImage(std::span<const Alloc::Extent> bad,
   std::vector<BYTE> image =
       TestFakeImage::BuildFakeNtfsImageWithFreedNonResidentFile(
           stale_size, {FakeDataRun{.lcn = 40, .clusters = 4}});
-  Support::FillStaleClusters(image, 13);
+  TestAlloc::FillStaleClusters(image, 13);
   TestFakeImage::SetRecordInUse(image, TestFakeImage::mft_tree_stale_child_idx,
                                 in_use);
   std::vector<FakeDataRun> in_bitmap(allocated_runs.begin(),
                                      allocated_runs.end());
   if (marked) {
-    in_bitmap = Support::WithBadRuns(std::move(in_bitmap), bad);
+    in_bitmap = TestAlloc::WithBadRuns(std::move(in_bitmap), bad);
   }
-  image = Support::WithBitmap(std::move(image), in_bitmap);
-  return Support::WithBadClusters(std::move(image), bad);
+  image = TestAlloc::WithBitmap(std::move(image), in_bitmap);
+  return TestAlloc::WithBadClusters(std::move(image), bad);
 }
 
 // The other three clusters of the stale file, allocated in the bitmap.
@@ -76,11 +76,11 @@ const std::vector<FakeDataRun> rest_used{FakeDataRun{.lcn = 40, .clusters = 1},
 template <Cache::Strategy S>
 void CheckABadClusterIsLogged() {
   const auto strict_opened =
-      Support::OpenVolume<S>(LiveImage(one_bad, rest_used), strict);
+      TestAlloc::OpenVolume<S>(LiveImage(one_bad, rest_used), strict);
   const std::vector<BYTE> expected = ReadStale(strict_opened);
 
   const auto opened =
-      Support::OpenVolume<S>(LiveImage(one_bad, rest_used), recovering);
+      TestAlloc::OpenVolume<S>(LiveImage(one_bad, rest_used), recovering);
   (void)TestSupport::TakeCapturedLog();
 
   CHECK(ReadStale(opened) == expected);
@@ -98,7 +98,7 @@ void CheckAPartlyBadRunIsLogged() {
   const std::array<FakeDataRun, 1> middle{
       FakeDataRun{.lcn = 41, .clusters = 2}};
   const std::string log =
-      Support::LogOfReadingStale<S>(LiveImage(two, middle), recovering);
+      TestAlloc::LogOfReadingStale<S>(LiveImage(two, middle), recovering);
 
   CHECK_THAT(log, ContainsSubstring(bad_message));
   CHECK_THAT(log, ContainsSubstring("2 clusters"));
@@ -109,7 +109,7 @@ void CheckAHealthyFileIsNotLogged() {
   const std::array<FakeDataRun, 1> all_used{
       FakeDataRun{.lcn = 40, .clusters = 4}};
   const std::string log =
-      Support::LogOfReadingStale<S>(LiveImage({}, all_used), recovering);
+      TestAlloc::LogOfReadingStale<S>(LiveImage({}, all_used), recovering);
 
   CHECK_THAT(log, !ContainsSubstring(bad_message));
   CHECK_THAT(log, !ContainsSubstring(free_message));
@@ -118,14 +118,14 @@ void CheckAHealthyFileIsNotLogged() {
 template <Cache::Strategy S>
 void CheckStrictModeReadsNoBadList() {
   const std::vector<BYTE> image = LiveImage(one_bad, rest_used);
-  const auto opened = Support::OpenVolume<S>(image, strict);
+  const auto opened = TestAlloc::OpenVolume<S>(image, strict);
   (void)TestSupport::TakeCapturedLog();
   opened.counter->Reset();
 
   (void)ReadStale(opened);
 
   CHECK_THAT(TestSupport::TakeCapturedLog(), !ContainsSubstring(bad_message));
-  CHECK(opened.counter->ReadsInRange(Support::bitmap_data_offset,
+  CHECK(opened.counter->ReadsInRange(TestAlloc::bitmap_data_offset,
                                      image.size()) == 0);
   // Reading the stale stream asks for no allocation at all: a failure to load
   // the bad list would be logged as soon as it was tried.
@@ -135,7 +135,7 @@ void CheckStrictModeReadsNoBadList() {
 template <Cache::Strategy S>
 void CheckOneCauseRaisesOneMessage() {
   // The cluster is listed bad and its bit is clear: bad, never also free.
-  const std::string log = Support::LogOfReadingStale<S>(
+  const std::string log = TestAlloc::LogOfReadingStale<S>(
       LiveImage(one_bad, rest_used, /*marked=*/false), recovering);
 
   CHECK_THAT(log, ContainsSubstring(bad_message));
@@ -145,8 +145,8 @@ void CheckOneCauseRaisesOneMessage() {
 template <Cache::Strategy S>
 void CheckTheCheckRunsOnce() {
   const auto opened =
-      Support::OpenVolume<S>(LiveImage(one_bad, rest_used), recovering);
-  const auto record = Support::ParsedStale(opened);
+      TestAlloc::OpenVolume<S>(LiveImage(one_bad, rest_used), recovering);
+  const auto record = TestAlloc::ParsedStale(opened);
   std::vector<BYTE> out(stale_size);
   const auto* const stream = record->FindStream({});
   (void)TestSupport::TakeCapturedLog();
@@ -162,7 +162,7 @@ void CheckTheCheckRunsOnce() {
 
 template <Cache::Strategy S>
 void CheckADeletedFileIsNotChecked() {
-  const std::string log = Support::LogOfReadingStale<S>(
+  const std::string log = TestAlloc::LogOfReadingStale<S>(
       LiveImage(one_bad, rest_used, true, /*in_use=*/false),
       VolumeOptions{.include_deleted = true, .recover_errors = true});
 
@@ -172,15 +172,15 @@ void CheckADeletedFileIsNotChecked() {
 template <Cache::Strategy S>
 void CheckTheVolumesOwnMetadataIsNotChecked() {
   const std::vector<BYTE> image = LiveImage(one_bad, rest_used);
-  const auto opened = Support::OpenVolume<S>(image, recovering);
+  const auto opened = TestAlloc::OpenVolume<S>(image, recovering);
   (void)TestSupport::TakeCapturedLog();
 
-  const auto mft = Support::ParsedRecord(*opened.volume,
-                                         static_cast<ULONGLONG>(Mft::Idx::Mft));
+  const auto mft = TestAlloc::ParsedRecord(
+      *opened.volume, static_cast<ULONGLONG>(Mft::Idx::Mft));
   std::vector<BYTE> mft_bytes(TestFakeImage::fake_cluster_size);
   CHECK(mft->FindStream({})->ReadData(0, mft_bytes));
 
-  const auto bitmap = Support::ParsedRecord(
+  const auto bitmap = TestAlloc::ParsedRecord(
       *opened.volume, static_cast<ULONGLONG>(Mft::Idx::Bitmap));
   std::vector<BYTE> bitmap_bytes(8);
   CHECK(bitmap->FindStream({})->ReadData(0, bitmap_bytes));

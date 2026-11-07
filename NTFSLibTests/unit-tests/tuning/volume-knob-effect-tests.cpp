@@ -47,8 +47,7 @@ namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace Account = NTFS_BROWSER_NAMESPACE::Tests::AccountSupport;
-namespace AllocSupport = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 namespace TreeSupport = NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport;
 namespace Usn = NTFS_BROWSER_NAMESPACE::Usn;
 namespace UsnSupport = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
@@ -80,22 +79,23 @@ struct CheckScan {
 };
 
 std::vector<BYTE> CheckImage() {
-  Account::Volume volume;
+  TestAlloc::Volume volume;
   volume.bitmap_options.volume_clusters = 400;
   constexpr ULONGLONG bytes = file_clusters * TestFakeImage::fake_cluster_size;
-  volume.Put(22, Account::Freed(
-                     100, Account::Stream({{data_lcn, file_clusters}}, bytes)));
+  volume.Put(22,
+             TestAlloc::Freed(
+                 100, TestAlloc::Stream({{data_lcn, file_clusters}}, bytes)));
   volume.Put(
-      23, Account::Freed(
-              101, Account::Stream({{data_lcn + 20, file_clusters}}, bytes)));
+      23, TestAlloc::Freed(
+              101, TestAlloc::Stream({{data_lcn + 20, file_clusters}}, bytes)));
   return volume.Build();
 }
 
 CheckScan ScanCheck(const VolumeOptions& options) {
   const TreeSupport::ScannedVolume<Cache::Strategy::NoCache> scanned(
       CheckImage(), options,
-      Account::Scan(Alloc::ClusterAccountLevel::Counts,
-                    Alloc::DataCheckMode::Full));
+      TestAlloc::Scan(Alloc::ClusterAccountLevel::Counts,
+                      Alloc::DataCheckMode::Full));
   CheckScan scan;
   scan.data_calls = Region(scanned.opened.counter->Calls(),
                            data_lcn * TestFakeImage::fake_cluster_size,
@@ -310,7 +310,7 @@ TEST_CASE("alloc.bitmap_window_bytes sets the size of the bitmap reads",
 
   const auto summary = [&](const VolumeOptions& options) {
     const auto opened =
-        AllocSupport::OpenVolume<Cache::Strategy::NoCache>(image, options);
+        TestAlloc::OpenVolume<Cache::Strategy::NoCache>(image, options);
     opened.counter->Reset();
     const auto space = opened.volume->GetSpaceSummary();
     REQUIRE(space.has_value());
@@ -343,9 +343,9 @@ TEST_CASE("check.max_read_bytes sets the size of one read of the content check",
   const std::uint64_t read_bytes = GENERATE(min_bytes, std::uint64_t{8192});
   INFO("read " << read_bytes);
 
-  const CheckScan base = ScanCheck(AllocSupport::DeletedOptions());
+  const CheckScan base = ScanCheck(TestAlloc::DeletedOptions());
   const CheckScan tuned = ScanCheck(Tuned(
-      AllocSupport::DeletedOptions(), {{"check.max_read_bytes", read_bytes}}));
+      TestAlloc::DeletedOptions(), {{"check.max_read_bytes", read_bytes}}));
 
   // The default merges both files into one read, over the gap between them.
   CHECK(Count(base.data_calls, Kind::Read) == 1);
@@ -356,9 +356,9 @@ TEST_CASE("check.max_read_bytes sets the size of one read of the content check",
 
 TEST_CASE("check.max_gap_bytes sets the hole a read of the content check spans",
           "[tuning][knob-effect][check]") {
-  const CheckScan base = ScanCheck(AllocSupport::DeletedOptions());
+  const CheckScan base = ScanCheck(TestAlloc::DeletedOptions());
   const CheckScan apart = ScanCheck(
-      Tuned(AllocSupport::DeletedOptions(), {{"check.max_gap_bytes", 0}}));
+      Tuned(TestAlloc::DeletedOptions(), {{"check.max_gap_bytes", 0}}));
 
   // The files lie four clusters apart: no hole allowed reads each by itself.
   CHECK(Count(base.data_calls, Kind::Read) == 1);
@@ -371,8 +371,8 @@ TEST_CASE("check.max_gap_bytes sets the hole a read of the content check spans",
 
 TEST_CASE("check.max_announced_reads bounds the reads announced ahead",
           "[tuning][knob-effect][check]") {
-  const VolumeOptions small_reads = Tuned(
-      AllocSupport::DeletedOptions(), {{"check.max_read_bytes", min_bytes}});
+  const VolumeOptions small_reads =
+      Tuned(TestAlloc::DeletedOptions(), {{"check.max_read_bytes", min_bytes}});
   const CheckScan wide = ScanCheck(small_reads);
   const CheckScan narrow =
       ScanCheck(Tuned(small_reads, {{"check.max_announced_reads", 2}}));
@@ -385,8 +385,8 @@ TEST_CASE("check.max_announced_reads bounds the reads announced ahead",
 
 TEST_CASE("check.max_announced_bytes bounds the bytes announced ahead",
           "[tuning][knob-effect][check]") {
-  const VolumeOptions small_reads = Tuned(
-      AllocSupport::DeletedOptions(), {{"check.max_read_bytes", min_bytes}});
+  const VolumeOptions small_reads =
+      Tuned(TestAlloc::DeletedOptions(), {{"check.max_read_bytes", min_bytes}});
   const CheckScan wide = ScanCheck(small_reads);
   const CheckScan narrow = ScanCheck(
       Tuned(small_reads, {{"check.max_announced_bytes", 2 * min_bytes}}));

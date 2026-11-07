@@ -44,7 +44,7 @@ namespace {
 // ReadMe.md. Each image is checked in there as a gzip/rar archive, too large
 // to check into this one too.
 const std::filesystem::path& samples_dir =
-    NTFS_BROWSER_NAMESPACE::Tests::NtfsSamplesDir();
+    NTFS_BROWSER_NAMESPACE::Test::Corpus::NtfsSamplesDir();
 
 const std::filesystem::path ptrn_image = samples_dir / "ntfs-ptrn.raw";
 
@@ -223,9 +223,9 @@ inline void CheckRepairStreamsHoldPtrnPattern(
 // comparison flaky.
 inline ULONGLONG TickDelta(const FILETIME& first, const FILETIME& second) {
   const ULONGLONG first_ticks =
-      NTFS_BROWSER_NAMESPACE::Tests::FileTimeToTicks(first);
+      NTFS_BROWSER_NAMESPACE::Test::Corpus::FileTimeToTicks(first);
   const ULONGLONG second_ticks =
-      NTFS_BROWSER_NAMESPACE::Tests::FileTimeToTicks(second);
+      NTFS_BROWSER_NAMESPACE::Test::Corpus::FileTimeToTicks(second);
   return first_ticks > second_ticks ? first_ticks - second_ticks
                                     : second_ticks - first_ticks;
 }
@@ -241,7 +241,7 @@ inline void CheckDeltaMatchesSeconds(ULONGLONG delta_ticks,
 
 // Year/month/day of ft, converted from its (local-time) FILETIME.
 inline std::tuple<WORD, WORD, WORD> ToDate(const FILETIME& file_time) {
-  return NTFS_BROWSER_NAMESPACE::Tests::FileTimeToDate(file_time);
+  return NTFS_BROWSER_NAMESPACE::Test::Corpus::FileTimeToDate(file_time);
 }
 
 }  // namespace

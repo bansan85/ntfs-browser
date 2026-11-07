@@ -25,8 +25,8 @@ namespace {
 
 using NTFS_BROWSER_NAMESPACE::Efs::Fek;
 using NTFS_BROWSER_NAMESPACE::Efs::sector_size;
-using NTFS_BROWSER_NAMESPACE::Tests::Algorithm;
-using NTFS_BROWSER_NAMESPACE::Tests::TestEfsEntry;
+using NTFS_BROWSER_NAMESPACE::Test::Efs::Algorithm;
+using NTFS_BROWSER_NAMESPACE::Test::Efs::TestEfsEntry;
 
 // Stream offset of the sector under test. Non-zero, so the IV is not the one
 // of the first sector.
@@ -59,12 +59,12 @@ constexpr size_t entry_fek_length = 0x08;
 TEST_CASE("A Crypto++ sector decryptor takes exactly one sector",
           "[cov-efs][efs]") {
   for (const Algorithm algorithm :
-       NTFS_BROWSER_NAMESPACE::Tests::all_algorithms) {
+       NTFS_BROWSER_NAMESPACE::Test::Efs::all_algorithms) {
     INFO("algorithm 0x" << std::hex << static_cast<int>(algorithm));
     const std::vector<BYTE> key =
-        NTFS_BROWSER_NAMESPACE::Tests::TestKey(algorithm);
-    const std::optional<Fek> fek =
-        Fek::Parse(NTFS_BROWSER_NAMESPACE::Tests::MakeFekBlob(algorithm, key));
+        NTFS_BROWSER_NAMESPACE::Test::Efs::TestKey(algorithm);
+    const std::optional<Fek> fek = Fek::Parse(
+        NTFS_BROWSER_NAMESPACE::Test::Efs::MakeFekBlob(algorithm, key));
     REQUIRE(fek.has_value());
     const auto decryptor =
         NTFS_BROWSER_NAMESPACE::Efs::MakeCryptoPpDecryptor(*fek);
@@ -79,8 +79,8 @@ TEST_CASE("A Crypto++ sector decryptor takes exactly one sector",
     }
 
     const std::vector<BYTE> plaintext =
-        NTFS_BROWSER_NAMESPACE::Tests::PlaintextPattern(sector_size);
-    std::vector<BYTE> sector = NTFS_BROWSER_NAMESPACE::Tests::EfsEncrypt(
+        NTFS_BROWSER_NAMESPACE::Test::Efs::PlaintextPattern(sector_size);
+    std::vector<BYTE> sector = NTFS_BROWSER_NAMESPACE::Test::Efs::EfsEncrypt(
         algorithm, key, plaintext, sector_offset);
     REQUIRE(decryptor->DecryptSector(sector_offset, sector));
     CHECK(sector == plaintext);
@@ -98,9 +98,9 @@ TEST_CASE("A BCrypt sector decryptor takes exactly one sector",
                                     Algorithm::Aes256, Algorithm::_3Des}) {
     INFO("algorithm 0x" << std::hex << static_cast<int>(algorithm));
     const std::vector<BYTE> key =
-        NTFS_BROWSER_NAMESPACE::Tests::TestKey(algorithm);
-    const std::optional<Fek> fek =
-        Fek::Parse(NTFS_BROWSER_NAMESPACE::Tests::MakeFekBlob(algorithm, key));
+        NTFS_BROWSER_NAMESPACE::Test::Efs::TestKey(algorithm);
+    const std::optional<Fek> fek = Fek::Parse(
+        NTFS_BROWSER_NAMESPACE::Test::Efs::MakeFekBlob(algorithm, key));
     REQUIRE(fek.has_value());
     const auto decryptor =
         NTFS_BROWSER_NAMESPACE::Efs::MakeBCryptDecryptor(*fek);
@@ -115,8 +115,8 @@ TEST_CASE("A BCrypt sector decryptor takes exactly one sector",
     }
 
     const std::vector<BYTE> plaintext =
-        NTFS_BROWSER_NAMESPACE::Tests::PlaintextPattern(sector_size);
-    std::vector<BYTE> sector = NTFS_BROWSER_NAMESPACE::Tests::EfsEncrypt(
+        NTFS_BROWSER_NAMESPACE::Test::Efs::PlaintextPattern(sector_size);
+    std::vector<BYTE> sector = NTFS_BROWSER_NAMESPACE::Test::Efs::EfsEncrypt(
         algorithm, key, plaintext, sector_offset);
     REQUIRE(decryptor->DecryptSector(sector_offset, sector));
     CHECK(sector == plaintext);
@@ -125,9 +125,9 @@ TEST_CASE("A BCrypt sector decryptor takes exactly one sector",
 
 TEST_CASE("The BCrypt backend declines a DESX key", "[cov-efs][efs]") {
   const std::optional<Fek> fek =
-      Fek::Parse(NTFS_BROWSER_NAMESPACE::Tests::MakeFekBlob(
+      Fek::Parse(NTFS_BROWSER_NAMESPACE::Test::Efs::MakeFekBlob(
           Algorithm::Desx,
-          NTFS_BROWSER_NAMESPACE::Tests::TestKey(Algorithm::Desx)));
+          NTFS_BROWSER_NAMESPACE::Test::Efs::TestKey(Algorithm::Desx)));
   REQUIRE(fek.has_value());
 
   CHECK(NTFS_BROWSER_NAMESPACE::Efs::MakeBCryptDecryptor(*fek) == nullptr);
@@ -138,10 +138,10 @@ TEST_CASE("The BCrypt backend declines a DESX key", "[cov-efs][efs]") {
 TEST_CASE("An $EFS entry with no FEK bytes, or an oversized one, is rejected",
           "[cov-efs][efs]") {
   const TestEfsEntry oversized_fek{
-      NTFS_BROWSER_NAMESPACE::Tests::TestThumbprint(1),
+      NTFS_BROWSER_NAMESPACE::Test::Efs::TestThumbprint(1),
       std::vector<BYTE>(max_wrapped_fek_size + 1, oversized_fek_fill)};
   const std::vector<BYTE> oversized_stream =
-      NTFS_BROWSER_NAMESPACE::Tests::MakeEfsStream(
+      NTFS_BROWSER_NAMESPACE::Test::Efs::MakeEfsStream(
           std::span(&oversized_fek, 1));
   CHECK_FALSE(NTFS_BROWSER_NAMESPACE::Efs::ParseEfsStream(oversized_stream)
                   .has_value());
@@ -149,10 +149,11 @@ TEST_CASE("An $EFS entry with no FEK bytes, or an oversized one, is rejected",
   // MakeEfsStream() cannot write an empty FEK, so a one-byte one is forged
   // to zero: the FEK length field sits 8 bytes into the entry.
   const TestEfsEntry one_byte_fek{
-      NTFS_BROWSER_NAMESPACE::Tests::TestThumbprint(1),
+      NTFS_BROWSER_NAMESPACE::Test::Efs::TestThumbprint(1),
       std::vector<BYTE>(1, oversized_fek_fill)};
   std::vector<BYTE> empty_stream =
-      NTFS_BROWSER_NAMESPACE::Tests::MakeEfsStream(std::span(&one_byte_fek, 1));
+      NTFS_BROWSER_NAMESPACE::Test::Efs::MakeEfsStream(
+          std::span(&one_byte_fek, 1));
   DWORD ddf_offset = 0;
   std::memcpy(&ddf_offset, &empty_stream[ddf_offset_field], sizeof(ddf_offset));
   const size_t fek_length_field = ddf_offset + count_size + entry_fek_length;

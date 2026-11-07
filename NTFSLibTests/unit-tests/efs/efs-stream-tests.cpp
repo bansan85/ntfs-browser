@@ -63,10 +63,10 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Efs::CipherBackend;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-using NTFS_BROWSER_NAMESPACE::Tests::Algorithm;
-using NTFS_BROWSER_NAMESPACE::Tests::TestEfsEntry;
-using NTFS_BROWSER_NAMESPACE::Tests::TestKeyProvider;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+using NTFS_BROWSER_NAMESPACE::Test::Efs::Algorithm;
+using NTFS_BROWSER_NAMESPACE::Test::Efs::TestEfsEntry;
+using NTFS_BROWSER_NAMESPACE::Test::Efs::TestKeyProvider;
+namespace TestEfs = NTFS_BROWSER_NAMESPACE::Test::Efs;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
@@ -110,10 +110,10 @@ TEMPLATE_TEST_CASE_SIG(
     "An encrypted stream reads back as its plaintext, whatever the cipher",
     "[efs]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  for (const Algorithm algorithm : Tests::all_algorithms) {
+  for (const Algorithm algorithm : TestEfs::all_algorithms) {
     for (const CipherBackend backend :
          {CipherBackend::CryptoPp, CipherBackend::BCrypt}) {
-      if (!Tests::BackendAvailable(backend)) {
+      if (!TestEfs::BackendAvailable(backend)) {
         continue;
       }
 #ifndef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP
@@ -171,23 +171,24 @@ TEMPLATE_TEST_CASE_SIG(
     "A hole inside an encrypted stream reads as zeros, not as decrypted data",
     "[efs]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  const std::vector<BYTE> key = Tests::TestKey(Algorithm::Aes256);
+  const std::vector<BYTE> key = TestEfs::TestKey(Algorithm::Aes256);
   const TestEfsEntry user = TestUser();
   const auto provider = ProviderFor(user, Algorithm::Aes256, key);
 
   // Clusters 0-1 real, 2-3 a hole, 4 real: 5000 bytes.
   constexpr size_t hole_start = 2048;
   constexpr size_t tail_start = 4096;
-  const std::vector<BYTE> head = Tests::PlaintextPattern(hole_start);
-  const std::vector<BYTE> tail = Tests::PlaintextPattern(904);
+  const std::vector<BYTE> head = TestEfs::PlaintextPattern(hole_start);
+  const std::vector<BYTE> tail = TestEfs::PlaintextPattern(904);
 
-  std::vector<BYTE> cipher = Tests::EfsEncrypt(Algorithm::Aes256, key, head, 0);
+  std::vector<BYTE> cipher =
+      TestEfs::EfsEncrypt(Algorithm::Aes256, key, head, 0);
   const std::vector<BYTE> cipher_tail =
-      Tests::EfsEncrypt(Algorithm::Aes256, key, tail, tail_start);
+      TestEfs::EfsEncrypt(Algorithm::Aes256, key, tail, tail_start);
   cipher.insert(cipher.end(), cipher_tail.begin(), cipher_tail.end());
 
   TestFakeImage::FakeEncryptedFile file;
-  file.efs_stream = Tests::MakeEfsStream(std::span(&user, 1));
+  file.efs_stream = TestEfs::MakeEfsStream(std::span(&user, 1));
   file.streams.push_back({.runs = {{first_stream_lcn, 2},
                                    {{}, 2},
                                    {first_stream_lcn + tail_extent_gap, 1}},
@@ -210,24 +211,24 @@ TEMPLATE_TEST_CASE_SIG(
     "not",
     "[efs]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  const std::vector<BYTE> key = Tests::TestKey(Algorithm::Aes256);
+  const std::vector<BYTE> key = TestEfs::TestKey(Algorithm::Aes256);
   const TestEfsEntry user = TestUser();
   const auto provider = ProviderFor(user, Algorithm::Aes256, key);
 
-  const std::vector<BYTE> unnamed = Tests::PlaintextPattern(1800);
-  const std::vector<BYTE> secret = Tests::PlaintextPattern(700);
+  const std::vector<BYTE> unnamed = TestEfs::PlaintextPattern(1800);
+  const std::vector<BYTE> secret = TestEfs::PlaintextPattern(700);
   const std::vector<BYTE> plain(300, 0x5A);
 
   TestFakeImage::FakeEncryptedFile file;
-  file.efs_stream = Tests::MakeEfsStream(std::span(&user, 1));
+  file.efs_stream = TestEfs::MakeEfsStream(std::span(&user, 1));
   file.streams.push_back(
       {.runs = {{first_stream_lcn, 2}},
-       .cluster_bytes = Tests::EfsEncrypt(Algorithm::Aes256, key, unnamed),
+       .cluster_bytes = TestEfs::EfsEncrypt(Algorithm::Aes256, key, unnamed),
        .real_size = unnamed.size()});
   file.streams.push_back(
       {.name = L"secret",
        .runs = {{first_stream_lcn + secret_stream_gap, 1}},
-       .cluster_bytes = Tests::EfsEncrypt(Algorithm::Aes256, key, secret),
+       .cluster_bytes = TestEfs::EfsEncrypt(Algorithm::Aes256, key, secret),
        .real_size = secret.size()});
   file.streams.push_back({.name = L"plain",
                           .runs = {{first_stream_lcn + plain_stream_gap, 1}},
@@ -272,9 +273,9 @@ TEMPLATE_TEST_CASE_SIG(
 
   SECTION("the provider holds another user's key") {
     const auto stranger = std::make_shared<TestKeyProvider>();
-    stranger->Add(Tests::TestThumbprint(stranger_seed), wrapped_fek,
-                  Tests::MakeFekBlob(Algorithm::Aes256,
-                                     Tests::TestKey(Algorithm::Aes256)));
+    stranger->Add(TestEfs::TestThumbprint(stranger_seed), wrapped_fek,
+                  TestEfs::MakeFekBlob(Algorithm::Aes256,
+                                       TestEfs::TestKey(Algorithm::Aes256)));
 
     (void)TakeLog();
     const Opened<S> opened = OpenVolume<S>(fixture.image, stranger);
@@ -288,7 +289,7 @@ TEMPLATE_TEST_CASE_SIG(
     std::vector<BYTE> blob(broken_blob_size, 0);
     Patch32(blob, 0, broken_key_length);
     Patch32(blob, fek_algorithm_field, broken_algorithm_id);
-    broken->Add(Tests::TestThumbprint(1), wrapped_fek, std::move(blob));
+    broken->Add(TestEfs::TestThumbprint(1), wrapped_fek, std::move(blob));
 
     (void)TakeLog();
     const Opened<S> opened = OpenVolume<S>(fixture.image, broken);
@@ -317,8 +318,8 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG("The key can come from any entry of the $EFS stream",
                        "[efs]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const std::vector<BYTE> key = Tests::TestKey(Algorithm::Aes128);
-  const std::vector<BYTE> plaintext = Tests::PlaintextPattern(900);
+  const std::vector<BYTE> key = TestEfs::TestKey(Algorithm::Aes128);
+  const std::vector<BYTE> plaintext = TestEfs::PlaintextPattern(900);
 
   const std::vector<BYTE> other_wrapped(32, 0x11);
   const std::vector<BYTE> recovery_wrapped(32, 0x22);
@@ -331,14 +332,14 @@ TEMPLATE_TEST_CASE_SIG("The key can come from any entry of the $EFS stream",
     // users holds 2 entries.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     provider->Add(users[1].thumbprint, users[1].wrapped_fek,
-                  Tests::MakeFekBlob(Algorithm::Aes128, key));
+                  TestEfs::MakeFekBlob(Algorithm::Aes128, key));
 
     TestFakeImage::FakeEncryptedFile file;
-    file.efs_stream = Tests::MakeEfsStream(users);
-    file.streams.push_back(
-        {.runs = {{first_stream_lcn, 1}},
-         .cluster_bytes = Tests::EfsEncrypt(Algorithm::Aes128, key, plaintext),
-         .real_size = plaintext.size()});
+    file.efs_stream = TestEfs::MakeEfsStream(users);
+    file.streams.push_back({.runs = {{first_stream_lcn, 1}},
+                            .cluster_bytes = TestEfs::EfsEncrypt(
+                                Algorithm::Aes128, key, plaintext),
+                            .real_size = plaintext.size()});
     const Opened<S> opened = OpenVolume<S>(
         TestFakeImage::BuildFakeNtfsImageWithEncryptedFile(file), provider);
     CHECK(ReadAt<S>(OnlyData<S>(*opened.record), 0, 900) == plaintext);
@@ -349,14 +350,14 @@ TEMPLATE_TEST_CASE_SIG("The key can come from any entry of the $EFS stream",
     // recovery holds 1 entry.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     provider->Add(recovery[0].thumbprint, recovery[0].wrapped_fek,
-                  Tests::MakeFekBlob(Algorithm::Aes128, key));
+                  TestEfs::MakeFekBlob(Algorithm::Aes128, key));
 
     TestFakeImage::FakeEncryptedFile file;
-    file.efs_stream = Tests::MakeEfsStream(users, recovery);
-    file.streams.push_back(
-        {.runs = {{first_stream_lcn, 1}},
-         .cluster_bytes = Tests::EfsEncrypt(Algorithm::Aes128, key, plaintext),
-         .real_size = plaintext.size()});
+    file.efs_stream = TestEfs::MakeEfsStream(users, recovery);
+    file.streams.push_back({.runs = {{first_stream_lcn, 1}},
+                            .cluster_bytes = TestEfs::EfsEncrypt(
+                                Algorithm::Aes128, key, plaintext),
+                            .real_size = plaintext.size()});
     const Opened<S> opened = OpenVolume<S>(
         TestFakeImage::BuildFakeNtfsImageWithEncryptedFile(file), provider);
     CHECK(ReadAt<S>(OnlyData<S>(*opened.record), 0, 900) == plaintext);
@@ -366,17 +367,17 @@ TEMPLATE_TEST_CASE_SIG("The key can come from any entry of the $EFS stream",
 TEMPLATE_TEST_CASE_SIG("A resident $EFS stream works like a non-resident one",
                        "[efs]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const std::vector<BYTE> key = Tests::TestKey(Algorithm::Aes256);
-  const std::vector<BYTE> plaintext = Tests::PlaintextPattern(900);
+  const std::vector<BYTE> key = TestEfs::TestKey(Algorithm::Aes256);
+  const std::vector<BYTE> plaintext = TestEfs::PlaintextPattern(900);
   const TestEfsEntry user = TestUser();
   const auto provider = ProviderFor(user, Algorithm::Aes256, key);
 
   TestFakeImage::FakeEncryptedFile file;
   file.efs_resident = true;
-  file.efs_stream = Tests::MakeEfsStream(std::span(&user, 1));
+  file.efs_stream = TestEfs::MakeEfsStream(std::span(&user, 1));
   file.streams.push_back(
       {.runs = {{first_stream_lcn, 1}},
-       .cluster_bytes = Tests::EfsEncrypt(Algorithm::Aes256, key, plaintext),
+       .cluster_bytes = TestEfs::EfsEncrypt(Algorithm::Aes256, key, plaintext),
        .real_size = plaintext.size()});
   const Opened<S> opened = OpenVolume<S>(
       TestFakeImage::BuildFakeNtfsImageWithEncryptedFile(file), provider);
@@ -402,12 +403,12 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::FullCache) {
   const TestEfsEntry user = TestUser();
   const auto provider =
-      ProviderFor(user, Algorithm::Aes256, Tests::TestKey(Algorithm::Aes256));
+      ProviderFor(user, Algorithm::Aes256, TestEfs::TestKey(Algorithm::Aes256));
 
   const std::vector<BYTE> on_disk(TestFakeImage::fake_cluster_size, 0x42);
 
   TestFakeImage::FakeEncryptedFile file;
-  file.efs_stream = Tests::MakeEfsStream(std::span(&user, 1));
+  file.efs_stream = TestEfs::MakeEfsStream(std::span(&user, 1));
   file.streams.push_back({.runs = {{first_stream_lcn, 1}},
                           .cluster_bytes = on_disk,
                           .real_size = on_disk.size(),
@@ -434,12 +435,12 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::FullCache) {
   const TestEfsEntry user = TestUser();
   const auto provider =
-      ProviderFor(user, Algorithm::Aes256, Tests::TestKey(Algorithm::Aes256));
+      ProviderFor(user, Algorithm::Aes256, TestEfs::TestKey(Algorithm::Aes256));
 
   const std::vector<BYTE> on_disk(TestFakeImage::fake_cluster_size, 0x42);
 
   TestFakeImage::FakeEncryptedFile file;
-  file.efs_stream = Tests::MakeEfsStream(std::span(&user, 1));
+  file.efs_stream = TestEfs::MakeEfsStream(std::span(&user, 1));
   file.streams.push_back({.runs = {{first_stream_lcn, 1}},
                           .cluster_bytes = on_disk,
                           .real_size = on_disk.size(),
@@ -465,17 +466,17 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::FullCache) {
   // Less than one 1024-byte cluster: one encrypted sector run.
   constexpr size_t size_value = 1000;
-  const std::vector<BYTE> plaintext = Tests::PlaintextPattern(size_value);
-  const std::vector<BYTE> key = Tests::TestKey(Algorithm::Aes256);
+  const std::vector<BYTE> plaintext = TestEfs::PlaintextPattern(size_value);
+  const std::vector<BYTE> key = TestEfs::TestKey(Algorithm::Aes256);
   const TestEfsEntry user = TestUser();
   const auto provider = ProviderFor(user, Algorithm::Aes256, key);
 
   TestFakeImage::FakeEncryptedFile file;
-  file.efs_stream = Tests::MakeEfsStream(std::span(&user, 1));
+  file.efs_stream = TestEfs::MakeEfsStream(std::span(&user, 1));
   file.trailing_undersized_attribute = true;
   file.streams.push_back(
       {.runs = {{first_stream_lcn, 1}},
-       .cluster_bytes = Tests::EfsEncrypt(Algorithm::Aes256, key, plaintext),
+       .cluster_bytes = TestEfs::EfsEncrypt(Algorithm::Aes256, key, plaintext),
        .real_size = size_value});
 
   NtfsVolume<S> volume(
@@ -499,18 +500,18 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::FullCache) {
   // Less than one 1024-byte cluster: one encrypted sector run.
   constexpr size_t size_value = 1000;
-  const std::vector<BYTE> plaintext = Tests::PlaintextPattern(size_value);
-  const std::vector<BYTE> key = Tests::TestKey(Algorithm::Aes256);
+  const std::vector<BYTE> plaintext = TestEfs::PlaintextPattern(size_value);
+  const std::vector<BYTE> key = TestEfs::TestKey(Algorithm::Aes256);
   const TestEfsEntry user = TestUser();
   const auto provider = ProviderFor(user, Algorithm::Aes256, key);
 
   TestFakeImage::FakeEncryptedFile file;
   file.efs_resident = true;
   file.efs_body_overruns = true;
-  file.efs_stream = Tests::MakeEfsStream(std::span(&user, 1));
+  file.efs_stream = TestEfs::MakeEfsStream(std::span(&user, 1));
   file.streams.push_back(
       {.runs = {{first_stream_lcn, 1}},
-       .cluster_bytes = Tests::EfsEncrypt(Algorithm::Aes256, key, plaintext),
+       .cluster_bytes = TestEfs::EfsEncrypt(Algorithm::Aes256, key, plaintext),
        .real_size = size_value});
 
   NtfsVolume<S> volume(
@@ -593,23 +594,23 @@ TEMPLATE_TEST_CASE_SIG(
     "An encrypted stream reads as zeros beyond its initialized size",
     "[efs][regression]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  const std::vector<BYTE> key = Tests::TestKey(Algorithm::Aes256);
+  const std::vector<BYTE> key = TestEfs::TestKey(Algorithm::Aes256);
   const TestEfsEntry user = TestUser();
   const auto provider = ProviderFor(user, Algorithm::Aes256, key);
 
   constexpr size_t real_size = 3000;
   constexpr size_t ini_size = 1500;
-  const std::vector<BYTE> head = Tests::PlaintextPattern(ini_size);
+  const std::vector<BYTE> head = TestEfs::PlaintextPattern(ini_size);
 
   // Ciphertext up to the initialized size, then residue the key never wrote.
   std::vector<BYTE> cluster =
-      Tests::EfsEncrypt(Algorithm::Aes256, key, head, 0);
+      TestEfs::EfsEncrypt(Algorithm::Aes256, key, head, 0);
   cluster.resize(size_t{ClustersFor(real_size)} *
                      TestFakeImage::fake_cluster_size,
                  residue_fill);
 
   TestFakeImage::FakeEncryptedFile file;
-  file.efs_stream = Tests::MakeEfsStream(std::span(&user, 1));
+  file.efs_stream = TestEfs::MakeEfsStream(std::span(&user, 1));
   file.streams.push_back({.runs = {{first_stream_lcn, ClustersFor(real_size)}},
                           .cluster_bytes = cluster,
                           .real_size = real_size,

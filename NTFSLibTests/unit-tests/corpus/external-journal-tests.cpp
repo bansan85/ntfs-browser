@@ -36,17 +36,17 @@ namespace {
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestCorpus = NTFS_BROWSER_NAMESPACE::Test::Corpus;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Usn = NTFS_BROWSER_NAMESPACE::Usn;
-namespace RealJournal = NTFS_BROWSER_NAMESPACE::Tests::RealJournal;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using RealJournal::Fixture;
-using RealJournal::JournalSample;
-using Tests::DfirNtfsDir;
-using Tests::EntryUtcSeconds;
-using Tests::EntryUtcTicks;
-using Tests::ReadCorpusFile;
-using Tests::RequireCorpusFile;
+using TestCorpus::DfirNtfsDir;
+using TestCorpus::EntryUtcSeconds;
+using TestCorpus::EntryUtcTicks;
+using TestCorpus::Fixture;
+using TestCorpus::JournalSample;
+using TestCorpus::ReadCorpusFile;
+using TestCorpus::RequireCorpusFile;
 using Tests::UsnSupport::RecoverOptions;
 
 // Bytes of a cluster of the fake volume: the unit of a sparse head.
@@ -76,7 +76,7 @@ constexpr std::size_t fsutil_range_records = 7;
 constexpr std::size_t fsutil_record_count = 268;
 
 std::vector<BYTE> BytesOf(const Fixture& fixture) {
-  std::vector<BYTE> bytes = ReadCorpusFile(RealJournal::RequirePathOf(fixture));
+  std::vector<BYTE> bytes = ReadCorpusFile(TestCorpus::RequirePathOf(fixture));
   REQUIRE(bytes.size() == fixture.file_size);
   return bytes;
 }
@@ -128,7 +128,7 @@ bool UsnsAscend(const std::vector<Usn::Record>& records) {
 // Reads a whole journal in recovery mode, without caching: the setting the
 // scans of a real file use.
 Usn::Journal ReadRecovered(std::span<const BYTE> stream, ULONGLONG head) {
-  std::optional<Usn::Journal> journal = RealJournal::ReadJournalOf(
+  std::optional<Usn::Journal> journal = TestCorpus::ReadJournalOf(
       stream, head, Cache::Strategy::NoCache, RecoverOptions());
   REQUIRE(journal.has_value());
   return std::move(*journal);
@@ -138,7 +138,7 @@ Usn::Journal ReadRecovered(std::span<const BYTE> stream, ULONGLONG head) {
 
 TEST_CASE("A real $J gives the independent record count and sample",
           "[dfir-corpora][integration][usn]") {
-  const Fixture fixture = GENERATE(from_range(RealJournal::Fixtures()));
+  const Fixture fixture = GENERATE(from_range(TestCorpus::Fixtures()));
   CAPTURE(fixture.label);
   const std::vector<BYTE> stream = BytesOf(fixture);
 
@@ -165,14 +165,14 @@ TEST_CASE("A real $J gives the independent record count and sample",
 
 TEST_CASE("The smallest real journals read alike under both cache strategies",
           "[dfir-corpora][integration][usn]") {
-  const Fixture fixture = GENERATE(RealJournal::FixtureNamed("dfir_ntfs"),
-                                   RealJournal::FixtureNamed("Server 2022"));
+  const Fixture fixture = GENERATE(TestCorpus::FixtureNamed("dfir_ntfs"),
+                                   TestCorpus::FixtureNamed("Server 2022"));
   CAPTURE(fixture.label);
   const std::vector<BYTE> stream = BytesOf(fixture);
 
-  const std::optional<Usn::Journal> without_cache = RealJournal::ReadJournalOf(
+  const std::optional<Usn::Journal> without_cache = TestCorpus::ReadJournalOf(
       stream, fixture.base_usn, Cache::Strategy::NoCache, RecoverOptions());
-  const std::optional<Usn::Journal> with_cache = RealJournal::ReadJournalOf(
+  const std::optional<Usn::Journal> with_cache = TestCorpus::ReadJournalOf(
       stream, fixture.base_usn, Cache::Strategy::FullCache, RecoverOptions());
 
   REQUIRE(without_cache.has_value());
@@ -189,7 +189,7 @@ TEST_CASE("The smallest real journals read alike under both cache strategies",
 
 TEST_CASE("Strict mode does not read a real journal",
           "[dfir-corpora][integration][usn][strict]") {
-  const Fixture& fixture = RealJournal::FixtureNamed("dfir_ntfs");
+  const Fixture& fixture = TestCorpus::FixtureNamed("dfir_ntfs");
   const std::vector<BYTE> stream = BytesOf(fixture);
 
   for (const VolumeOptions& options :
@@ -197,7 +197,7 @@ TEST_CASE("Strict mode does not read a real journal",
     for (const Cache::Strategy strategy :
          {Cache::Strategy::NoCache, Cache::Strategy::FullCache}) {
       CHECK_FALSE(
-          RealJournal::ReadJournalOf(stream, 0, strategy, options).has_value());
+          TestCorpus::ReadJournalOf(stream, 0, strategy, options).has_value());
     }
   }
 }
@@ -206,7 +206,7 @@ TEST_CASE("A real $J keeps its USNs wherever the stream is served",
           "[dfir-corpora][integration][usn]") {
   // The Windows 10 journal starts at USN 92 274 688: NTFS purged what came
   // before. A stream served from offset 0 puts every USN away from its offset.
-  const Fixture& fixture = RealJournal::FixtureNamed("Windows 10");
+  const Fixture& fixture = TestCorpus::FixtureNamed("Windows 10");
   REQUIRE(fixture.base_usn != 0);
   const std::vector<BYTE> whole = BytesOf(fixture);
   // The bytes before the second sample are exactly the records before it.
@@ -232,16 +232,16 @@ TEST_CASE("A real $J keeps its USNs wherever the stream is served",
 
 TEST_CASE("The dfir_ntfs journal matches its fsutil listing record by record",
           "[dfir-corpora][integration][usn]") {
-  const Fixture& fixture = RealJournal::FixtureNamed("dfir_ntfs");
+  const Fixture& fixture = TestCorpus::FixtureNamed("dfir_ntfs");
   const std::vector<BYTE> stream = BytesOf(fixture);
-  const RealJournal::FsutilListing listing = RealJournal::ParseFsutilListing(
+  const TestCorpus::FsutilListing listing = TestCorpus::ParseFsutilListing(
       RequireCorpusFile(DfirNtfsDir() / "test_data" / "usnjrnlj.fsutil.txt"));
   const Usn::Journal journal = ReadRecovered(stream, 0);
 
   REQUIRE(listing.records.size() == fsutil_record_count);
-  std::unordered_map<LONGLONG, const RealJournal::FsutilRecord*> by_usn;
+  std::unordered_map<LONGLONG, const TestCorpus::FsutilRecord*> by_usn;
   std::size_t listed_without_name = 0;
-  for (const RealJournal::FsutilRecord& listed : listing.records) {
+  for (const TestCorpus::FsutilRecord& listed : listing.records) {
     by_usn.emplace(listed.usn, &listed);
     listed_without_name += listed.has_name ? 0 : 1;
   }
@@ -260,7 +260,7 @@ TEST_CASE("The dfir_ntfs journal matches its fsutil listing record by record",
       ++written_later;
       continue;
     }
-    const RealJournal::FsutilRecord& listed = *found->second;
+    const TestCorpus::FsutilRecord& listed = *found->second;
     INFO("usn " << record.usn << ", " << listed.name);
     CHECK(listed.has_name);
     CHECK(Widen(listed.name) == record.name);
@@ -290,7 +290,7 @@ namespace {
 // The intact journal, read once for all the tests that damage it.
 const Usn::Journal& IntactServer2012() {
   static const Usn::Journal intact = [] {
-    const Fixture& fixture = RealJournal::FixtureNamed("Server 2012 R2");
+    const Fixture& fixture = TestCorpus::FixtureNamed("Server 2012 R2");
     const Usn::Journal journal =
         ReadRecovered(BytesOf(fixture), fixture.base_usn);
     REQUIRE(journal.records.size() == fixture.record_count);
@@ -368,14 +368,14 @@ void ZeroRange(std::vector<BYTE>& stream, std::uint64_t begin,
 
 // The sample of the intact journal at position index of its list of 20.
 const JournalSample& SampleOf(std::size_t index) {
-  return RealJournal::FixtureNamed("Server 2012 R2").samples[index];
+  return TestCorpus::FixtureNamed("Server 2012 R2").samples[index];
 }
 
 }  // namespace
 
 TEST_CASE("Damage to a real $J loses only the records it touches",
           "[dfir-corpora][integration][usn]") {
-  const Fixture& fixture = RealJournal::FixtureNamed("Server 2012 R2");
+  const Fixture& fixture = TestCorpus::FixtureNamed("Server 2012 R2");
   std::vector<BYTE> stream = BytesOf(fixture);
   const std::uint64_t size = stream.size();
 

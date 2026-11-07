@@ -33,14 +33,14 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::DfirMuseumDir;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::DfirNtfsDir;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::OpenStandaloneMftVolume;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::ReadCorpusFile;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::RecoveringOptions;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::RequireCorpusFile;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::StrictOptions;
 using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
-using NTFS_BROWSER_NAMESPACE::Tests::DfirMuseumDir;
-using NTFS_BROWSER_NAMESPACE::Tests::DfirNtfsDir;
-using NTFS_BROWSER_NAMESPACE::Tests::OpenStandaloneMftVolume;
-using NTFS_BROWSER_NAMESPACE::Tests::ReadCorpusFile;
-using NTFS_BROWSER_NAMESPACE::Tests::RecoveringOptions;
-using NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusFile;
-using NTFS_BROWSER_NAMESPACE::Tests::StrictOptions;
 
 // $Boot, the file that sits at the very start of the volume.
 constexpr ULONGLONG boot_record = 7;

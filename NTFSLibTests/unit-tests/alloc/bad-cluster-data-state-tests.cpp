@@ -22,10 +22,10 @@ namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 using Alloc::DataState;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Support::stale_size;
+using TestAlloc::stale_size;
 using TestFakeImage::FakeBadClusterOptions;
 using TestFakeImage::FakeDataRun;
 
@@ -53,19 +53,19 @@ std::vector<BYTE> StaleImage(std::span<const Alloc::Extent> bad,
                              std::span<const FakeDataRun> allocated = {},
                              const StaleFile& file = {}) {
   std::vector<FakeDataRun> in_bitmap(allocated.begin(), allocated.end());
-  std::vector<BYTE> image = Support::WithBitmap(
+  std::vector<BYTE> image = TestAlloc::WithBitmap(
       TestFakeImage::BuildFakeNtfsImageWithFreedNonResidentFile(file.real_size,
                                                                 file.runs),
-      Support::WithBadRuns(std::move(in_bitmap), marked));
-  return Support::WithBadClusters(std::move(image), bad, file.options);
+      TestAlloc::WithBadRuns(std::move(in_bitmap), marked));
+  return TestAlloc::WithBadClusters(std::move(image), bad, file.options);
 }
 
 template <Cache::Strategy S>
 std::optional<DataState>
     StateOfStale(const std::vector<BYTE>& image,
-                 const VolumeOptions& options = Support::DeletedOptions()) {
-  const auto opened = Support::OpenVolume<S>(image, options);
-  return Support::ParsedStale(opened)->GetDataState();
+                 const VolumeOptions& options = TestAlloc::DeletedOptions()) {
+  const auto opened = TestAlloc::OpenVolume<S>(image, options);
+  return TestAlloc::ParsedStale(opened)->GetDataState();
 }
 
 template <Cache::Strategy S>
@@ -105,19 +105,19 @@ void CheckNoBadClusterIsIntact() {
 
 template <Cache::Strategy S>
 void CheckReadingABadStreamIsUnchanged() {
-  std::vector<BYTE> without = Support::WithBitmap(
+  std::vector<BYTE> without = TestAlloc::WithBitmap(
       TestFakeImage::BuildFakeNtfsImageWithFreedNonResidentFile(stale_size,
                                                                 stale_runs),
       {});
   std::vector<BYTE> with = StaleImage(one_bad, one_bad);
   for (std::vector<BYTE>* image : {&without, &with}) {
-    Support::FillStaleClusters(*image, 7);
+    TestAlloc::FillStaleClusters(*image, 7);
   }
 
   const auto bytes_of = [](const std::vector<BYTE>& image) {
-    const auto opened = Support::OpenVolume<S>(image);
+    const auto opened = TestAlloc::OpenVolume<S>(image);
     opened.counter->Reset();
-    std::vector<BYTE> out = Support::ReadStale(opened);
+    std::vector<BYTE> out = TestAlloc::ReadStale(opened);
     // The read is issued on the bad cluster 41, as on any other. A FullCache
     // volume has the whole 64 KiB block in memory already, so only NoCache
     // goes to the reader again.
@@ -138,8 +138,8 @@ void CheckALiveFileIsIntactWithoutAnyRead() {
   std::vector<BYTE> image = StaleImage(one_bad, one_bad);
   TestFakeImage::SetRecordInUse(image, TestFakeImage::mft_tree_stale_child_idx,
                                 true);
-  const auto opened = Support::OpenVolume<S>(image);
-  const auto record = Support::ParsedStale(opened);
+  const auto opened = TestAlloc::OpenVolume<S>(image);
+  const auto record = TestAlloc::ParsedStale(opened);
   opened.counter->Reset();
 
   CHECK(record->GetDataState() == DataState::Intact);
@@ -162,12 +162,12 @@ void CheckResidentAndSparseOwnNoCluster() {
           {.runs = runs, .real_size = 7 * TestFakeImage::fake_cluster_size})) ==
       DataState::Intact);
 
-  const std::vector<BYTE> image = Support::WithBadClusters(
-      Support::WithBitmap(TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(),
-                          {}),
+  const std::vector<BYTE> image = TestAlloc::WithBadClusters(
+      TestAlloc::WithBitmap(
+          TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(), {}),
       one_bad);
-  const auto opened = Support::OpenVolume<S>(image);
-  const auto record = Support::ParsedRecord(
+  const auto opened = TestAlloc::OpenVolume<S>(image);
+  const auto record = TestAlloc::ParsedRecord(
       *opened.volume, TestFakeImage::mft_tree_deleted_file_idx);
   CHECK(record->GetDataState() == DataState::Intact);
 }
@@ -178,7 +178,7 @@ void CheckAMissingBadListFallsBackOnTheBitmap() {
   // cluster allocated, so the stream is reallocated, as before this feature.
   const std::array<FakeDataRun, 1> marked{
       FakeDataRun{.lcn = 41, .clusters = 1}};
-  const std::vector<BYTE> image = Support::WithBitmap(
+  const std::vector<BYTE> image = TestAlloc::WithBitmap(
       TestFakeImage::BuildFakeNtfsImageWithFreedNonResidentFile(stale_size,
                                                                 stale_runs),
       marked);

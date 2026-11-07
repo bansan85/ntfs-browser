@@ -41,7 +41,7 @@ struct VolumeOptions;
 
 }  // namespace NTFS_BROWSER_NAMESPACE
 
-namespace NTFS_BROWSER_NAMESPACE::Tests::RealJournal {
+namespace NTFS_BROWSER_NAMESPACE::Test::Corpus {
 
 namespace {
 
@@ -207,26 +207,33 @@ std::filesystem::path RequirePathOf(const Fixture& fixture) {
                                                 fixture.relative_path.end()));
 }
 
-std::optional<Usn::Journal> ReadJournalOf(std::span<const BYTE> stream,
-                                          ULONGLONG sparse_head_bytes,
-                                          Cache::Strategy strategy,
-                                          const VolumeOptions& options) {
+std::optional<NTFS_BROWSER_NAMESPACE::Usn::Journal>
+    ReadJournalOf(std::span<const BYTE> stream, ULONGLONG sparse_head_bytes,
+                  NTFS_BROWSER_NAMESPACE::Cache::Strategy strategy,
+                  const VolumeOptions& options) {
   Test::FakeImage::FakeUsnOptions journal_options{.sparse_head_bytes =
                                                       sparse_head_bytes};
   journal_options.raw_stream.assign(stream.begin(), stream.end());
-  std::vector<BYTE> image = UsnSupport::JournalImage(journal_options);
+  std::vector<BYTE> image =
+      NTFS_BROWSER_NAMESPACE::Tests::UsnSupport::JournalImage(journal_options);
 
-  const auto read = [&]<Cache::Strategy S>() -> std::optional<Usn::Journal> {
-    const auto opened = UsnSupport::OpenVolume<S>(std::move(image), options);
-    const Usn::Journal* journal = opened.volume->GetUsnJournal();
+  const auto read = [&]<NTFS_BROWSER_NAMESPACE::Cache::Strategy S>()
+      -> std::optional<NTFS_BROWSER_NAMESPACE::Usn::Journal> {
+    const auto opened =
+        NTFS_BROWSER_NAMESPACE::Tests::UsnSupport::OpenVolume<S>(
+            std::move(image), options);
+    const NTFS_BROWSER_NAMESPACE::Usn::Journal* journal =
+        opened.volume->GetUsnJournal();
     if (journal == nullptr) {
       return std::nullopt;
     }
     return *journal;
   };
-  return strategy == Cache::Strategy::NoCache
-             ? read.template operator()<Cache::Strategy::NoCache>()
-             : read.template operator()<Cache::Strategy::FullCache>();
+  return strategy == NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache
+             ? read.template
+               operator()<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>()
+             : read.template
+               operator()<NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>();
 }
 
 FsutilListing ParseFsutilListing(const std::filesystem::path& file) {
@@ -256,4 +263,4 @@ FsutilListing ParseFsutilListing(const std::filesystem::path& file) {
   return listing;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests::RealJournal
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Corpus

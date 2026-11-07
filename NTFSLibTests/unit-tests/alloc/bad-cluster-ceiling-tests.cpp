@@ -32,7 +32,7 @@ namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 using Alloc::ClusterState;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
@@ -72,9 +72,9 @@ std::vector<Alloc::Extent> Isolated(size_t count) {
 std::vector<BYTE> Image(const std::vector<Alloc::Extent>& bad) {
   const std::vector<FakeDataRun> marked{
       FakeDataRun{.lcn = bad.back().lcn, .clusters = 1}};
-  std::vector<BYTE> image = Support::WithBitmap(
+  std::vector<BYTE> image = TestAlloc::WithBitmap(
       TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(), marked);
-  return Support::WithBadClusters(std::move(image), bad);
+  return TestAlloc::WithBadClusters(std::move(image), bad);
 }
 
 // A volume over a bad list of count isolated extents, opened under the small
@@ -82,12 +82,12 @@ std::vector<BYTE> Image(const std::vector<Alloc::Extent>& bad) {
 template <Cache::Strategy S>
 struct CeilingVolume {
   explicit CeilingVolume(
-      size_t count, const VolumeOptions& options = Support::DeletedOptions())
-      : opened(Support::OpenVolume<S>(Image(Isolated(count)), options)) {}
+      size_t count, const VolumeOptions& options = TestAlloc::DeletedOptions())
+      : opened(TestAlloc::OpenVolume<S>(Image(Isolated(count)), options)) {}
 
   const CeilingGuard guard{small_ceiling};
-  const Support::CapturedLevels log;
-  Support::Opened<S> opened;
+  const TestAlloc::CapturedLevels log;
+  TestAlloc::Opened<S> opened;
 };
 
 template <Cache::Strategy S>
@@ -110,7 +110,7 @@ void CheckRecoverCutsAListOverTheCeiling() {
       VolumeOptions{.include_deleted = true, .recover_errors = true});
   const NtfsVolume<S>& volume = *fixture.opened.volume;
 
-  const Alloc::BadClusters& list = Support::RequiredBadList(volume);
+  const Alloc::BadClusters& list = TestAlloc::RequiredBadList(volume);
   CHECK(list.truncated);
   REQUIRE(list.extents.size() == small_ceiling);
   CHECK(list.extents.front().lcn == 10);
@@ -132,7 +132,7 @@ void CheckAListAtTheCeilingIsWhole() {
         VolumeOptions{.include_deleted = true, .recover_errors = recover});
 
     const Alloc::BadClusters& list =
-        Support::RequiredBadList(*fixture.opened.volume);
+        TestAlloc::RequiredBadList(*fixture.opened.volume);
     CHECK_FALSE(list.truncated);
     CHECK(list.extents.size() == small_ceiling);
   }

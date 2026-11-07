@@ -12,7 +12,7 @@
 
 #include "efs/fek.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Efs {
 
 // Size of a certificate thumbprint: a SHA-1 digest.
 inline constexpr size_t thumbprint_size_value = 20;
@@ -99,4 +99,4 @@ class TestKeyProvider final
              : has_b_crypt;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Efs

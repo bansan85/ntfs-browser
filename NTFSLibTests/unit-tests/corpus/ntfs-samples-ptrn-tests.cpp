@@ -22,10 +22,11 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 
 TEST_CASE("Reads /2.txt and finds the $Repair PTRN artifact (ntfs-ptrn.raw)",
           "[ntfs-samples][integration][slack]") {
-  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(ptrn_image, "ntfs-ptrn");
+  NTFS_BROWSER_NAMESPACE::Test::Corpus::RequireCorpusImage(ptrn_image,
+                                                           "ntfs-ptrn");
 
   const NtfsVolume<Cache::Strategy::NoCache> volume(
-      NTFS_BROWSER_NAMESPACE::Tests::OpenCorpusImage(
+      NTFS_BROWSER_NAMESPACE::Test::Corpus::OpenCorpusImage(
           ptrn_image, small_image_partition_offset, "ntfs-ptrn"));
   REQUIRE(volume.IsVolumeOK());
 
@@ -45,11 +46,11 @@ TEST_CASE("Reads /2.txt and finds the $Repair PTRN artifact (ntfs-ptrn.raw)",
 TEST_CASE(
     "Finds the RAM slack and cluster slack PTRN pattern (ntfs-ramslack.raw)",
     "[ntfs-samples][integration][slack]") {
-  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(ramslack_image,
-                                                    "ntfs-ramslack");
+  NTFS_BROWSER_NAMESPACE::Test::Corpus::RequireCorpusImage(ramslack_image,
+                                                           "ntfs-ramslack");
 
   const NtfsVolume<Cache::Strategy::NoCache> volume(
-      NTFS_BROWSER_NAMESPACE::Tests::OpenCorpusImage(
+      NTFS_BROWSER_NAMESPACE::Test::Corpus::OpenCorpusImage(
           ramslack_image, small_image_partition_offset, "ntfs-ramslack"));
   REQUIRE(volume.IsVolumeOK());
 

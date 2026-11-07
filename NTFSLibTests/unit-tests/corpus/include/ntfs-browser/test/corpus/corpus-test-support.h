@@ -11,7 +11,7 @@
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Corpus {
 
 // Roots of the forensic image corpora, outside this repo. CMake sets each one
 // from its NTFS_BROWSER_TEST_* cache or environment variable, as a UTF-8 path.
@@ -127,4 +127,4 @@ std::filesystem::path RequireCorpusFile(const std::filesystem::path& file);
 [[nodiscard]] std::tuple<WORD, WORD, WORD>
     FileTimeToDate(const FILETIME& file_time) noexcept;
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Corpus

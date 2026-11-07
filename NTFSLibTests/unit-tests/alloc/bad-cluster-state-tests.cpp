@@ -21,7 +21,7 @@
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 using Alloc::ClusterState;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using TestFakeImage::FakeBadClusterOptions;
@@ -45,19 +45,19 @@ const std::vector<Alloc::Extent> bad_clear{{.lcn = 60, .clusters = 1}};
 std::vector<BYTE> ImageWith(std::span<const Alloc::Extent> bad,
                             std::span<const Alloc::Extent> bad_in_bitmap,
                             const FakeBadClusterOptions& options = {}) {
-  std::vector<BYTE> image =
-      Support::WithBitmap(TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(),
-                          Support::WithBadRuns(allocated_runs, bad_in_bitmap));
-  return Support::WithBadClusters(std::move(image), bad, options);
+  std::vector<BYTE> image = TestAlloc::WithBitmap(
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(),
+      TestAlloc::WithBadRuns(allocated_runs, bad_in_bitmap));
+  return TestAlloc::WithBadClusters(std::move(image), bad, options);
 }
 
 // Opens the base image with a bad list, over the given volume options.
 template <Cache::Strategy S>
-Support::Opened<S>
+TestAlloc::Opened<S>
     OpenWith(std::span<const Alloc::Extent> bad,
              std::span<const Alloc::Extent> bad_in_bitmap,
-             const VolumeOptions& options = Support::DeletedOptions()) {
-  return Support::OpenVolume<S>(ImageWith(bad, bad_in_bitmap), options);
+             const VolumeOptions& options = TestAlloc::DeletedOptions()) {
+  return TestAlloc::OpenVolume<S>(ImageWith(bad, bad_in_bitmap), options);
 }
 
 // Both lists together, in cluster order.
@@ -99,7 +99,7 @@ constexpr std::string_view disagreement_message =
 
 template <Cache::Strategy S>
 void CheckDisagreementIsLoggedOnce() {
-  const Support::CapturedLevels log;
+  const TestAlloc::CapturedLevels log;
   const auto opened = OpenWith<S>(bad_clear, {});
 
   CHECK(opened.volume->GetClusterState(60) == ClusterState::Bad);
@@ -141,7 +141,7 @@ template <Cache::Strategy S>
 void CheckAHealthyVolumeHasAnEmptyList() {
   const auto opened = OpenWith<S>({}, {});
 
-  const Alloc::BadClusters& list = Support::RequiredBadList(*opened.volume);
+  const Alloc::BadClusters& list = TestAlloc::RequiredBadList(*opened.volume);
   CHECK(list.extents.empty());
   CHECK_FALSE(list.truncated);
   CHECK(opened.volume->GetClusterState(45) == ClusterState::Free);
@@ -156,7 +156,7 @@ void CheckTheListIsSortedMergedAndClamped() {
                                          {.lcn = 1000, .clusters = 4}};
   const auto opened = OpenWith<S>(given, {});
 
-  const Alloc::BadClusters& list = Support::RequiredBadList(*opened.volume);
+  const Alloc::BadClusters& list = TestAlloc::RequiredBadList(*opened.volume);
   REQUIRE(list.extents.size() == 2);
   CHECK(list.extents[0].lcn == 10);
   CHECK(list.extents[0].clusters == 5);
@@ -164,7 +164,7 @@ void CheckTheListIsSortedMergedAndClamped() {
   CHECK(list.extents[1].clusters == 2);
   CHECK_FALSE(list.truncated);
   // The same object comes back: the list is read once.
-  CHECK(&Support::RequiredBadList(*opened.volume) == &list);
+  CHECK(&TestAlloc::RequiredBadList(*opened.volume) == &list);
 }
 
 template <Cache::Strategy S>
@@ -173,7 +173,7 @@ void CheckOptionsDoNotChangeTheAnswer() {
   const std::vector<BYTE> image = ImageWith(both, bad_marked);
 
   for (const bool include_deleted : {false, true}) {
-    const auto opened = Support::OpenVolume<S>(
+    const auto opened = TestAlloc::OpenVolume<S>(
         image, VolumeOptions{.include_deleted = include_deleted});
 
     CHECK(opened.volume->GetClusterState(45) == ClusterState::Bad);

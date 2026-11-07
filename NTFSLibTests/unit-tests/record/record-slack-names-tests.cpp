@@ -35,10 +35,10 @@ namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Record = NTFS_BROWSER_NAMESPACE::Record;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Support::OpenVolume;
+using TestAlloc::OpenVolume;
 using TestFakeImage::FakeSlackName;
 
 namespace {

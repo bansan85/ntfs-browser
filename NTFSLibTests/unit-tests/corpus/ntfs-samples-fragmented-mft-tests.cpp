@@ -23,12 +23,12 @@ TEST_CASE(
     "(ntfs_extremely_fragmented_mft.raw)",
     "[ntfs-samples][integration][fragmented-mft]") {
   const std::filesystem::path& image =
-      NTFS_BROWSER_NAMESPACE::Tests::FragmentedMftImage();
-  NTFS_BROWSER_NAMESPACE::Tests::RequireUnfetchedCorpusImage(
+      NTFS_BROWSER_NAMESPACE::Test::Corpus::FragmentedMftImage();
+  NTFS_BROWSER_NAMESPACE::Test::Corpus::RequireUnfetchedCorpusImage(
       image, "ntfs-fragmented-mft");
 
   const NtfsVolume<Cache::Strategy::NoCache> volume(
-      NTFS_BROWSER_NAMESPACE::Tests::OpenCorpusImage(
+      NTFS_BROWSER_NAMESPACE::Test::Corpus::OpenCorpusImage(
           image, large_image_partition_offset, "ntfs-fragmented-mft"));
   REQUIRE(volume.IsVolumeOK());
 

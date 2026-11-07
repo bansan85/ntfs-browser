@@ -52,7 +52,7 @@ namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
-namespace Account = NTFS_BROWSER_NAMESPACE::Tests::AccountSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 using NTFS_BROWSER_NAMESPACE::IDiskReader;
 using NTFS_BROWSER_NAMESPACE::IndexEntryView;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
@@ -177,15 +177,15 @@ TEST_CASE("A scan reads its first pass in M1 and its second in M2",
 }
 
 TEST_CASE("The content check reads in M4", "[tuning][read-pattern][tree]") {
-  Account::Volume volume;
+  TestAlloc::Volume volume;
   volume.bitmap_options.volume_clusters = 400;
-  volume.Put(22, Account::Freed(100, Account::Stream({{100, 4}}, 4096)));
+  volume.Put(22, TestAlloc::Freed(100, TestAlloc::Stream({{100, 4}}, 4096)));
   Mft::MftTree::ScanOptions scan;
   scan.cluster_account = Alloc::ClusterAccountLevel::Counts;
   scan.verify_data = Alloc::DataCheckMode::Full;
 
   const Patterns seen =
-      ScanPatterns(volume.Build(), Tests::AllocSupport::DeletedOptions(), scan);
+      ScanPatterns(volume.Build(), TestAlloc::DeletedOptions(), scan);
 
   CHECK(Has(seen, Tuning::Pattern::LargeData));
   CHECK(Has(seen, Tuning::Pattern::LargeSequential));

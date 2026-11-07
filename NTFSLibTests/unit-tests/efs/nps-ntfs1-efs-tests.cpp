@@ -76,20 +76,20 @@ TEST_CASE(
     "Encrypted files decrypt or fail to decrypt as their own $EFS entry "
     "dictates (NPS ntfs1, gen2)",
     "[nps][integration][efs]") {
-  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(
-      NTFS_BROWSER_NAMESPACE::Tests::ntfs1_image);
+  NTFS_BROWSER_NAMESPACE::Test::Corpus::RequireCorpusImage(
+      NTFS_BROWSER_NAMESPACE::Test::Corpus::ntfs1_image);
 
   NtfsVolume<Cache::Strategy::NoCache> volume(
-      NTFS_BROWSER_NAMESPACE::Tests::OpenNtfs1Image(), VolumeOptions{});
+      NTFS_BROWSER_NAMESPACE::Test::Corpus::OpenNtfs1Image(), VolumeOptions{});
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> root(volume);
-  NTFS_BROWSER_NAMESPACE::Tests::OpenRootDir(root);
+  NTFS_BROWSER_NAMESPACE::Test::Corpus::OpenRootDir(root);
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache>
       encrypted_dir(volume);
-  NTFS_BROWSER_NAMESPACE::Tests::OpenRootDir(encrypted_dir);
-  NTFS_BROWSER_NAMESPACE::Tests::OpenSubDir(encrypted_dir, "Encrypted");
+  NTFS_BROWSER_NAMESPACE::Test::Corpus::OpenRootDir(encrypted_dir);
+  NTFS_BROWSER_NAMESPACE::Test::Corpus::OpenSubDir(encrypted_dir, "Encrypted");
 
   for (const EfsKey& key : efs_keys) {
     INFO("key " << key.pfx_name);
@@ -97,7 +97,8 @@ TEST_CASE(
     // The key file itself sits unencrypted at the volume root, so a plain
     // read recovers it.
     const std::vector<BYTE> pfx_bytes =
-        NTFS_BROWSER_NAMESPACE::Tests::ReadFile(volume, root, key.pfx_name);
+        NTFS_BROWSER_NAMESPACE::Test::Corpus::ReadFile(volume, root,
+                                                       key.pfx_name);
     const std::filesystem::path pfx_path =
         WriteTempFile(key.pfx_name, pfx_bytes);
     const std::shared_ptr<NTFS_BROWSER_NAMESPACE::Efs::IEfsKeyProvider>
@@ -106,14 +107,14 @@ TEST_CASE(
     REQUIRE(provider != nullptr);
     volume.SetEfsKeyProvider(provider);
 
-    for (const NTFS_BROWSER_NAMESPACE::Tests::KnownFile& file :
-         NTFS_BROWSER_NAMESPACE::Tests::known_files) {
+    for (const NTFS_BROWSER_NAMESPACE::Test::Corpus::KnownFile& file :
+         NTFS_BROWSER_NAMESPACE::Test::Corpus::known_files) {
       INFO("file " << file.name);
 
       NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache>
           stream_owner(volume);
-      NTFS_BROWSER_NAMESPACE::Tests::OpenFile(stream_owner, encrypted_dir,
-                                              file.name);
+      NTFS_BROWSER_NAMESPACE::Test::Corpus::OpenFile(stream_owner,
+                                                     encrypted_dir, file.name);
       const NTFS_BROWSER_NAMESPACE::Attr::AttrBase<Cache::Strategy::NoCache>*
           stream = stream_owner.FindStream({});
       REQUIRE(stream != nullptr);

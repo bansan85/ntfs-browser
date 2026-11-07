@@ -51,6 +51,7 @@ namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::FileTimeToTicks;
 using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::
     attr_name_exceeds_total_size_record_idx;
@@ -75,7 +76,6 @@ using NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_reused_dir_idx;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_stale_child_idx;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_zeroed_idx;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::SetStdInfoPermission;
-using NTFS_BROWSER_NAMESPACE::Tests::FileTimeToTicks;
 
 namespace {
 

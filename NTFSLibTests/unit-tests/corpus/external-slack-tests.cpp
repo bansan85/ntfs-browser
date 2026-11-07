@@ -29,14 +29,14 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Record = NTFS_BROWSER_NAMESPACE::Record;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using NTFS_BROWSER_NAMESPACE::Tests::DfirNtfsDir;
-using NTFS_BROWSER_NAMESPACE::Tests::EntryUtcTicks;
-using NTFS_BROWSER_NAMESPACE::Tests::ReadCorpusFile;
-using NTFS_BROWSER_NAMESPACE::Tests::RecoveringOptions;
-using NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusFile;
-using NTFS_BROWSER_NAMESPACE::Tests::ScanStandaloneMft;
-using NTFS_BROWSER_NAMESPACE::Tests::StrictOptions;
-using NTFS_BROWSER_NAMESPACE::Tests::UtcTicks;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::DfirNtfsDir;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::EntryUtcTicks;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::ReadCorpusFile;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::RecoveringOptions;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::RequireCorpusFile;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::ScanStandaloneMft;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::StrictOptions;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::UtcTicks;
 
 // The directory record of the three slack fixtures, whose resident $INDEX_ROOT
 // shrank and left its old entries after the end marker.

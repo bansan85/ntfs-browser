@@ -30,7 +30,7 @@ namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Usn = NTFS_BROWSER_NAMESPACE::Usn;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
-namespace AllocSupport = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
@@ -128,8 +128,8 @@ void CheckAFreedJournalRecordIsStillRead() {
 
 template <Cache::Strategy S>
 void CheckAnAbsentJournalIsNull(const FakeUsnOptions& options) {
-  const auto sink = std::make_shared<AllocSupport::LevelSink>();
-  const AllocSupport::ScopedSink scoped(sink);
+  const auto sink = std::make_shared<TestAlloc::LevelSink>();
+  const TestAlloc::ScopedSink scoped(sink);
   const auto opened = Support::OpenVolume<S>(Support::JournalImage(options));
 
   CHECK(opened.volume->GetUsnJournal() == nullptr);
@@ -137,7 +137,7 @@ void CheckAnAbsentJournalIsNull(const FakeUsnOptions& options) {
   // A volume with no journal is normal: nothing above Info.
   CHECK(sink->Count(unusable_message) == 1);
   CHECK(sink->LevelOf(unusable_message) == Log::Level::Info);
-  for (const AllocSupport::LevelSink::Line& line : sink->lines) {
+  for (const TestAlloc::LevelSink::Line& line : sink->lines) {
     CHECK(line.level != Log::Level::Warn);
     CHECK(line.level != Log::Level::Error);
   }
@@ -204,8 +204,8 @@ namespace {
 
 template <Cache::Strategy S>
 void CheckADamagedRunListIsReadAsFarAsItGoes() {
-  const auto sink = std::make_shared<AllocSupport::LevelSink>();
-  const AllocSupport::ScopedSink scoped(sink);
+  const auto sink = std::make_shared<TestAlloc::LevelSink>();
+  const TestAlloc::ScopedSink scoped(sink);
   // The cut drops the run of the second stretch, which follows a hole.
   const auto opened = Support::OpenVolume<S>(Support::JournalImage(
       {.records = {Ghost()},

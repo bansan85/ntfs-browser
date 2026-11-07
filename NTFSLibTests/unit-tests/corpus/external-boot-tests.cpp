@@ -34,11 +34,11 @@ namespace Data = NTFS_BROWSER_NAMESPACE::Data;
 namespace Volume = NTFS_BROWSER_NAMESPACE::Volume;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::DfirMuseumDir;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::DfirNtfsDir;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::ReadCorpusFile;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::RequireCorpusFile;
 using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
-using NTFS_BROWSER_NAMESPACE::Tests::DfirMuseumDir;
-using NTFS_BROWSER_NAMESPACE::Tests::DfirNtfsDir;
-using NTFS_BROWSER_NAMESPACE::Tests::ReadCorpusFile;
-using NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusFile;
 
 // Bytes of a boot sector: the BPB the library parses.
 constexpr std::size_t boot_sector_bytes = 512;

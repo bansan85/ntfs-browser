@@ -7,28 +7,24 @@
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 
-namespace NtfsBrowser {
-namespace Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Corpus {
 
 struct FlsLine;
-
-}  // namespace Tests
-}  // namespace NtfsBrowser
-
-namespace NTFS_BROWSER_NAMESPACE::Tests {
 
 // Names the first field two entries disagree on. Empty when they are equal.
 // strict_left is true when left comes from a strict scan and right from a
 // recovering one: a strict scan drops the damaged parent of a name, so the
 // name may be linked to its parent only on the right.
-[[nodiscard]] std::string FirstDifference(const Mft::MftTree::Entry& left,
-                                          const Mft::MftTree::Entry& right,
-                                          bool strict_left = false);
+[[nodiscard]] std::string
+    FirstDifference(const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& left,
+                    const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& right,
+                    bool strict_left = false);
 
 // Names the first thing two scans disagree on. Empty when they are the same
 // kept records with the same counters.
-[[nodiscard]] std::string FirstDifference(const Mft::MftTree& left,
-                                          const Mft::MftTree& right);
+[[nodiscard]] std::string
+    FirstDifference(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& left,
+                    const NTFS_BROWSER_NAMESPACE::Mft::MftTree& right);
 
 // What every field of a listing line says, checked against a tree. Collects
 // the first few differences, since a listing holds thousands of lines.
@@ -52,7 +48,7 @@ struct ListingReport {
 //   - the root directory is never listed;
 //   - the `*` of a deleted file is not in any of the kept listings.
 [[nodiscard]] ListingReport
-    CompareWithListing(const Mft::MftTree& tree,
+    CompareWithListing(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
                        const std::vector<FlsLine>& lines);
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Corpus

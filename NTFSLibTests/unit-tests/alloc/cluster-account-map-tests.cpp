@@ -24,16 +24,15 @@ struct VolumeOptions;
 }  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
-namespace AllocSupport = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AccountSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace TreeSupport = NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport;
 using Alloc::ClusterCondition;
 using Alloc::ClusterPiece;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Support::Freed;
-using Support::Live;
-using Support::Stream;
+using TestAlloc::Freed;
+using TestAlloc::Live;
+using TestAlloc::Stream;
 using TestFakeImage::FakeAccountFile;
 using TestFakeImage::FakeAccountStream;
 using TestFakeImage::FakeDataRun;
@@ -46,18 +45,18 @@ constexpr ULONGLONG cluster = TestFakeImage::fake_cluster_size;
 
 template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 TreeSupport::ScannedVolume<S>
-    ScanMap(const Support::Volume& volume,
-            const VolumeOptions& options = AllocSupport::DeletedOptions()) {
+    ScanMap(const TestAlloc::Volume& volume,
+            const VolumeOptions& options = TestAlloc::DeletedOptions()) {
   return TreeSupport::ScannedVolume<S>(
       volume.Build(), options,
-      Support::Scan(Alloc::ClusterAccountLevel::CountsAndMap));
+      TestAlloc::Scan(Alloc::ClusterAccountLevel::CountsAndMap));
 }
 
 // The pieces of the one stream of record's map.
 const std::vector<ClusterPiece>&
     PiecesOf(const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree, ULONGLONG record,
              size_t stream = 0) {
-  const Alloc::ClusterAccount& account = Support::AccountOf(tree, record);
+  const Alloc::ClusterAccount& account = TestAlloc::AccountOf(tree, record);
   REQUIRE(account.streams.size() > stream);
   return account.streams.at(stream).pieces;
 }
@@ -85,8 +84,8 @@ void CheckPiece(const ClusterPiece& piece, ULONGLONG vcn, ULONGLONG clusters,
 
 TEST_CASE("the map is in file order when the runs are not in LCN order",
           "[alloc][cluster][map]") {
-  Support::ForEachStrategy([](auto strategy) {
-    Support::Volume volume;
+  TestAlloc::ForEachStrategy([](auto strategy) {
+    TestAlloc::Volume volume;
     // VCN 0 and 1 at a high LCN, VCN 2 and 3 at a low one.
     volume.Put(subject, Freed(100, Stream({{50, 2}, {40, 2}}, 4 * cluster)));
     // A live file rewrote the last cluster of the stream, at LCN 41.
@@ -105,8 +104,8 @@ TEST_CASE("the map is in file order when the runs are not in LCN order",
 
 TEST_CASE("the map keeps sparse holes and the clusters a cut list lost",
           "[alloc][cluster][map]") {
-  Support::ForEachStrategy([](auto strategy) {
-    Support::Volume volume;
+  TestAlloc::ForEachStrategy([](auto strategy) {
+    TestAlloc::Volume volume;
     FakeAccountFile file =
         Freed(100, Stream({{40, 2},
                            FakeDataRun{.lcn = std::nullopt, .clusters = 3},
@@ -116,7 +115,7 @@ TEST_CASE("the map keeps sparse holes and the clusters a cut list lost",
     file.streams.front().cut_after_runs = 3;
     volume.Put(subject, file);
     const auto scanned = ScanMap<decltype(strategy)::value>(
-        volume, Support::DeletedAndRecover());
+        volume, TestAlloc::DeletedAndRecover());
 
     const std::vector<ClusterPiece>& pieces = PiecesOf(scanned.tree, subject);
     REQUIRE(pieces.size() == 4);
@@ -130,8 +129,8 @@ TEST_CASE("the map keeps sparse holes and the clusters a cut list lost",
 
 TEST_CASE("the map of an entry has one stream for each $DATA, named ones too",
           "[alloc][cluster][map]") {
-  Support::ForEachStrategy([](auto strategy) {
-    Support::Volume volume;
+  TestAlloc::ForEachStrategy([](auto strategy) {
+    TestAlloc::Volume volume;
     FakeAccountFile file = Freed(100, Stream({{40, 2}}, 2 * cluster));
     FakeAccountStream named = Stream({{50, 1}}, cluster);
     named.name = L"zone";
@@ -140,7 +139,7 @@ TEST_CASE("the map of an entry has one stream for each $DATA, named ones too",
     const auto scanned = ScanMap<decltype(strategy)::value>(volume);
 
     const Alloc::ClusterAccount& account =
-        Support::AccountOf(scanned.tree, subject);
+        TestAlloc::AccountOf(scanned.tree, subject);
     REQUIRE(account.streams.size() == 2);
     CHECK(account.streams.at(0).name.empty());
     CHECK(account.streams.at(1).name == L"zone");
@@ -151,13 +150,13 @@ TEST_CASE("the map of an entry has one stream for each $DATA, named ones too",
 }
 
 TEST_CASE("the counts level keeps no map", "[alloc][cluster][map]") {
-  Support::ForEachStrategy([](auto strategy) {
-    Support::Volume volume;
+  TestAlloc::ForEachStrategy([](auto strategy) {
+    TestAlloc::Volume volume;
     volume.Put(subject, Freed(100, Stream({{40, 2}}, 2 * cluster)));
     const TreeSupport::ScannedVolume<decltype(strategy)::value> scanned(
-        volume.Build(), AllocSupport::DeletedOptions(), Support::Scan());
+        volume.Build(), TestAlloc::DeletedOptions(), TestAlloc::Scan());
 
-    CHECK(Support::AccountOf(scanned.tree, subject).streams.empty());
+    CHECK(TestAlloc::AccountOf(scanned.tree, subject).streams.empty());
   });
 }
 
@@ -166,8 +165,8 @@ TEST_CASE("the counts level keeps no map", "[alloc][cluster][map]") {
 #ifdef NTFS_BROWSER_ENABLE_DECOMPRESSION
 TEST_CASE("a damaged compression unit marks all of its clusters",
           "[alloc][cluster][map]") {
-  Support::ForEachStrategy([](auto strategy) {
-    Support::Volume volume;
+  TestAlloc::ForEachStrategy([](auto strategy) {
+    TestAlloc::Volume volume;
     // Two units of four clusters, each with two real clusters and two holes.
     FakeAccountStream stream =
         Stream({{40, 2},
@@ -183,7 +182,7 @@ TEST_CASE("a damaged compression unit marks all of its clusters",
     const auto scanned = ScanMap<decltype(strategy)::value>(volume);
 
     const Alloc::ClusterAccount& account =
-        Support::AccountOf(scanned.tree, subject);
+        TestAlloc::AccountOf(scanned.tree, subject);
     CHECK(account.tally.Count(ClusterCondition::LostWithUnit) == 1);
     CHECK(account.tally.Count(ClusterCondition::ReallocatedWritten) == 1);
     CHECK(account.tally.Count(ClusterCondition::Intact) == 2);
@@ -252,15 +251,15 @@ TEST_CASE("a map turns into byte ranges, clipped at the file size",
 
 TEST_CASE("a never written range of a scanned file reads as zeros, not damage",
           "[alloc][cluster][map]") {
-  Support::ForEachStrategy([](auto strategy) {
-    Support::Volume volume;
+  TestAlloc::ForEachStrategy([](auto strategy) {
+    TestAlloc::Volume volume;
     FakeAccountFile file = Freed(100, Stream({{40, 4}}, 4 * cluster));
     file.streams.front().ini_size = cluster;
     volume.Put(subject, file);
     const auto scanned = ScanMap<decltype(strategy)::value>(volume);
 
     const std::vector<Alloc::StreamByteRange> ranges = Alloc::ToByteRanges(
-        Support::AccountOf(scanned.tree, subject).streams.at(0), cluster);
+        TestAlloc::AccountOf(scanned.tree, subject).streams.at(0), cluster);
 
     REQUIRE(ranges.size() == 2);
     CHECK(ranges.at(0).condition == ClusterCondition::Intact);

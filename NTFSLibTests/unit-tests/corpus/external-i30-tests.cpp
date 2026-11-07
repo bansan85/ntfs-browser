@@ -34,7 +34,7 @@ namespace {
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Record = NTFS_BROWSER_NAMESPACE::Record;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestCorpus = NTFS_BROWSER_NAMESPACE::Test::Corpus;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
@@ -60,9 +60,9 @@ constexpr BYTE dos_name_space = 2;
 
 std::filesystem::path StateFile(std::string_view state) {
   const std::u8string name(state.begin(), state.end());
-  return Tests::RequireCorpusFile(Tests::DfirMuseumDir() / u8"Windows" /
-                                  u8"NTFSArtifacts" / u8"$I30" /
-                                  u8"EricZimmerman" / name / u8"$I30");
+  return TestCorpus::RequireCorpusFile(
+      TestCorpus::DfirMuseumDir() / u8"Windows" / u8"NTFSArtifacts" / u8"$I30" /
+      u8"EricZimmerman" / name / u8"$I30");
 }
 
 std::uint64_t Load64(const std::vector<BYTE>& bytes, size_t offset) {
@@ -112,7 +112,7 @@ void RetargetParent(std::vector<BYTE>& block, std::uint64_t from,
 
 // A fake volume whose directory 5 holds the five blocks of a state.
 std::vector<BYTE> ImageOfState(std::string_view state) {
-  const std::vector<BYTE> file = Tests::ReadCorpusFile(StateFile(state));
+  const std::vector<BYTE> file = TestCorpus::ReadCorpusFile(StateFile(state));
   REQUIRE(file.size() == index_block_bytes * index_block_count);
   std::vector<std::vector<BYTE>> blocks;
   for (size_t index = 0; index < index_block_count; ++index) {
@@ -273,8 +273,8 @@ TEST_CASE("Strict mode lists the live entries of a $I30 state only",
 
 TEST_CASE("The index slack of ntfs_index.raw names its one deleted file",
           "[dfir-corpora][integration][i30]") {
-  const std::filesystem::path image = Tests::RequireCorpusFile(
-      Tests::DfirNtfsDir() / u8"test_data" / u8"ntfs_index.raw");
+  const std::filesystem::path image = TestCorpus::RequireCorpusFile(
+      TestCorpus::DfirNtfsDir() / u8"test_data" / u8"ntfs_index.raw");
   // The volume starts at byte 65536 of the image.
   auto reader = std::make_unique<TestDiskReaders::PartitionDiskReader>(65536);
   REQUIRE(reader->Open(image.wstring()));

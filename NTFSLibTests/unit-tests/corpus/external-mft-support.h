@@ -16,12 +16,12 @@
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::Corpus {
 
 // Everything a test learns from one scan of a standalone $MFT, besides the
 // tree itself.
 struct StandaloneMftScan {
-  Mft::MftTree tree;
+  NTFS_BROWSER_NAMESPACE::Mft::MftTree tree;
   // Bytes the cache holds once the scan is over. 0 for NoCache.
   std::uint64_t held_bytes{0};
   // Size of the largest read the disk reader received.
@@ -51,13 +51,16 @@ class TempFile {
 // volume options and cache strategy. repair_extent is
 // StandaloneMftDiskReader::SetRepairDeclaredExtent(). Fails the running test
 // when the file does not open as a $MFT or the volume does not open.
-[[nodiscard]] StandaloneMftScan ScanStandaloneMft(
-    const std::filesystem::path& file, Cache::Strategy strategy,
-    const VolumeOptions& options = {}, bool repair_extent = false);
+[[nodiscard]] StandaloneMftScan
+    ScanStandaloneMft(const std::filesystem::path& file,
+                      NTFS_BROWSER_NAMESPACE::Cache::Strategy strategy,
+                      const VolumeOptions& options = {},
+                      bool repair_extent = false);
 
 // Opens file as the $MFT of a NoCache volume, for a test that reads records
 // itself. Fails the running test when it does not open.
-[[nodiscard]] std::unique_ptr<NtfsVolume<Cache::Strategy::NoCache>>
+[[nodiscard]] std::unique_ptr<
+    NtfsVolume<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>>
     OpenStandaloneMftVolume(const std::filesystem::path& file,
                             const VolumeOptions& options = {},
                             bool repair_extent = false);
@@ -120,4 +123,4 @@ struct FlsLine {
 // '/', without the leading separator.
 [[nodiscard]] std::string ListingPath(const std::wstring& tree_path);
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Corpus

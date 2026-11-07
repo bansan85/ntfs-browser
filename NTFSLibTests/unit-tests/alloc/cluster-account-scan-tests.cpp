@@ -29,21 +29,20 @@
 #include "alloc/cluster-bitmap.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
-namespace AllocSupport = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AccountSupport;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace TreeSupport = NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport;
 using Alloc::ClusterCondition;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Support::CountOf;
-using Support::Freed;
-using Support::Live;
-using Support::Stream;
+using TestAlloc::CountOf;
+using TestAlloc::Freed;
+using TestAlloc::Live;
+using TestAlloc::Stream;
 using TestFakeImage::FakeAccountFile;
 using TestFakeImage::FakeAccountStream;
 using TestFakeImage::FakeDataRun;
@@ -68,8 +67,8 @@ FakeAccountStream IndexOn(ULONGLONG lcn) {
 
 // The subject, and a live file whose only non-resident attribute, a
 // $INDEX_ALLOCATION on cluster 41, sits in an extension record.
-Support::Volume WithListedIndex() {
-  Support::Volume volume;
+TestAlloc::Volume WithListedIndex() {
+  TestAlloc::Volume volume;
   volume.Put(subject, Freed(100, Stream({{40, 4}}, 4 * cluster)));
   FakeAccountFile owner;
   owner.freed = false;
@@ -119,11 +118,11 @@ std::string DescribeAccounts(const Mft::MftTree& tree) {
 
 TEST_CASE("a non-resident attribute in an extension record is a claim",
           "[alloc][cluster][scan]") {
-  Support::ForEachStrategy([](auto strategy) {
+  TestAlloc::ForEachStrategy([](auto strategy) {
     constexpr auto S = decltype(strategy)::value;
     const TreeSupport::ScannedVolume<S> scanned(WithListedIndex().Build(),
-                                                AllocSupport::DeletedOptions(),
-                                                Support::Scan());
+                                                TestAlloc::DeletedOptions(),
+                                                TestAlloc::Scan());
 
     CHECK(CountOf(scanned.tree, subject, ClusterCondition::Intact) == 3);
     CHECK(CountOf(scanned.tree, subject,
@@ -133,12 +132,12 @@ TEST_CASE("a non-resident attribute in an extension record is a claim",
 
 TEST_CASE("the account changes nothing about the tree of a healthy volume",
           "[alloc][cluster][scan]") {
-  Support::ForEachStrategy([](auto strategy) {
+  TestAlloc::ForEachStrategy([](auto strategy) {
     constexpr auto S = decltype(strategy)::value;
     const std::vector<BYTE> image = WithListedIndex().Build();
     const TreeSupport::ScannedVolume<S> off(image);
-    const TreeSupport::ScannedVolume<S> on(
-        image, AllocSupport::DeletedOptions(), Support::Scan());
+    const TreeSupport::ScannedVolume<S> on(image, TestAlloc::DeletedOptions(),
+                                           TestAlloc::Scan());
 
     REQUIRE(off.tree.Entries().size() == on.tree.Entries().size());
     for (size_t i = 0; i < off.tree.Entries().size(); i++) {
@@ -156,9 +155,9 @@ TEST_CASE("the account changes nothing about the tree of a healthy volume",
 
 TEST_CASE("an extension record nobody can use does not fail a record",
           "[alloc][cluster][scan]") {
-  Support::ForEachStrategy([](auto strategy) {
+  TestAlloc::ForEachStrategy([](auto strategy) {
     constexpr auto S = decltype(strategy)::value;
-    Support::Volume volume = WithListedIndex();
+    TestAlloc::Volume volume = WithListedIndex();
     // The extension slot no longer holds a record.
     std::vector<BYTE> image = volume.Build();
     const size_t slot_start =
@@ -173,7 +172,7 @@ TEST_CASE("an extension record nobody can use does not fail a record",
       const TreeSupport::ScannedVolume<S> on(
           image,
           VolumeOptions{.include_deleted = true, .recover_errors = recover},
-          Support::Scan());
+          TestAlloc::Scan());
 
       INFO("recover " << recover);
       CHECK(off.tree.Entries().size() == on.tree.Entries().size());
@@ -188,9 +187,9 @@ TEST_CASE("an extension record nobody can use does not fail a record",
 
 TEST_CASE("a damaged attribute that is only listed does not damage a record",
           "[alloc][cluster][scan]") {
-  Support::ForEachStrategy([](auto strategy) {
+  TestAlloc::ForEachStrategy([](auto strategy) {
     constexpr auto S = decltype(strategy)::value;
-    Support::Volume volume;
+    TestAlloc::Volume volume;
     FakeAccountFile file = Live(Stream({{40, 2}}, 2 * cluster));
     FakeAccountStream index = IndexOn(44);
     index.runs = {FakeDataRun{.lcn = 44, .clusters = 1},
@@ -208,7 +207,7 @@ TEST_CASE("a damaged attribute that is only listed does not damage a record",
       static_cast<void>(TestSupport::TakeCapturedLog());
       const TreeSupport::ScannedVolume<S> off(image, options);
       const std::string off_log = TestSupport::TakeCapturedLog();
-      const TreeSupport::ScannedVolume<S> on(image, options, Support::Scan());
+      const TreeSupport::ScannedVolume<S> on(image, options, TestAlloc::Scan());
       const std::string on_log = TestSupport::TakeCapturedLog();
 
       INFO("recover " << recover);
@@ -224,9 +223,9 @@ TEST_CASE("a damaged attribute that is only listed does not damage a record",
 
 TEST_CASE("the account is the same whatever the thread count",
           "[alloc][cluster][scan]") {
-  Support::ForEachStrategy([](auto strategy) {
+  TestAlloc::ForEachStrategy([](auto strategy) {
     constexpr auto S = decltype(strategy)::value;
-    Support::Volume volume = WithListedIndex();
+    TestAlloc::Volume volume = WithListedIndex();
     volume.Put(23, Freed(200, Stream({{42, 2}}, 2 * cluster)));
     FakeAccountFile damaged = Live(Stream({{44, 2}, {50, 2}}, 4 * cluster));
     damaged.streams.front().cut_after_runs = 2;
@@ -237,10 +236,10 @@ TEST_CASE("the account is the same whatever the thread count",
     std::vector<TestDiskReaders::CountingDiskReader::Call> expected_calls;
     for (const unsigned threads : {1U, 2U, 3U, 8U}) {
       Mft::MftTree::ScanOptions options =
-          Support::Scan(Alloc::ClusterAccountLevel::CountsAndMap);
+          TestAlloc::Scan(Alloc::ClusterAccountLevel::CountsAndMap);
       options.threads = threads;
       const TreeSupport::ScannedVolume<S> scanned(
-          image, Support::DeletedAndRecover(), options);
+          image, TestAlloc::DeletedAndRecover(), options);
 
       const std::string text = DescribeAccounts(scanned.tree);
       INFO("threads " << threads);
@@ -268,7 +267,7 @@ TEST_CASE("the account reads $Bitmap once, in ascending order",
   // Windows of one cluster of bitmap each, which cover 8192 clusters.
   Alloc::SetBitmapWindowBytesForTests(TestFakeImage::fake_cluster_size);
   constexpr ULONGLONG volume_clusters = 20000;
-  Support::Volume volume;
+  TestAlloc::Volume volume;
   volume.bitmap_options.volume_clusters = volume_clusters;
   // Freed files in the first three windows.
   volume.Put(subject, Freed(100, Stream({{40, 4}}, 4 * cluster)));
@@ -277,10 +276,10 @@ TEST_CASE("the account reads $Bitmap once, in ascending order",
   const std::vector<BYTE> image = volume.Build();
 
   for (const bool annotate : {true, false}) {
-    Mft::MftTree::ScanOptions options = Support::Scan();
+    Mft::MftTree::ScanOptions options = TestAlloc::Scan();
     options.annotate_data_state = annotate;
     const TreeSupport::ScannedVolume<Cache::Strategy::NoCache> scanned(
-        image, AllocSupport::DeletedOptions(), options);
+        image, TestAlloc::DeletedOptions(), options);
 
     INFO("annotate " << annotate);
     std::vector<ULONGLONG> offsets;
@@ -306,19 +305,19 @@ TEST_CASE("the account never touches a volume with nothing to keep",
   const TreeSupport::ScannedVolume<Cache::Strategy::NoCache> plain(
       image, VolumeOptions{});
   const TreeSupport::ScannedVolume<Cache::Strategy::NoCache> asked(
-      image, VolumeOptions{}, Support::Scan());
+      image, VolumeOptions{}, TestAlloc::Scan());
 
   CHECK(plain.opened.counter->ReadCount() == asked.opened.counter->ReadCount());
 }
 
 TEST_CASE("cluster runs follow the bitmap and the bad list",
           "[alloc][cluster][scan]") {
-  Support::ForEachStrategy([](auto strategy) {
+  TestAlloc::ForEachStrategy([](auto strategy) {
     constexpr auto S = decltype(strategy)::value;
-    Support::Volume volume;
+    TestAlloc::Volume volume;
     volume.allocated = {FakeDataRun{.lcn = 40, .clusters = 4}};
     volume.bad = {Alloc::Extent{.lcn = 42, .clusters = 1}};
-    const auto opened = AllocSupport::OpenVolume<S>(volume.Build());
+    const auto opened = TestAlloc::OpenVolume<S>(volume.Build());
     std::vector<Alloc::ClusterRun> runs;
 
     opened.volume->GetClusterRuns(38, 10, runs);
@@ -337,7 +336,7 @@ TEST_CASE("cluster runs follow the bitmap and the bad list",
     CHECK(runs.at(4).lcn == 44);
     CHECK(runs.at(4).clusters == 4);
 
-    opened.volume->GetClusterRuns(Support::far_lcn, 3, runs);
+    opened.volume->GetClusterRuns(TestAlloc::far_lcn, 3, runs);
     REQUIRE(runs.size() == 1);
     CHECK(runs.at(0).state == Alloc::ClusterState::OutOfRange);
     CHECK(runs.at(0).clusters == 3);
@@ -349,11 +348,11 @@ TEST_CASE("cluster runs follow the bitmap and the bad list",
 
 TEST_CASE("cluster runs are unknown when $Bitmap is lost",
           "[alloc][cluster][scan]") {
-  Support::ForEachStrategy([](auto strategy) {
+  TestAlloc::ForEachStrategy([](auto strategy) {
     constexpr auto S = decltype(strategy)::value;
-    Support::Volume volume;
+    TestAlloc::Volume volume;
     volume.with_bitmap = false;
-    const auto opened = AllocSupport::OpenVolume<S>(volume.Build());
+    const auto opened = TestAlloc::OpenVolume<S>(volume.Build());
     std::vector<Alloc::ClusterRun> runs;
 
     opened.volume->GetClusterRuns(40, 6, runs);

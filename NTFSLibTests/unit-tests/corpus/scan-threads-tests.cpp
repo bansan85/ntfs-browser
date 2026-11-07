@@ -27,7 +27,7 @@
 #include "external-mft-support.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestCorpus = NTFS_BROWSER_NAMESPACE::Test::Corpus;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace Fs = std::filesystem;
@@ -46,7 +46,7 @@ TestSupport::ScanResult ScanMftFile(const Fs::path& file,
                                     unsigned threads) {
   static_cast<void>(TestSupport::TakeCapturedLog());
   const std::unique_ptr<NtfsVolume<Cache::Strategy::NoCache>> volume =
-      Tests::OpenStandaloneMftVolume(file, options);
+      TestCorpus::OpenStandaloneMftVolume(file, options);
   return TestSupport::CaptureScan(*volume, nullptr, threads);
 }
 
@@ -59,8 +59,8 @@ TEST_CASE("A small real $MFT scans the same whatever the thread count",
       "deleted.mft", "orphan.mft", "unicode.mft", "mapping_pairs_1.mft");
   const bool include_deleted = GENERATE(false, true);
   const bool recover = GENERATE(false, true);
-  const Fs::path file = Tests::RequireCorpusFile(
-      Tests::DfirNtfsDir() / mft_folder / std::string(name));
+  const Fs::path file = TestCorpus::RequireCorpusFile(
+      TestCorpus::DfirNtfsDir() / mft_folder / std::string(name));
   const VolumeOptions options{.include_deleted = include_deleted,
                               .recover_errors = recover};
 
@@ -76,8 +76,8 @@ TEST_CASE("A small real $MFT scans the same whatever the thread count",
 
 TEST_CASE("The NIST hacking case $MFT scans the same whatever the thread count",
           "[corpus][mft][threads]") {
-  const Fs::path file = Tests::RequireCorpusFile(
-      Tests::DfirNtfsDir() / mft_folder / "nist-hacking-case.mft");
+  const Fs::path file = TestCorpus::RequireCorpusFile(
+      TestCorpus::DfirNtfsDir() / mft_folder / "nist-hacking-case.mft");
   const bool recover = GENERATE(false, true);
   const VolumeOptions options{.include_deleted = true,
                               .recover_errors = recover};
@@ -99,14 +99,14 @@ TEST_CASE("The NIST hacking case $MFT scans the same whatever the thread count",
 TEST_CASE("The NPS ntfs1 image scans the same whatever the thread count",
           "[corpus][nps][threads]") {
   constexpr std::string_view trace = "nps-ntfs1-scan-threads";
-  Tests::RequireCorpusImage(Tests::ntfs1_image, trace);
+  TestCorpus::RequireCorpusImage(TestCorpus::ntfs1_image, trace);
   const bool include_deleted = GENERATE(false, true);
   const VolumeOptions options{.include_deleted = include_deleted,
                               .recover_errors = true};
   const auto scan = [&](unsigned threads) {
     static_cast<void>(TestSupport::TakeCapturedLog());
     auto counting = std::make_unique<TestDiskReaders::CountingDiskReader>(
-        Tests::OpenCorpusImage(Tests::ntfs1_image, 0, trace));
+        TestCorpus::OpenCorpusImage(TestCorpus::ntfs1_image, 0, trace));
     const TestDiskReaders::CountingDiskReader* const reader = counting.get();
     const NtfsVolume<Cache::Strategy::NoCache> volume(std::move(counting),
                                                       options);
@@ -126,9 +126,9 @@ TEMPLATE_TEST_CASE_SIG(
     "A volume with attribute lists scans the same whatever the thread count",
     "[corpus][threads]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  const Fs::path file = Tests::RequireCorpusFile(
-      Tests::DfirNtfsDir() / mft_folder / "ntfs3_attrlist.raw");
-  const std::vector<BYTE> bytes = Tests::ReadCorpusFile(file);
+  const Fs::path file = TestCorpus::RequireCorpusFile(
+      TestCorpus::DfirNtfsDir() / mft_folder / "ntfs3_attrlist.raw");
+  const std::vector<BYTE> bytes = TestCorpus::ReadCorpusFile(file);
   const bool include_deleted = GENERATE(false, true);
   const bool recover = GENERATE(false, true);
   const VolumeOptions options{.include_deleted = include_deleted,

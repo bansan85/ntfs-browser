@@ -41,7 +41,7 @@ namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
@@ -135,8 +135,8 @@ size_t BucketOf(std::uint64_t value) {
 std::vector<BYTE> LiveStaleImage() {
   std::vector<BYTE> image =
       TestFakeImage::BuildFakeNtfsImageWithFreedNonResidentFile(
-          Support::stale_size, {FakeDataRun{.lcn = 40, .clusters = 4}});
-  Support::FillStaleClusters(image, 13);
+          TestAlloc::stale_size, {FakeDataRun{.lcn = 40, .clusters = 4}});
+  TestAlloc::FillStaleClusters(image, 13);
   return image;
 }
 
@@ -304,11 +304,11 @@ TEMPLATE_TEST_CASE_SIG("The reads of the bitmap and of file data have kinds",
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const std::vector<FakeDataRun> allocated{
       FakeDataRun{.lcn = 40, .clusters = 2}};
-  const std::vector<BYTE> bitmap_image = Support::WithBitmap(
+  const std::vector<BYTE> bitmap_image = TestAlloc::WithBitmap(
       TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(), allocated);
 
   SECTION("a bitmap window") {
-    auto opened = Support::OpenVolume<S>(bitmap_image);
+    auto opened = TestAlloc::OpenVolume<S>(bitmap_image);
     TestSupport::BenchSessionGuard session;
     CHECK(opened.volume->GetClusterState(40) == Alloc::ClusterState::Allocated);
     const Bench::Report report = session.Finish();
@@ -319,18 +319,18 @@ TEMPLATE_TEST_CASE_SIG("The reads of the bitmap and of file data have kinds",
   }
 
   SECTION("file data") {
-    const auto opened = Support::OpenVolume<S>(LiveStaleImage());
-    const auto record = Support::ParsedStale(opened);
+    const auto opened = TestAlloc::OpenVolume<S>(LiveStaleImage());
+    const auto record = TestAlloc::ParsedStale(opened);
     // The parse read the blocks that hold the stream: the data read must
     // reach the reader.
     opened.volume->MinifyCache();
-    std::vector<BYTE> bytes(Support::stale_size);
+    std::vector<BYTE> bytes(TestAlloc::stale_size);
     TestSupport::BenchSessionGuard session;
     const auto read = record->FindStream({})->ReadData(0, bytes);
     const Bench::Report report = session.Finish();
 
     REQUIRE(read.has_value());
-    CHECK(*read == Support::stale_size);
+    CHECK(*read == TestAlloc::stale_size);
     CHECK(Kind(report, Bench::ReadKind::Data).reads > 0);
     CHECK(Kind(report, Bench::ReadKind::BitmapWindow).reads == 0);
     CheckKindsAreConsistent(report);

@@ -38,7 +38,7 @@
 #include "io/file-reader.h"
 #include "util/chunk-pool.h"
 
-namespace AccountSupport = NTFS_BROWSER_NAMESPACE::Tests::AccountSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
@@ -353,11 +353,11 @@ TEST_CASE("The cluster account times its flushes, sweep and content check",
           "[bench][phase][tree]") {
   constexpr ULONGLONG subject = 22;
   constexpr ULONGLONG first_cluster = 40;
-  AccountSupport::Volume volume;
-  volume.Put(subject, AccountSupport::Freed(
-                          100, AccountSupport::Stream(
-                                   {{first_cluster, 4}},
-                                   4 * TestFakeImage::fake_cluster_size)));
+  TestAlloc::Volume volume;
+  volume.Put(subject,
+             TestAlloc::Freed(
+                 100, TestAlloc::Stream({{first_cluster, 4}},
+                                        4 * TestFakeImage::fake_cluster_size)));
   // Data the content check finds neither empty nor metadata.
   for (size_t i = 0; i < 4 * TestFakeImage::fake_cluster_size; i++) {
     volume.image.at((first_cluster * TestFakeImage::fake_cluster_size) + i) =
@@ -365,9 +365,9 @@ TEST_CASE("The cluster account times its flushes, sweep and content check",
   }
 
   const SessionScan run = ScanInSession<Cache::Strategy::NoCache>(
-      volume.Build(), AccountSupport::DeletedAndRecover(),
-      AccountSupport::Scan(Alloc::ClusterAccountLevel::CountsAndMap,
-                           Alloc::DataCheckMode::Full));
+      volume.Build(), TestAlloc::DeletedAndRecover(),
+      TestAlloc::Scan(Alloc::ClusterAccountLevel::CountsAndMap,
+                      Alloc::DataCheckMode::Full));
 
   CHECK(run.stats.complete);
   const Bench::PhaseStat& pass2 = RequirePhase(run.report, Bench::Phase::Pass2);

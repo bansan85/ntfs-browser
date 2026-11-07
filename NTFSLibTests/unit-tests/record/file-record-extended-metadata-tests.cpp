@@ -37,7 +37,7 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 using NTFS_BROWSER_NAMESPACE::Attr::AttrFileName;
 using NTFS_BROWSER_NAMESPACE::Attr::AttrResidentFullCache;
 using NTFS_BROWSER_NAMESPACE::Attr::AttrResidentNoCache;
-using NTFS_BROWSER_NAMESPACE::Tests::FileTimeToTicks;
+using NTFS_BROWSER_NAMESPACE::Test::Corpus::FileTimeToTicks;
 
 namespace {
 

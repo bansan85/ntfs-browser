@@ -19,10 +19,11 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 
 TEST_CASE("Opens a volume with 2 MiB clusters (ntfs-2m.raw)",
           "[ntfs-samples][integration]") {
-  NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusImage(k2m_image, "ntfs-2m");
+  NTFS_BROWSER_NAMESPACE::Test::Corpus::RequireCorpusImage(k2m_image,
+                                                           "ntfs-2m");
 
   const NtfsVolume<Cache::Strategy::NoCache> volume(
-      NTFS_BROWSER_NAMESPACE::Tests::OpenCorpusImage(
+      NTFS_BROWSER_NAMESPACE::Test::Corpus::OpenCorpusImage(
           k2m_image, small_image_partition_offset, "ntfs-2m"));
   REQUIRE(volume.IsVolumeOK());
   CHECK(volume.GetClusterSize() == 2097152);

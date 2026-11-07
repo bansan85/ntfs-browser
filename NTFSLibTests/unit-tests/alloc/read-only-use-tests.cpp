@@ -22,7 +22,7 @@ namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
+namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 using TestDiskReaders::CountingDiskReader;
 using TestFakeImage::FakeDataRun;
 
@@ -54,13 +54,13 @@ void CheckOnlyReadOnlyCalls(const CountingDiskReader& counter) {
 // Runs the range, summary and data state queries on the volume of StaleFile(),
 // then checks that its reader saw only read-only calls.
 template <Cache::Strategy S>
-void CheckTheRestOnlyReads(const Support::Opened<S>& opened) {
+void CheckTheRestOnlyReads(const TestAlloc::Opened<S>& opened) {
   CHECK(opened.volume->GetRangeState(30, 20) == Alloc::ClusterState::Allocated);
   std::vector<Alloc::RangeQuery> queries{{.lcn = 10, .clusters = 5},
                                          {.lcn = 41, .clusters = 1}};
   opened.volume->GetRangeStates(queries);
   CHECK(opened.volume->GetSpaceSummary());
-  CHECK(Support::ParsedStale(opened)->GetDataState() ==
+  CHECK(TestAlloc::ParsedStale(opened)->GetDataState() ==
         Alloc::DataState::Reallocated);
 
   CheckOnlyReadOnlyCalls(*opened.counter);
@@ -71,7 +71,7 @@ void CheckEveryQueryOnlyReads() {
   const std::vector<FakeDataRun> allocated{
       FakeDataRun{.lcn = 40, .clusters = 2}};
   const auto opened =
-      Support::OpenVolume<S>(Support::WithBitmap(StaleFile(), allocated));
+      TestAlloc::OpenVolume<S>(TestAlloc::WithBitmap(StaleFile(), allocated));
 
   CHECK(opened.volume->GetClusterState(40) == Alloc::ClusterState::Allocated);
   CheckTheRestOnlyReads(opened);
@@ -82,8 +82,9 @@ void CheckEveryBadClusterQueryOnlyReads() {
   const std::vector<FakeDataRun> allocated{
       FakeDataRun{.lcn = 40, .clusters = 2}};
   const std::vector<Alloc::Extent> bad{{.lcn = 41, .clusters = 1}};
-  const auto opened = Support::OpenVolume<S>(Support::WithBadClusters(
-      Support::WithBitmap(StaleFile(), Support::WithBadRuns(allocated, bad)),
+  const auto opened = TestAlloc::OpenVolume<S>(TestAlloc::WithBadClusters(
+      TestAlloc::WithBitmap(StaleFile(),
+                            TestAlloc::WithBadRuns(allocated, bad)),
       bad));
 
   REQUIRE(opened.volume->GetBadClusters() != nullptr);
