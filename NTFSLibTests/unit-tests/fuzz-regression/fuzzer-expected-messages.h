@@ -371,7 +371,7 @@ inline constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 233>
          {true, {"Data length = 6 clusters, LCN = 30"}}},
         {"mft_tree_full_cache",
          {true,
-          {"MFT scan: 26 slots, 9 in use, 4 deleted, 12 unreadable",
+          {"MFT scan: 26 slots, 10 in use, 4 deleted, 12 unreadable",
            "File Name: REPORT~1.TXT"}}},
         {"mft_tree_huge_real_size",
          {true,
