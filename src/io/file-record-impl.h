@@ -21,13 +21,13 @@
 #include "io/file-record-attr-types.h"
 #include "record/header.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 namespace Alloc {
 
 struct StreamLayout;
 
 }  // namespace Alloc
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Attr {

@@ -12,14 +12,14 @@
 
 #include "internal-export.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 namespace Tuning {
 
 enum class MediaKind : std::uint8_t;
 struct ProbeTuning;
 
 }  // namespace Tuning
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE {
 

@@ -9,7 +9,7 @@
 
 #include "internal-export.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 namespace Alloc {
 
 struct ClaimInventory;
@@ -21,7 +21,7 @@ namespace Cache {
 enum class Strategy : std::uint8_t;
 
 }  // namespace Cache
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE {
 

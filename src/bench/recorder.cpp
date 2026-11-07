@@ -23,13 +23,13 @@
 #include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/namespace.h>
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 namespace Tuning {
 
 enum class MediaKind : std::uint8_t;
 
 }  // namespace Tuning
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 #ifdef _WIN32
   #include <windows.h>

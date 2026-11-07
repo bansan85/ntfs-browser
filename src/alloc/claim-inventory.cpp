@@ -22,14 +22,14 @@
 
 #include "attr/slot.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 namespace Attr {
 
 template <Cache::Strategy S>
 class AttrBase;
 
 }  // namespace Attr
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Alloc {
 
