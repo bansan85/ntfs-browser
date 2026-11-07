@@ -117,6 +117,11 @@ class RecordEdit {
   static void CopyRecord(std::vector<BYTE>& image, ULONGLONG from,
                          ULONGLONG to);
 
+  // Copies record from of the image donor onto record to of image.
+  static void CopyRecordFrom(std::vector<BYTE>& image,
+                             const std::vector<BYTE>& donor, ULONGLONG from,
+                             ULONGLONG to);
+
   // Writes value at offset of the image. Throws std::out_of_range when the
   // value does not fit.
   static void StoreByte(std::vector<BYTE>& image, std::size_t offset,

@@ -12,6 +12,7 @@
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
 
 #include "data/file-record-header.h"
+#include "data/header-non-resident.h"
 #include "data/header-resident.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
@@ -22,7 +23,8 @@ namespace FakeImage = Test::FakeImage;
 
 using Image = std::vector<BYTE>;
 
-// The root directory record and the $Volume record.
+// The record of the $MFT, the root directory record and the $Volume record.
+constexpr ULONGLONG mft_record = 0;
 constexpr ULONGLONG root_record = 5;
 constexpr ULONGLONG volume_record = 3;
 
@@ -85,7 +87,10 @@ constexpr const char* resident_data_body = "DE AD BE EF";
 constexpr const char* volume_name_text =
     "54 00 45 00 53 00 54 00 56 00 4F 00 4C 00";
 
-Image Base() { return FakeImage::BuildFakeNtfsImage(); }
+// A $VOLUME_INFORMATION value of eight bytes, four short of the twelve that the
+// attribute needs, and the size of the attribute that holds it.
+constexpr DWORD short_volume_information_length = 8;
+constexpr DWORD short_volume_information_total_size = 32;
 
 // Makes the root record a plain file instead of a directory.
 void MakeRootAFile(Image& image) {
@@ -93,6 +98,117 @@ void MakeRootAFile(Image& image) {
       image, RecordEdit::RecordOffset(root_record), [](auto& header) {
         header.flags = static_cast<Data::FileRecordFlag>(flag_in_use);
       });
+}
+
+// The type code of the $EFS stream, which is a $LOGGED_UTILITY_STREAM named
+// "$EFS", and the attribute flags: encrypted, and encrypted with compressed.
+constexpr DWORD type_logged_utility_stream = 0x100;
+constexpr WORD attr_flag_encrypted = 0x4000;
+constexpr WORD attr_flag_encrypted_and_compressed = 0x4001;
+
+// The name of the stream, in UTF-16, and its length in characters.
+constexpr const char* efs_name_units = "24 00 45 00 46 00 53 00";
+constexpr BYTE efs_name_length = 4;
+
+// Where a non-resident attribute keeps its name: after the 64 bytes of the
+// header. The run list follows the name. A resident one keeps the name after
+// its 24 bytes, and the value after the name.
+constexpr WORD non_resident_name_offset = 0x40;
+constexpr WORD non_resident_runs_offset = 0x48;
+constexpr WORD resident_name_offset = 0x18;
+constexpr WORD resident_value_offset = 0x20;
+
+// An empty run list, a stream of 131072 bytes (more than the library reads)
+// and one of 100 bytes whose run list holds no run (so no byte can be read).
+constexpr ULONGLONG efs_size_too_large = 0x20000;
+constexpr ULONGLONG efs_size_unreadable = 100;
+constexpr const char* empty_run_list = "00";
+
+// A resident $EFS body of four zero bytes, too short to be a stream.
+constexpr const char* malformed_efs_body = "00 00 00 00";
+
+Image Base() { return FakeImage::BuildFakeNtfsImage(); }
+
+// The $MFT of the inputs about one file is a single record: a stream of one
+// cluster whose run list is empty, in an attribute of the size of its header
+// and that list.
+constexpr ULONGLONG single_record_mft_size = 0x400;
+constexpr DWORD single_record_mft_attribute_size = 0x41;
+
+// Gives the $MFT the form of a volume that holds one file only.
+void ShrinkMft(Image& image) {
+  const std::size_t data =
+      RecordEdit::Attribute(image, mft_record, RecordEdit::type_data);
+  RecordEdit::Edit<Data::HeaderNonResident>(image, data, [](auto& header) {
+    header.alloc_size = single_record_mft_size;
+    header.real_size = single_record_mft_size;
+    header.ini_size = single_record_mft_size;
+  });
+  RecordEdit::ShrinkLastAttribute(image, data,
+                                  single_record_mft_attribute_size);
+}
+
+// Puts the root in the state of a file with no other attribute than a
+// non-resident $EFS stream of size bytes with no run, then an encrypted
+// non-resident $DATA with no run.
+void PutEfsStream(Image& image, ULONGLONG size) {
+  ShrinkMft(image);
+  MakeRootAFile(image);
+  RecordEdit::ClearAttributes(image, root_record);
+  std::vector<BYTE> name_then_runs = HexBytes::Decode(efs_name_units);
+  const std::vector<BYTE> runs = HexBytes::Decode(empty_run_list);
+  name_then_runs.insert(name_then_runs.end(), runs.begin(), runs.end());
+  const std::size_t efs = RecordEdit::AppendNonResident(
+      image, root_record, type_logged_utility_stream, name_then_runs, 0, size,
+      size);
+  RecordEdit::Edit<Data::HeaderNonResident>(image, efs, [](auto& header) {
+    header.header.name_length = efs_name_length;
+    header.header.name_offset = non_resident_name_offset;
+    header.data_run_offset = non_resident_runs_offset;
+  });
+  const std::size_t data = RecordEdit::AppendNonResident(
+      image, root_record, RecordEdit::type_data, runs, 0, 0, 0);
+  RecordEdit::Edit<Data::HeaderNonResident>(image, data, [](auto& header) {
+    header.header.flags = attr_flag_encrypted;
+  });
+}
+
+// Puts a resident $EFS of four zero bytes, then an encrypted non-resident
+// $DATA with no run.
+void PutMalformedEfs(Image& image) {
+  ShrinkMft(image);
+  MakeRootAFile(image);
+  RecordEdit::ClearAttributes(image, root_record);
+  std::vector<BYTE> name_then_body = HexBytes::Decode(efs_name_units);
+  const std::vector<BYTE> body = HexBytes::Decode(malformed_efs_body);
+  name_then_body.insert(name_then_body.end(), body.begin(), body.end());
+  const std::size_t efs = RecordEdit::AppendResident(
+      image, root_record, type_logged_utility_stream, 0, name_then_body);
+  RecordEdit::Edit<Data::HeaderResident>(image, efs, [&](auto& header) {
+    header.header.name_length = efs_name_length;
+    header.header.name_offset = resident_name_offset;
+    header.attr_offset = resident_value_offset;
+    header.attr_size = static_cast<DWORD>(body.size());
+  });
+  const std::size_t data =
+      RecordEdit::AppendNonResident(image, root_record, RecordEdit::type_data,
+                                    HexBytes::Decode(empty_run_list), 0, 0, 0);
+  RecordEdit::Edit<Data::HeaderNonResident>(image, data, [](auto& header) {
+    header.header.flags = attr_flag_encrypted;
+  });
+}
+
+// Puts a resident $DATA of four zero bytes, with flags, as the only attribute
+// of the root file.
+void PutFlaggedData(Image& image, WORD flags) {
+  ShrinkMft(image);
+  MakeRootAFile(image);
+  RecordEdit::ClearAttributes(image, root_record);
+  const std::size_t data =
+      RecordEdit::AppendResident(image, root_record, RecordEdit::type_data, 0,
+                                 HexBytes::Decode("00 00 00 00"));
+  RecordEdit::Edit<Data::HeaderResident>(
+      image, data, [&](auto& header) { header.header.flags = flags; });
 }
 
 const std::vector<LegacyFixtures::Damaged>& Inputs() {
@@ -186,6 +302,39 @@ const std::vector<LegacyFixtures::Damaged>& Inputs() {
            [](Image& image) {
              RecordEdit::AppendResident(image, volume_record, type_volume_name,
                                         1, HexBytes::Decode(volume_name_text));
+           }},
+      {.name = "9d6b29a12783a8d0595bf861671e5401493570b5",
+       .base = Base,
+       .damage =
+           [](Image& image) {
+             const std::size_t attr = RecordEdit::Attribute(
+                 image, volume_record, RecordEdit::type_volume_information);
+             RecordEdit::SetValueLength(image, attr,
+                                        short_volume_information_length);
+             RecordEdit::ShrinkLastAttribute(
+                 image, attr, short_volume_information_total_size);
+           }},
+      {.name = "efs_stream_too_large",
+       .base = Base,
+       .damage = [](Image& image) { PutEfsStream(image, efs_size_too_large); },
+       .needs = Feature::Efs},
+      {.name = "efs_stream_read_failure",
+       .base = Base,
+       .damage = [](Image& image) { PutEfsStream(image, efs_size_unreadable); },
+       .needs = Feature::Efs},
+      {.name = "efs_stream_malformed",
+       .base = Base,
+       .damage = PutMalformedEfs,
+       .needs = Feature::Efs},
+      {.name = "resident_data_flagged_encrypted",
+       .base = Base,
+       .damage =
+           [](Image& image) { PutFlaggedData(image, attr_flag_encrypted); }},
+      {.name = "data_flagged_compressed_and_encrypted",
+       .base = Base,
+       .damage =
+           [](Image& image) {
+             PutFlaggedData(image, attr_flag_encrypted_and_compressed);
            }},
       {.name = "compressed_index_allocation_encrypted",
        .base = Base,

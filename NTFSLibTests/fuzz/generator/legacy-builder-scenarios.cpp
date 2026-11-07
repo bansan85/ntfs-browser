@@ -4,12 +4,15 @@
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/tool/fuzzgen/index-edit.h>
 #include <ntfs-browser/tool/fuzzgen/legacy-builder-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/legacy-fixtures.h>
 #include <ntfs-browser/tool/fuzzgen/legacy-geometry.h>
 #include <ntfs-browser/tool/fuzzgen/record-edit.h>
 #include <ntfs-browser/tool/fuzzgen/recorded-stream.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
+
+#include "data/index-block.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 
@@ -23,9 +26,65 @@ using Probe = RecordedStream::Probe;
 // The root directory record, which the old builders sized without padding.
 constexpr ULONGLONG root_record = 5;
 
+// Where the update sequence array starts in a block of one sector, and the
+// words of that array.
+constexpr WORD block_array_offset = 0x3FC;
+constexpr WORD one_sector_array_size = 2;
+
 // Cuts the root record to the size the old builders gave it.
 void PackRoot(Image& image) {
   LegacyGeometry::PackLastAttribute(image, root_record);
+}
+
+// The first builders put an index block into a compressed unit without the
+// padding of its entries, and with the array of a one-sector block. Gives the
+// block that form.
+void UnpackCompressedBlock(Image& image) {
+  const std::size_t block = IndexEdit::FindBlock(image);
+  IndexEdit::UnpadBlock(image, block);
+  RecordEdit::Edit<Data::IndexBlock>(image, block, [](auto& header) {
+    header.offset_of_us = block_array_offset;
+    header.size_of_us = one_sector_array_size;
+  });
+}
+
+// A run of one cluster at a logical cluster number whose byte address
+// overflows, which is 8 bytes of offset in a run header of 0x81.
+constexpr std::size_t compressed_attribute_header_bytes = 0x48;
+
+// The run lists of a compression unit of four clusters whose first run lies at
+// the overflowing cluster: that run takes one cluster and a hole takes three,
+// or that run takes all four (a stored unit).
+const std::vector<BYTE> compressed_unit_bad_runs = {
+    0x81, 0x01, 0, 0, 0, 0, 0, 0, 0x20, 0x00, 0x01, 0x03, 0x00};
+const std::vector<BYTE> stored_unit_bad_runs = {0x81, 0x04, 0,    0,    0,   0,
+                                                0,    0,    0x20, 0x00, 0x00};
+
+// Where a compressed attribute keeps its compressed size, after the 64 bytes
+// of the header of a non-resident one, and the sizes of the two inputs: one
+// cluster, and the four clusters of a stored unit.
+constexpr std::size_t compressed_size_field = 0x40;
+constexpr ULONGLONG one_cluster_size = 0x400;
+constexpr ULONGLONG four_clusters_size = 0x1000;
+
+// Replaces the run list of the compressed $INDEX_ALLOCATION of the root, and
+// cuts the attribute to the size of its header and its runs.
+void PutRuns(Image& image, const std::vector<BYTE>& runs,
+             ULONGLONG compressed_size) {
+  const std::size_t attr = RecordEdit::Attribute(
+      image, root_record, RecordEdit::type_index_allocation);
+  RecordEdit::StoreQword(image, attr + compressed_size_field, compressed_size);
+  RecordEdit::SetRunList(image, attr, runs);
+  RecordEdit::ShrinkLastAttribute(
+      image, attr,
+      static_cast<DWORD>(compressed_attribute_header_bytes + runs.size()));
+}
+
+// Packs the root, and the block of the compressed unit.
+void PackRootAndBlock(Image& image) {
+  IndexEdit::UnpadRoot(image, root_record);
+  PackRoot(image);
+  UnpackCompressedBlock(image);
 }
 
 const std::vector<LegacyFixtures::Damaged>& Inputs() {
@@ -56,6 +115,31 @@ const std::vector<LegacyFixtures::Damaged>& Inputs() {
        .base =
            FakeImage::BuildFakeNtfsImageWithCorruptCompressedIndexAllocation,
        .damage = PackRoot,
+       .needs = Feature::Decompression},
+      {.name = "index_block_chain_depth_limit",
+       .base = FakeImage::BuildFakeNtfsImageWithDeepIndexBlockChain,
+       .damage = PackRoot},
+      {.name = "compressed_index_allocation",
+       .base = FakeImage::BuildFakeNtfsImageWithCompressedIndexAllocation,
+       .damage = PackRootAndBlock,
+       .needs = Feature::Decompression},
+      {.name = "compressed_index_allocation_compressed_unit_bad_lcn",
+       .base = FakeImage::BuildFakeNtfsImageWithCompressedIndexAllocation,
+       .damage =
+           [](Image& image) {
+             PutRuns(image, compressed_unit_bad_runs, one_cluster_size);
+           },
+       .needs = Feature::Decompression},
+      {.name = "compressed_index_allocation_stored_unit_bad_lcn",
+       .base = FakeImage::BuildFakeNtfsImageWithCompressedIndexAllocation,
+       .damage =
+           [](Image& image) {
+             PutRuns(image, stored_unit_bad_runs, four_clusters_size);
+           },
+       .needs = Feature::Decompression},
+      {.name = "surrogate_pair_names",
+       .base = FakeImage::BuildFakeNtfsImageWithSurrogatePairNames,
+       .damage = PackRootAndBlock,
        .needs = Feature::Decompression},
       {.name = "compressed_index_allocation_unmapped_unit",
        .base = FakeImage::

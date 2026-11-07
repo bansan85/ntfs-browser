@@ -62,6 +62,8 @@ add_library(
   "slack-names-scenarios.cpp"
   "include/ntfs-browser/tool/fuzzgen/record-edit.h"
   "record-edit.cpp"
+  "include/ntfs-browser/tool/fuzzgen/index-edit.h"
+  "index-edit.cpp"
   "include/ntfs-browser/tool/fuzzgen/legacy-geometry.h"
   "legacy-geometry.cpp"
   "include/ntfs-browser/tool/fuzzgen/legacy-fixtures.h"
@@ -82,6 +84,12 @@ add_library(
   "legacy-root-record-scenarios.cpp"
   "include/ntfs-browser/tool/fuzzgen/legacy-builder-scenarios.h"
   "legacy-builder-scenarios.cpp"
+  "include/ntfs-browser/tool/fuzzgen/legacy-attribute-list-scenarios.h"
+  "legacy-attribute-list-scenarios.cpp"
+  "include/ntfs-browser/tool/fuzzgen/legacy-index-block-scenarios.h"
+  "legacy-index-block-scenarios.cpp"
+  "include/ntfs-browser/tool/fuzzgen/legacy-residency-scenarios.h"
+  "legacy-residency-scenarios.cpp"
 )
 
 target_include_directories(

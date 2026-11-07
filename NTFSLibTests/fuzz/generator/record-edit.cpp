@@ -259,6 +259,17 @@ void RecordEdit::CopyRecord(std::vector<BYTE>& image, ULONGLONG from,
               FakeImage::fake_file_record_size);
 }
 
+void RecordEdit::CopyRecordFrom(std::vector<BYTE>& image,
+                                const std::vector<BYTE>& donor, ULONGLONG from,
+                                ULONGLONG to) {
+  const std::size_t source = RecordOffset(from);
+  static_cast<void>(donor.at(source + FakeImage::fake_file_record_size - 1));
+  static_cast<void>(
+      image.at(RecordOffset(to) + FakeImage::fake_file_record_size - 1));
+  std::memcpy(&image[RecordOffset(to)], &donor[source],
+              FakeImage::fake_file_record_size);
+}
+
 void RecordEdit::StoreByte(std::vector<BYTE>& image, std::size_t offset,
                            BYTE value) {
   Store<BYTE>(image, offset, value);

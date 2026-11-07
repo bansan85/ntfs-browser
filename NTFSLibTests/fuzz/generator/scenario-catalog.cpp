@@ -10,8 +10,11 @@
 #include <ntfs-browser/tool/fuzzgen/file-record-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/index-fixture-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/index-slack-scenarios.h>
+#include <ntfs-browser/tool/fuzzgen/legacy-attribute-list-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/legacy-builder-scenarios.h>
+#include <ntfs-browser/tool/fuzzgen/legacy-index-block-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/legacy-index-root-scenarios.h>
+#include <ntfs-browser/tool/fuzzgen/legacy-residency-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/legacy-root-record-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/mft-fixture-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/mft-scan-scenarios.h>
@@ -52,6 +55,9 @@ ScenarioRegistry ScenarioCatalog::Build() {
   LegacyIndexRootScenarios::Register(registry);
   LegacyRootRecordScenarios::Register(registry);
   LegacyBuilderScenarios::Register(registry);
+  LegacyAttributeListScenarios::Register(registry);
+  LegacyIndexBlockScenarios::Register(registry);
+  LegacyResidencyScenarios::Register(registry);
   return registry;
 }
 
