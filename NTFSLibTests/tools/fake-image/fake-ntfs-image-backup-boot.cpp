@@ -6,9 +6,9 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 
 #include "data/ntfs-bpb.h"
-#include "fake-ntfs-image.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 

@@ -13,9 +13,9 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "fake-ntfs-image.h"
 #include "fuzz-input-writer.h"
 #include "usn-journal-record.h"
 

@@ -19,8 +19,8 @@
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/record/carved-name.h>
+#include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
 
-#include "counting-disk-reader.h"
 #include "mft/tree-testing.h"
 #include "test-log-sink.h"
 

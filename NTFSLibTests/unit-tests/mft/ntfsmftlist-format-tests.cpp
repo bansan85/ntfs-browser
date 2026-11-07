@@ -20,8 +20,8 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 
-#include "fake-ntfs-image.h"
 #include "mft-tree-parent-support.h"
 #include "mft-tree-state-support.h"
 #include "name-tree-support.h"

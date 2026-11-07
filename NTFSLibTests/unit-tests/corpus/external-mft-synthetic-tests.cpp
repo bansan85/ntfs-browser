@@ -15,9 +15,9 @@
 #include <gsl/narrow>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/disk-readers/standalone-mft-disk-reader.h>
 
 #include "external-mft-support.h"
-#include "standalone-mft-disk-reader.h"
 #include "volume/volume-geometry.h"
 
 namespace {

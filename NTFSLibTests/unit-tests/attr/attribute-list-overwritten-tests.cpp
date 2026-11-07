@@ -12,12 +12,12 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
+#include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "counting-disk-reader.h"
-#include "fake-ntfs-image.h"
 #include "level-recorder.h"
-#include "memory-disk-reader.h"
 #include "nonresident-index-support.h"
 
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;

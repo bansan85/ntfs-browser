@@ -1,5 +1,3 @@
-#include "standalone-mft-disk-reader.h"
-
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
@@ -24,6 +22,7 @@
 #include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/disk-readers/standalone-mft-disk-reader.h>
 
 #include "data/file-record-header.h"
 #include "data/header-non-resident.h"

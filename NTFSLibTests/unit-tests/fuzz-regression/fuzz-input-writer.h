@@ -14,10 +14,9 @@
 
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
-
-#include "fuzz-core.h"
-#include "memory-disk-reader.h"
-#include "recording-disk-reader.h"
+#include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
+#include <ntfs-browser/test/disk-readers/recording-disk-reader.h>
+#include <ntfs-browser/test/fuzz/fuzz-core.h>
 
 namespace NTFS_BROWSER_NAMESPACE {
 

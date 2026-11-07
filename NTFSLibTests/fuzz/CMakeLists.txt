@@ -21,17 +21,22 @@ endif()
 add_library(
   NtfsFuzzCore
   STATIC
-  "fuzz-core.h"
+  "include/ntfs-browser/test/fuzz/fuzz-core.h"
   "fuzz-core.cpp"
-  "looping-disk-reader.h"
+  "include/ntfs-browser/test/fuzz/looping-disk-reader.h"
   "looping-disk-reader.cpp"
-  "named-stream-probe.h"
-  "gap-collation-probe.h"
+  "include/ntfs-browser/test/fuzz/named-stream-probe.h"
+  "include/ntfs-browser/test/fuzz/gap-collation-probe.h"
   "scan-probes.h"
   "scan-probes.cpp"
 )
 
 target_link_libraries(NtfsFuzzCore PUBLIC ${PROJECT_NAME})
+
+target_include_directories(
+  NtfsFuzzCore
+  PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
 
 # FuzzJournalScanner() drives the journal scanner, an internal class: it needs
 # the src/ header, and the macro that makes the library export it (defined in

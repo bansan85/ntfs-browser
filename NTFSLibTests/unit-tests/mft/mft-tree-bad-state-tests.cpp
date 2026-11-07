@@ -16,11 +16,11 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "alloc-failure-support.h"
 #include "alloc-test-support.h"
-#include "fake-ntfs-image.h"
 #include "mft-tree-state-support.h"
 #include "mft/tree-testing.h"
 #include "test-log-sink.h"

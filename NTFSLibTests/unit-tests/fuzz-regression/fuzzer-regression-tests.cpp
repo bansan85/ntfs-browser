@@ -15,12 +15,12 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/fuzz/fuzz-core.h>
+#include <ntfs-browser/test/fuzz/looping-disk-reader.h>
 
 #include "frozen/bits/elsa_std.h"
 #include "frozen/unordered_map.h"
-#include "fuzz-core.h"
 #include "fuzzer-expected-messages.h"
-#include "looping-disk-reader.h"
 #include "test-log-sink.h"
 
 using NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog;

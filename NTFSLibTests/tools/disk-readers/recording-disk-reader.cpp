@@ -1,5 +1,3 @@
-#include "recording-disk-reader.h"
-
 #include <ntfs-browser/win-types.h>
 
 #include <filesystem>
@@ -16,6 +14,7 @@
 
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/disk-readers/recording-disk-reader.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 

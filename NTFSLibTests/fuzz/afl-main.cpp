@@ -2,7 +2,7 @@
 #include <string>
 #include <vector>
 
-#include "fuzz-core.h"
+#include <ntfs-browser/test/fuzz/fuzz-core.h>
 
 // Windows gives a wmain() the command line as wide characters. A narrow
 // main() only ever sees it through the active ANSI code page, which cannot

@@ -21,10 +21,10 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "attribute-list-support.h"
-#include "fake-ntfs-image.h"
 #include "nonresident-index-support.h"
 #include "test-log-sink.h"
 

@@ -25,8 +25,8 @@ target_sources(
     "traverse-sub-entries-recovery-tests.cpp"
     "update-sequence-words-tests.cpp"
     "volume-options-tests.cpp"
-    "${PROJECT_SOURCE_DIR}/NTFSLibTests/fuzz/named-stream-probe.h"
-    "${PROJECT_SOURCE_DIR}/NTFSLibTests/fuzz/gap-collation-probe.h"
+    "${PROJECT_SOURCE_DIR}/NTFSLibTests/fuzz/include/ntfs-browser/test/fuzz/named-stream-probe.h"
+    "${PROJECT_SOURCE_DIR}/NTFSLibTests/fuzz/include/ntfs-browser/test/fuzz/gap-collation-probe.h"
 )
 
 target_include_directories(

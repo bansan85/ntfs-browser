@@ -15,8 +15,8 @@
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/record/carved-name.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 
-#include "fake-ntfs-image.h"
 #include "record/slack-carver.h"
 
 namespace Record = NTFS_BROWSER_NAMESPACE::Record;

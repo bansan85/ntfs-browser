@@ -6,8 +6,7 @@
 
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
-
-#include "counting-disk-reader.h"
+#include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
 
 namespace NtfsBrowser {
 namespace Mft {

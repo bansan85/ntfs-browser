@@ -1,5 +1,3 @@
-#include "fuzz-core.h"
-
 #include <ntfs-browser/win-types.h>
 
 #include <array>
@@ -33,13 +31,14 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/record/carved-name.h>
+#include <ntfs-browser/test/fuzz/fuzz-core.h>
+#include <ntfs-browser/test/fuzz/gap-collation-probe.h>
+#include <ntfs-browser/test/fuzz/looping-disk-reader.h>
+#include <ntfs-browser/test/fuzz/named-stream-probe.h>
 #include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/usn/types.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "gap-collation-probe.h"
-#include "looping-disk-reader.h"
-#include "named-stream-probe.h"
 #include "scan-probes.h"
 #include "usn/usn-record-scanner.h"
 

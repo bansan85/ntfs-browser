@@ -31,6 +31,8 @@
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/disk-readers/partition-disk-reader.h>
+#include <ntfs-browser/test/disk-readers/standalone-mft-disk-reader.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "attr/vol-name.h"
@@ -39,8 +41,6 @@
 #include "external-mft-support.h"
 #include "io/file-record-attr-types.h"
 #include "md5-test-support.h"
-#include "partition-disk-reader.h"
-#include "standalone-mft-disk-reader.h"
 #include "volume/volume-geometry.h"
 
 namespace {

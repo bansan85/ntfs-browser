@@ -9,12 +9,11 @@
 
 #include <ntfs-browser/io/directory-read-ahead.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
+#include <ntfs-browser/test/disk-readers/throttled-disk-reader.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
-
-#include "counting-disk-reader.h"
-#include "fake-ntfs-image.h"
-#include "throttled-disk-reader.h"
 
 namespace NtfsBrowser {
 namespace Cache {

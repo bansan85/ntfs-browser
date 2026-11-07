@@ -13,11 +13,11 @@
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
+#include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 
 #include "alloc-test-support.h"
-#include "counting-disk-reader.h"
-#include "fake-ntfs-image.h"
-#include "memory-disk-reader.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

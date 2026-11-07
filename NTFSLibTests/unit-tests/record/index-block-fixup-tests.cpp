@@ -13,11 +13,11 @@
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 
 #include "data/file-record-header.h"
 #include "data/index-block.h"
-#include "fake-ntfs-image.h"
-#include "memory-disk-reader.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 

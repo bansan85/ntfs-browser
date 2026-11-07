@@ -19,14 +19,14 @@
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "alloc-test-support.h"
 #include "alloc/cluster-bitmap.h"
 #include "bench-session-guard.h"
-#include "counting-disk-reader.h"
-#include "fake-ntfs-image.h"
 #include "knob-effect-support.h"
 #include "mft-tree-state-support.h"
 #include "mft/tree-testing.h"

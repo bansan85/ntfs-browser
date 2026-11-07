@@ -17,7 +17,7 @@
   #include <sys/stat.h>
   #include <unistd.h>
 
-  #include "fake-ntfs-image.h"
+  #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #endif
 
 using Catch::Matchers::ContainsSubstring;

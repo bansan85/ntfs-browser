@@ -17,9 +17,9 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 
 #include "directory-read-ahead-support.h"
-#include "fake-ntfs-image.h"
 #include "probe-walk-support.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

@@ -15,8 +15,7 @@
 
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-
-#include "memory-disk-reader.h"
+#include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Attr {

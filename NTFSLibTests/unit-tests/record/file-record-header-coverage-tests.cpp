@@ -9,10 +9,10 @@
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/fake-image/file-record-header-edit.h>
 
 #include "data/file-record-header.h"
-#include "fake-ntfs-image.h"
-#include "file-record-header-edit.h"
 #include "record/header.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

@@ -27,14 +27,14 @@
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
+#include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "bench-session-guard.h"
 #include "cluster-account-support.h"
-#include "counting-disk-reader.h"
-#include "fake-ntfs-image.h"
 #include "io/file-reader.h"
-#include "memory-disk-reader.h"
 #include "test-log-sink.h"
 #include "util/chunk-pool.h"
 

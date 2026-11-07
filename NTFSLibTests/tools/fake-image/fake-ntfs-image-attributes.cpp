@@ -13,13 +13,13 @@
 #include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 
 #include "attr/flags.h"
 #include "data/header-non-resident.h"
 #include "data/header-resident.h"
 #include "data/index-block.h"
 #include "fake-ntfs-image-internal.h"
-#include "fake-ntfs-image.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 

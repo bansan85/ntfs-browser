@@ -13,9 +13,9 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 
 #include "attr/non-resident.h"
-#include "fake-ntfs-image.h"
 #include "nonresident-index-support.h"
 #include "optional-access.h"
 

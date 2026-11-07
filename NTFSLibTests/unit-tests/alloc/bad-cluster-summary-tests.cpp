@@ -14,11 +14,11 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 
 #include "alloc-test-support.h"
 #include "alloc/bad-cluster-list.h"
 #include "alloc/cluster-bitmap.h"
-#include "fake-ntfs-image.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

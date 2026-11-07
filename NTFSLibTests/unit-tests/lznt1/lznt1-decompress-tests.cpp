@@ -8,9 +8,9 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 
 #include "compression-test-constants.h"
-#include "fake-ntfs-image.h"
 #include "lznt1/decompress.h"
 
 namespace {

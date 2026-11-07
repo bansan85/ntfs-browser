@@ -15,10 +15,9 @@
 
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
+#include <ntfs-browser/test/disk-readers/throttled-disk-reader.h>
 #include <ntfs-browser/tuning/tuning.h>
-
-#include "memory-disk-reader.h"
-#include "throttled-disk-reader.h"
 
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;

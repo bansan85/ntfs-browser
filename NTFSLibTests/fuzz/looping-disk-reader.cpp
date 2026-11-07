@@ -1,5 +1,3 @@
-#include "looping-disk-reader.h"
-
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
@@ -7,6 +5,8 @@
 #include <fstream>
 #include <iterator>
 #include <utility>
+
+#include <ntfs-browser/test/fuzz/looping-disk-reader.h>
 
 namespace NtfsFuzz {
 

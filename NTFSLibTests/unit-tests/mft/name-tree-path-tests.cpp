@@ -17,10 +17,10 @@
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "fake-ntfs-image.h"
-#include "memory-disk-reader.h"
 #include "mft/tree-testing.h"
 #include "name-support.h"
 #include "name-tree-support.h"

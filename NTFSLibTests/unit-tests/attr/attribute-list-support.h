@@ -9,10 +9,10 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "fake-ntfs-image.h"
-#include "memory-disk-reader.h"
 #include "nonresident-index-support.h"
 #include "test-log-sink.h"
 

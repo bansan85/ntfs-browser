@@ -2,19 +2,19 @@
 add_library(
   NtfsTestDiskReaders
   STATIC
-  "counting-disk-reader.h"
+  "include/ntfs-browser/test/disk-readers/counting-disk-reader.h"
   "counting-disk-reader.cpp"
-  "memory-disk-reader.h"
+  "include/ntfs-browser/test/disk-readers/memory-disk-reader.h"
   "memory-disk-reader.cpp"
-  "sequential-disk-reader.h"
+  "include/ntfs-browser/test/disk-readers/sequential-disk-reader.h"
   "sequential-disk-reader.cpp"
-  "partition-disk-reader.h"
+  "include/ntfs-browser/test/disk-readers/partition-disk-reader.h"
   "partition-disk-reader.cpp"
-  "recording-disk-reader.h"
+  "include/ntfs-browser/test/disk-readers/recording-disk-reader.h"
   "recording-disk-reader.cpp"
-  "standalone-mft-disk-reader.h"
+  "include/ntfs-browser/test/disk-readers/standalone-mft-disk-reader.h"
   "standalone-mft-disk-reader.cpp"
-  "throttled-disk-reader.h"
+  "include/ntfs-browser/test/disk-readers/throttled-disk-reader.h"
   "throttled-disk-reader.cpp"
 )
 
@@ -22,7 +22,7 @@ add_library(
 # builds (boot sector, file record header, non-resident attribute header).
 target_include_directories(
   NtfsTestDiskReaders
-  PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}"
+  PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../../src"
 )
 

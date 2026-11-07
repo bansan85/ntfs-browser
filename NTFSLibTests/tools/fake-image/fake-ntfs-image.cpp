@@ -1,5 +1,3 @@
-#include "fake-ntfs-image.h"
-
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
@@ -19,6 +17,8 @@
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/fake-image/file-record-header-edit.h>
 
 #include "data/file-record-header.h"
 #include "data/header-non-resident.h"
@@ -27,7 +27,6 @@
 #include "data/standard-information.h"
 #include "data/volume-information.h"
 #include "fake-ntfs-image-internal.h"
-#include "file-record-header-edit.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 

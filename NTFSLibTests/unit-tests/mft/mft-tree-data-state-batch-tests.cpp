@@ -14,11 +14,11 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 
 #include "alloc-test-support.h"
 #include "alloc/cluster-bitmap.h"
-#include "counting-disk-reader.h"
-#include "fake-ntfs-image.h"
 #include "mft/tree-testing.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;

@@ -13,10 +13,10 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "alloc-test-support.h"
-#include "fake-ntfs-image.h"
 #include "test-log-sink.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;

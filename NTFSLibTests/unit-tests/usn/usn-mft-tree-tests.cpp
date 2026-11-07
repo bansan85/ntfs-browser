@@ -13,9 +13,9 @@
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "fake-ntfs-image.h"
 #include "usn-journal-record.h"
 #include "usn-test-support.h"
 

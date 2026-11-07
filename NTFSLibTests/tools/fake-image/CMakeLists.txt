@@ -2,7 +2,7 @@
 add_library(
   NtfsFakeImage
   STATIC
-  "fake-ntfs-image.h"
+  "include/ntfs-browser/test/fake-image/fake-ntfs-image.h"
   "fake-ntfs-image-internal.h"
   "fake-ntfs-image.cpp"
   "fake-ntfs-image-records.cpp"
@@ -27,16 +27,16 @@ add_library(
   "fake-ntfs-image-efs.cpp"
   "fake-ntfs-image-slack.cpp"
   "fake-ntfs-image-usn.cpp"
-  "file-record-header-edit.h"
+  "include/ntfs-browser/test/fake-image/file-record-header-edit.h"
 )
 
-# fuzz/ resolves the bare "named-stream-probe.h" and "gap-collation-probe.h"
-# that fake-ntfs-image.h includes. src/ resolves the on-disk layouts.
+# fuzz/include resolves the named-stream-probe.h and gap-collation-probe.h that
+# fake-ntfs-image.h includes. src/ resolves the on-disk layouts.
 target_include_directories(
   NtfsFakeImage
   PUBLIC
-    "${CMAKE_CURRENT_SOURCE_DIR}"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../fuzz"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../fuzz/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/../../../src"
 )
 

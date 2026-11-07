@@ -16,8 +16,8 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 
-#include "fake-ntfs-image.h"
 #include "long-path-support.h"
 #include "name-support.h"
 #include "ntfsdir-sample-support.h"

@@ -13,6 +13,8 @@
 #include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/fake-image/file-record-header-edit.h>
 
 #include "data/file-record-flag.h"
 #include "data/file-record-header.h"
@@ -23,8 +25,6 @@
 #include "data/header-resident.h"
 #include "data/standard-information.h"
 #include "data/std-info-permission.h"
-#include "fake-ntfs-image.h"
-#include "file-record-header-edit.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 

@@ -19,12 +19,12 @@
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "efs-test-support.h"
 #include "efs-tests-support.h"
 #include "efs/fek.h"
-#include "fake-ntfs-image.h"
 #include "scripted-disk-reader.h"
 #include "test-log-sink.h"
 

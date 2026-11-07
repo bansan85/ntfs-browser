@@ -15,10 +15,10 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 
 #include "cluster-account-support.h"
 #include "data/std-info-permission.h"
-#include "fake-ntfs-image.h"
 #include "local-time.h"
 #include "mft-tree-parent-support.h"
 #include "ntfsmftlist-sample-support.h"

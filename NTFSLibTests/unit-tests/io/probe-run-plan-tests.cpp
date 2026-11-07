@@ -17,10 +17,10 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/tuning/tuning.h>
 
-#include "counting-disk-reader.h"
-#include "fake-ntfs-image.h"
 #include "io/mft-runs.h"
 #include "probe-walk-support.h"
 

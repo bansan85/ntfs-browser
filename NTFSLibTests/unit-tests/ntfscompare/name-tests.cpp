@@ -22,9 +22,10 @@
   #include <windows.h>
 #endif
 
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+
 #include "compare-engine.h"
 #include "entry.h"
-#include "fake-ntfs-image.h"
 #include "library-walk.h"
 #include "long-path-support.h"
 #include "name-support.h"

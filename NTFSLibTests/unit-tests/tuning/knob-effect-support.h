@@ -20,12 +20,12 @@
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
+#include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/tuning/knobs.h>
 #include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "counting-disk-reader.h"
-#include "memory-disk-reader.h"
 #include "scan-comparison.h"
 #include "test-log-sink.h"
 

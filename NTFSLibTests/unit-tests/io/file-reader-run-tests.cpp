@@ -20,11 +20,11 @@
 #include <ntfs-browser/cache/view.h>
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
+#include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/tuning/tuning.h>
 
-#include "counting-disk-reader.h"
 #include "io/file-reader.h"
-#include "memory-disk-reader.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;

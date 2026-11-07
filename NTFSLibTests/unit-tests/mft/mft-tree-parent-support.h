@@ -7,8 +7,8 @@
 
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 
-#include "fake-ntfs-image.h"
 #include "volume-tree-support.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tests::MftTreeParents {

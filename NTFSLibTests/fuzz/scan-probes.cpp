@@ -26,9 +26,8 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/record/carved-name.h>
+#include <ntfs-browser/test/fuzz/looping-disk-reader.h>
 #include <ntfs-browser/volume-options.h>
-
-#include "looping-disk-reader.h"
 
 namespace NtfsFuzz {
 

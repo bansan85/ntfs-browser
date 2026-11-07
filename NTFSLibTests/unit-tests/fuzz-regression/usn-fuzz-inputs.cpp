@@ -15,12 +15,11 @@
 
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
+#include <ntfs-browser/test/disk-readers/recording-disk-reader.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/fuzz/fuzz-core.h>
 #include <ntfs-browser/volume-options.h>
-
-#include "fake-ntfs-image.h"
-#include "fuzz-core.h"
-#include "memory-disk-reader.h"
-#include "recording-disk-reader.h"
 
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;

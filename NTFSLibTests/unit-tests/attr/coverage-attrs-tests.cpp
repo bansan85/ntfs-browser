@@ -22,6 +22,9 @@
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/fake-image/file-record-header-edit.h>
 
 #include "attr/file-name.h"
 #include "attr/resident.h"
@@ -35,9 +38,6 @@
 #include "data/header-resident.h"
 #include "data/standard-information.h"
 #include "data/std-info-permission.h"
-#include "fake-ntfs-image.h"
-#include "file-record-header-edit.h"
-#include "memory-disk-reader.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Attr {

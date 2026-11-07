@@ -9,8 +9,8 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/fuzz/fuzz-core.h>
 
-#include "fuzz-core.h"
 #include "test-log-sink.h"
 
 namespace {

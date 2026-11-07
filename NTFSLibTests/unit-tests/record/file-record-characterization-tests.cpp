@@ -25,6 +25,9 @@
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/fake-image/file-record-header-edit.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "data/file-record-flag.h"
@@ -38,9 +41,6 @@
 #include "data/standard-information.h"
 #include "data/std-info-permission.h"
 #include "data/volume-information.h"
-#include "fake-ntfs-image.h"
-#include "file-record-header-edit.h"
-#include "memory-disk-reader.h"
 #include "test-log-sink.h"
 
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;

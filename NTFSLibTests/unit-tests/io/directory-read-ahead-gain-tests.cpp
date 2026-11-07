@@ -10,12 +10,12 @@
 
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/disk-readers/throttled-disk-reader.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "directory-read-ahead-support.h"
-#include "fake-ntfs-image.h"
-#include "throttled-disk-reader.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;

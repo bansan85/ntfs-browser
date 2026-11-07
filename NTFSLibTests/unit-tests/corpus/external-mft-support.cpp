@@ -24,10 +24,10 @@
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
+#include <ntfs-browser/test/disk-readers/standalone-mft-disk-reader.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "counting-disk-reader.h"
-#include "standalone-mft-disk-reader.h"
 #include "test-log-sink.h"
 #include "utf/utf.h"
 

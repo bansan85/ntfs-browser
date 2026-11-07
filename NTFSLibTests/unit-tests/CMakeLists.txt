@@ -78,13 +78,9 @@ if(WIN32 AND NTFS_BROWSER_ENABLE_EFS_BCRYPT)
   target_link_libraries(NtfsBrowserTests PRIVATE bcrypt)
 endif()
 
-# The fuzz/ include lets the find-stream-named and find-subentry-gap-collation
-# tests reuse the fuzzer's probe headers instead of duplicating them.
 target_include_directories(
   NtfsBrowserTests
-  PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../src"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../fuzz"
+  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../src"
 )
 
 # Avoids hardcoding NtfsFuzzerAfl's build-output path in the test.

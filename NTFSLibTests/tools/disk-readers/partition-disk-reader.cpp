@@ -1,5 +1,3 @@
-#include "partition-disk-reader.h"
-
 #include <ntfs-browser/win-types.h>
 
 #include <cstddef>
@@ -10,6 +8,7 @@
 #include <gsl/narrow>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/disk-readers/partition-disk-reader.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 

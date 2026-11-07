@@ -9,10 +9,10 @@
 
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 
 #include "data/std-info-permission.h"
 #include "fake-ntfs-image-internal.h"
-#include "fake-ntfs-image.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 

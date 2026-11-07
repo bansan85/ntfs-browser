@@ -22,7 +22,8 @@
 #include <catch2/catch_message.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 
-#include "fake-ntfs-image.h"
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+
 #include "ntfsdir-sample-support.h"
 #include "sample-run.h"
 

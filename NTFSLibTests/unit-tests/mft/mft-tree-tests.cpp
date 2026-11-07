@@ -25,12 +25,12 @@
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "corpus-test-support.h"
 #include "data/std-info-permission.h"
-#include "fake-ntfs-image.h"
-#include "memory-disk-reader.h"
 #include "test-log-sink.h"
 
 namespace NTFS_BROWSER_NAMESPACE {

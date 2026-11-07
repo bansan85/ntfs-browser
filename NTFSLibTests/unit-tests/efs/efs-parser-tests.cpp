@@ -20,6 +20,7 @@
 #include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 
 #include "efs-test-support.h"
 #include "efs-tests-support.h"
@@ -28,7 +29,6 @@
 #include "efs/efs-stream.h"
 #include "efs/fek.h"
 #include "efs/sector-cipher.h"
-#include "fake-ntfs-image.h"
 #include "optional-access.h"
 #include "util/util.h"
 

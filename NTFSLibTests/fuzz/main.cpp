@@ -28,9 +28,8 @@
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/disk-readers/sequential-disk-reader.h>
 #include <ntfs-browser/volume-options.h>
-
-#include "sequential-disk-reader.h"
 
 using namespace NTFS_BROWSER_NAMESPACE;
 using NTFS_BROWSER_NAMESPACE::Tests::MakeGeneratorProducer;

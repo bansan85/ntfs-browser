@@ -10,10 +10,10 @@
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "alloc-test-support.h"
-#include "fake-ntfs-image.h"
 
 namespace NtfsBrowser {
 

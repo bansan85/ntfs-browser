@@ -23,11 +23,11 @@
   #include <ntfs-browser/mft/idx.h>
   #include <ntfs-browser/namespace.h>
   #include <ntfs-browser/ntfs-volume.h>
+  #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
   #include <ntfs-browser/tuning/tuning.h>
   #include <ntfs-browser/volume-options.h>
 
   #include "directory-read-ahead-support.h"
-  #include "fake-ntfs-image.h"
   #include "host-media-support.h"
   #include "io/host-media-kind.h"
   #include "io/win32-disk-reader.h"

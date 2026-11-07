@@ -10,9 +10,9 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/usn/types.h>
 
-#include "fake-ntfs-image.h"
 #include "usn-test-support.h"
 #include "usn/usn-record-scanner.h"
 

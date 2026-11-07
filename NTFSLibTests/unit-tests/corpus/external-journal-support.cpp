@@ -25,14 +25,14 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
+#include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
+#include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/usn/types.h>
 
 #include "corpus-test-support.h"
-#include "counting-disk-reader.h"
 #include "external-journal-samples.h"
 #include "external-mft-support.h"
-#include "fake-ntfs-image.h"
-#include "memory-disk-reader.h"
 #include "usn-test-support.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
