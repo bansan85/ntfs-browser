@@ -30,12 +30,13 @@ On Windows:
 - `NtfsDir "C:\Windows"` lists a folder. `NtfsDir C:\image.img\Windows` lists a folder of an image file. `NtfsDir --recursive C:` (or `-r`) lists a folder and every folder below it. `--deleted` adds deleted files, marked with `*`, and `--recover` salvages damaged directory data.
 - `NtfsMftList C:` lists every file of a volume. `--deleted` adds deleted files, and `--recover` salvages damaged entries and reads the change journal (`$UsnJrnl`), which names files the `$MFT` lost. `--threads=N` sets the threads that parse the `$MFT` and format the listing. `--clusters` counts the clusters of each deleted or damaged file by condition (intact, rewritten, bad...), `--clusters=map` also prints where they lie in the file, and `--verify-data[=sample|full]` reads the clusters presumed intact to tell zeros and NTFS metadata from data.
 - `NtfsDir`, `NtfsDir2` and `NtfsMftList` also take the benchmark options (see Benchmark and tuning).
-- `NtfsUndel` is a graphical tool that finds and recovers deleted files.
+- `NtfsUndel C:` lists the deleted files of a volume. `NtfsUndel C: --output D:\recovered --all` recovers them, and `--record N` or `--name "*.docx"` picks some. The output folder MUST be on another drive than the one that is read. `--include-doubtful` also recovers a file whose data may belong to another file.
 
 On Linux, `NtfsDir` and `NtfsMftList` take a device or an image file. Reading a device needs read access to it.
 
 - `NtfsDir /dev/sda1/Windows` or `NtfsDir ./disk.img/Windows` lists a folder.
 - `NtfsMftList /dev/sda1` or `NtfsMftList ./disk.img` lists every file of a volume, with the same options as on Windows.
+- `NtfsUndel /dev/sda1 --output /mnt/backup/recovered --all` recovers the deleted files into a folder on another drive.
 - `NtfsCompare /dev/sda1/Windows` compares the library with the operating system. If the partition is not mounted, it only compares the library's own listings with each other.
 
 ### As a library (C++)
@@ -127,7 +128,6 @@ To leave features out, or to change the build, add options to the configure step
 - `-DBUILD_SHARED_LIBS=ON` builds a DLL instead of a static library.
 - `-DNTFS_BROWSER_ENABLE_DECOMPRESSION=OFF` removes compressed-file support.
 - `-DNTFS_BROWSER_ENABLE_EFS_CRYPTOPP=OFF` and `-DNTFS_BROWSER_ENABLE_EFS_BCRYPT=OFF` remove the encryption backends (BCrypt is Windows only).
-- `-DNTFS_BROWSER_BUILD_MFC_APPS=OFF` skips the graphical tools.
 
 ## Benchmark and tuning
 
@@ -216,6 +216,7 @@ Each public class and function is described in the headers under `include/ntfs-b
 - 2026-10 — Cluster allocation from `$Bitmap`
 - 2026-10 — Bad clusters from `$BadClus`
 - 2026-10 — Change journal (`$UsnJrnl`) in recovery mode
+- 2026-11 — `NtfsAttr`, `NtfsDump` and `NtfsUndel` are console tools on Windows and Linux, MFC is gone from the build
 
 ## Credits and licence
 

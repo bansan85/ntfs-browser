@@ -1,7 +1,7 @@
-# Platform helpers shared by NtfsDir, NtfsAttr, NtfsDump, NtfsMftList and
-# NtfsCompare: a POSIX device reader, UTF-8 <-> wide conversion, local time,
-# device-path splitting, volume opening from a target, the argv adapter and the
-# buffered listing output. Portable C++: the POSIX halves sit behind
+# Platform helpers shared by NtfsDir, NtfsAttr, NtfsDump, NtfsUndel,
+# NtfsMftList and NtfsCompare: a POSIX device reader, UTF-8 <-> wide
+# conversion, local time, device-path splitting, volume opening from a target,
+# the host volume of a path, the argv adapter and the buffered listing output. Portable C++: the POSIX halves sit behind
 # #ifndef _WIN32, the Windows halves behind #ifdef _WIN32.
 add_library(
   NtfsDeviceAccess
@@ -38,6 +38,8 @@ add_library(
   "text-convert.cpp"
   "include/ntfs-browser/tool/device-access/tool-support.h"
   "tool-support.cpp"
+  "include/ntfs-browser/tool/device-access/volume-identity.h"
+  "volume-identity.cpp"
   "include/ntfs-browser/tool/device-access/volume-target.h"
   "volume-target.cpp"
 )

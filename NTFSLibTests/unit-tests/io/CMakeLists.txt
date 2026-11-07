@@ -40,20 +40,32 @@ target_include_directories(
 # The read ahead tests list a fake volume through NtfsDir's own listing code.
 target_link_libraries(NtfsBrowserTests PRIVATE NtfsDirCore)
 
-# NtfsAttr and NtfsDump run on Windows and Linux too. The tests link their
-# logic (examples/ntfsattr/ntfsattr-core.h, examples/ntfsdump/ntfsdump-core.h)
-# and run the executables.
+# NtfsAttr, NtfsDump and NtfsUndel run on Windows and Linux. The tests link
+# their logic (examples/ntfsattr/ntfsattr-core.h, examples/ntfsdump/
+# ntfsdump-core.h, examples/ntfsundel/ntfsundel-core.h and ntfsundel-cli.h) and
+# run the executables.
 target_sources(
   NtfsBrowserTests
-  PRIVATE "ntfsattr-core-tests.cpp" "ntfsdump-core-tests.cpp"
+  PRIVATE
+    "ntfsattr-core-tests.cpp"
+    "ntfsdump-core-tests.cpp"
+    "ntfsundel-advice-tests.cpp"
+    "ntfsundel-cli-tests.cpp"
+    "ntfsundel-file-tests.cpp"
+    "ntfsundel-recover-tests.cpp"
+    "ntfsundel-search-tests.cpp"
 )
-target_link_libraries(NtfsBrowserTests PRIVATE NtfsAttrCore NtfsDumpCore)
-add_dependencies(NtfsBrowserTests NtfsAttr NtfsDump)
+target_link_libraries(
+  NtfsBrowserTests
+  PRIVATE NtfsAttrCore NtfsDumpCore NtfsUndelCore
+)
+add_dependencies(NtfsBrowserTests NtfsAttr NtfsDump NtfsUndel)
 target_compile_definitions(
   NtfsBrowserTests
   PRIVATE
     NTFS_ATTR_EXE="$<TARGET_FILE:NtfsAttr>"
     NTFS_DUMP_EXE="$<TARGET_FILE:NtfsDump>"
+    NTFS_UNDEL_EXE="$<TARGET_FILE:NtfsUndel>"
 )
 
 # NtfsDir runs on Windows and Linux (examples/CMakeLists.txt). NtfsDir2, the
@@ -80,17 +92,4 @@ if(WIN32)
       "win32-disk-reader-tests.cpp"
       "win32-standing-lane-tests.cpp"
   )
-
-  # NtfsUndel's search and recovery logic (examples/ntfsundel/ntfsundel-core.h)
-  # is Windows-only, like its dialog. The tests link it directly, so the
-  # dialog's MFC never enters the test binary.
-  target_sources(
-    NtfsBrowserTests
-    PRIVATE
-      "ntfsundel-advice-tests.cpp"
-      "ntfsundel-file-tests.cpp"
-      "ntfsundel-recover-tests.cpp"
-      "ntfsundel-search-tests.cpp"
-  )
-  target_link_libraries(NtfsBrowserTests PRIVATE NtfsUndelCore)
 endif()

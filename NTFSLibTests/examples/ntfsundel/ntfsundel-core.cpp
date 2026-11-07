@@ -1,3 +1,5 @@
+#include <ntfs-browser/win-types.h>
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -10,7 +12,6 @@
 #include <utility>
 
 #include <gsl/narrow>
-#include <windows.h>
 
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/attr/base.h>
@@ -20,6 +21,16 @@
 #include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tool/device-access/text-convert.h>
+
+#ifdef _WIN32
+  #include <windows.h>
+#else
+  #include <cerrno>
+
+  #include <fcntl.h>
+  #include <unistd.h>
+#endif
 
 using namespace NTFS_BROWSER_NAMESPACE;
 
@@ -35,23 +46,38 @@ constexpr std::uint64_t kPumpRecordInterval = 5000;
 // disk.
 constexpr std::chrono::milliseconds kPumpTimeInterval(100);
 
+// FILETIME ticks in one second: they count 100 ns.
+constexpr std::uint64_t kTicksPerSecond = 10'000'000;
+
+// Seconds in one day. A FILETIME knows no leap second.
+constexpr std::uint64_t kSecondsPerDay = 86400;
+
+// Days from 0000-03-01 to 1601-01-01, the FILETIME epoch.
+constexpr std::uint64_t kDaysToFiletimeEpoch = 584694;
+
+// Days in 400 years, a full cycle of the Gregorian calendar.
+constexpr std::uint64_t kDaysPerEra = 146097;
+
+// Largest time FileTimeToSystemTime() takes: the signed 64-bit range. Past it
+// the date prints as zeros, the way the Win32 call fails.
+constexpr std::uint64_t kMaxSystemTimeTicks = 0x7FFFFFFFFFFFFFFFULL;
+
 // Filter that matches every name. Used when the user leaves the box empty.
 constexpr std::wstring_view kMatchAllFilter = L".*";
 
 // What the user is told when the data of a freed file probably belongs to
-// another file now. Ends with the question the dialog asks.
+// another file now.
 constexpr std::wstring_view kReallocatedMessage =
     L"The clusters of this file were given to another file after it was "
-    L"deleted. The recovered data probably belongs to that other file. "
-    L"Continue anyway ?";
+    L"deleted. The recovered data probably belongs to that other file.";
 
 // What the user is told when clusters of a freed file are marked bad.
 constexpr std::wstring_view kBadClustersMessage =
     L"Some clusters of this file are marked bad. The recovered data may be "
-    L"incomplete, or the read may fail. Continue anyway ?";
+    L"incomplete, or the read may fail.";
 
 // What the user is told when the allocation of a freed file could not be read.
-// It is a warning, not a question.
+// It is a warning only.
 constexpr std::wstring_view kUncheckedMessage =
     L"The allocation of the clusters of this file could not be checked. The "
     L"recovered data may be wrong.";
@@ -267,16 +293,36 @@ std::wstring TooManyFilesMessage() {
                      kMaxListedFiles);
 }
 
+// NOLINTBEGIN(readability-magic-numbers): the calendar algorithm is made of
+// them.
 std::wstring FormatWriteTime(std::uint64_t ticks) {
-  const FILETIME ft{.dwLowDateTime = static_cast<DWORD>(ticks & 0xFFFFFFFFU),
-                    .dwHighDateTime = static_cast<DWORD>(ticks >> 32U)};
-  SYSTEMTIME st{};
-  if (FileTimeToSystemTime(&ft, &st) == FALSE) {
-    st = SYSTEMTIME{};
+  if (ticks > kMaxSystemTimeTicks) {
+    return L"0000-00-00  00:00";
   }
-  return std::format(L"{:04}-{:02}-{:02}  {:02}:{:02}", st.wYear, st.wMonth,
-                     st.wDay, st.wHour, st.wMinute);
+  const std::uint64_t seconds = ticks / kTicksPerSecond;
+  const std::uint64_t second_of_day = seconds % kSecondsPerDay;
+
+  // The days count from 0000-03-01, so the leap day closes the year. This is
+  // the civil-from-days algorithm of Howard Hinnant.
+  const std::uint64_t days = seconds / kSecondsPerDay + kDaysToFiletimeEpoch;
+  const std::uint64_t era = days / kDaysPerEra;
+  const std::uint64_t day_of_era = days % kDaysPerEra;
+  const std::uint64_t year_of_era = (day_of_era - day_of_era / 1460 +
+                                     day_of_era / 36524 - day_of_era / 146096) /
+                                    365;
+  const std::uint64_t day_of_year =
+      day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+  const std::uint64_t month_from_march = (5 * day_of_year + 2) / 153;
+  const std::uint64_t day = day_of_year - (153 * month_from_march + 2) / 5 + 1;
+  const std::uint64_t month =
+      month_from_march < 10 ? month_from_march + 3 : month_from_march - 9;
+  const std::uint64_t year = year_of_era + era * 400 + (month <= 2 ? 1 : 0);
+
+  return std::format(L"{:04}-{:02}-{:02}  {:02}:{:02}", year, month, day,
+                     second_of_day / 3600, second_of_day % 3600 / 60);
 }
+
+// NOLINTEND(readability-magic-numbers)
 
 OpenedRecord OpenDeletedFile(NtfsVolume<Cache::Strategy::NoCache>& volume,
                              std::uint64_t reference) {
@@ -459,11 +505,18 @@ bool IsReservedDeviceName(std::wstring_view name) {
                          numbered_device_names.end();
 }
 
+// The separator the host puts between the parts of a path.
+#ifdef _WIN32
+constexpr wchar_t host_separator = L'\\';
+#else
+constexpr wchar_t host_separator = L'/';
+#endif
+
 // The path of the file called name in directory, with a separator between.
 std::wstring JoinPath(std::wstring_view directory, std::wstring_view name) {
   std::wstring path(directory);
   if (!path.empty() && path.back() != L'\\' && path.back() != L'/') {
-    path += L'\\';
+    path += host_separator;
   }
   path += name;
   return path;
@@ -485,12 +538,89 @@ std::wstring NumberedName(const std::wstring& name, unsigned copy) {
   return stem + suffix + extension;
 }
 
+#ifdef _WIN32
+
 // Reports whether a failed CREATE_NEW of path says that the name is taken: by
 // a file, or by a folder, or by a file the caller cannot open.
 bool IsNameTaken(const std::wstring& path, DWORD error) {
   return error == ERROR_FILE_EXISTS || error == ERROR_ALREADY_EXISTS ||
          GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES;
 }
+
+// What the host reported for a failed open: GetLastError() or errno.
+using OpenError = DWORD;
+
+// Opens path for writing. A new file is the only choice unless replace is set.
+// Returns no_file_handle on failure, and the error in last_error. No sharing:
+// nothing else may write the file while it is recovered.
+NativeFileHandle OpenForRecovery(const std::wstring& path, bool replace,
+                                 OpenError& last_error) {
+  const DWORD creation = replace ? CREATE_ALWAYS : CREATE_NEW;
+  HANDLE handle =
+      CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr,
+                  creation, FILE_ATTRIBUTE_NORMAL, nullptr);
+  if (handle == INVALID_HANDLE_VALUE) {
+    last_error = GetLastError();
+    return no_file_handle;
+  }
+  return reinterpret_cast<NativeFileHandle>(handle);
+}
+
+// Reports whether the failure of OpenForRecovery() says the name is taken.
+bool OpenFailedOnTakenName(const std::wstring& path, OpenError last_error) {
+  return IsNameTaken(path, last_error);
+}
+
+// Reports whether the failure of OpenForRecovery() says the path is too long.
+bool OpenFailedOnLength(OpenError last_error) {
+  return last_error == ERROR_FILENAME_EXCED_RANGE;
+}
+
+#else
+
+// What the host reported for a failed open: GetLastError() or errno.
+using OpenError = int;
+
+// The mode of a file a recovery creates, before the umask.
+constexpr mode_t recovery_file_mode = 0644;
+
+// Bytes of UTF-8 a recovered name keeps. A file system takes 255. The rest is
+// the room for " (9999)".
+constexpr std::size_t max_name_bytes = 240;
+
+// Opens path for writing. A new file is the only choice unless replace is set.
+// Returns no_file_handle on failure, and errno in last_error.
+NativeFileHandle OpenForRecovery(const std::wstring& path, bool replace,
+                                 OpenError& last_error) {
+  const std::string narrow = Tool::DeviceAccess::PathFromWide(path).string();
+  const int flags =
+      O_WRONLY | O_CREAT | O_CLOEXEC | (replace ? O_TRUNC : O_EXCL);
+  const int descriptor = open(narrow.c_str(), flags, recovery_file_mode);
+  if (descriptor < 0) {
+    last_error = errno;
+    return no_file_handle;
+  }
+  return descriptor;
+}
+
+// Reports whether the failure of OpenForRecovery() says the name is taken.
+bool OpenFailedOnTakenName(const std::wstring& /*path*/, OpenError last_error) {
+  return last_error == EEXIST;
+}
+
+// Reports whether the failure of OpenForRecovery() says the path is too long.
+bool OpenFailedOnLength(OpenError last_error) {
+  return last_error == ENAMETOOLONG;
+}
+
+// Cuts name to at most max_name_bytes bytes of UTF-8, one character at a time.
+void CutToUtf8Bytes(std::wstring& name) {
+  while (Tool::DeviceAccess::WideToUtf8(name).size() > max_name_bytes) {
+    name.pop_back();
+  }
+}
+
+#endif
 
 }  // namespace
 
@@ -520,18 +650,19 @@ std::wstring SafeFileName(std::wstring_view name) {
   return safe;
 }
 
-RecoveryFile::RecoveryFile(void* handle, std::wstring path, NameChange change)
+RecoveryFile::RecoveryFile(NativeFileHandle handle, std::wstring path,
+                           NameChange change)
     : handle_(handle), path_(std::move(path)), change_(change) {}
 
 RecoveryFile::RecoveryFile(RecoveryFile&& other) noexcept
-    : handle_(std::exchange(other.handle_, nullptr)),
+    : handle_(std::exchange(other.handle_, no_file_handle)),
       path_(std::move(other.path_)),
       change_(other.change_) {}
 
 RecoveryFile& RecoveryFile::operator=(RecoveryFile&& other) noexcept {
   if (this != &other) {
     Close();
-    handle_ = std::exchange(other.handle_, nullptr);
+    handle_ = std::exchange(other.handle_, no_file_handle);
     path_ = std::move(other.path_);
     change_ = other.change_;
   }
@@ -542,18 +673,41 @@ RecoveryFile::~RecoveryFile() { Close(); }
 
 // Closes the file, once: a moved-from object has no handle.
 void RecoveryFile::Close() noexcept {
-  if (handle_ != nullptr) {
-    CloseHandle(handle_);
-    handle_ = nullptr;
+  if (handle_ == no_file_handle) {
+    return;
   }
+#ifdef _WIN32
+  CloseHandle(reinterpret_cast<HANDLE>(handle_));
+#else
+  close(static_cast<int>(handle_));
+#endif
+  handle_ = no_file_handle;
 }
 
 bool RecoveryFile::Write(std::span<const BYTE> chunk) {
+  if (handle_ == no_file_handle) {
+    return false;
+  }
+#ifdef _WIN32
   DWORD written = 0;
-  return handle_ != nullptr &&
-         WriteFile(handle_, chunk.data(), gsl::narrow<DWORD>(chunk.size()),
-                   &written, nullptr) != FALSE &&
+  return WriteFile(reinterpret_cast<HANDLE>(handle_), chunk.data(),
+                   gsl::narrow<DWORD>(chunk.size()), &written,
+                   nullptr) != FALSE &&
          written == chunk.size();
+#else
+  while (!chunk.empty()) {
+    const ssize_t written =
+        ::write(static_cast<int>(handle_), chunk.data(), chunk.size());
+    if (written < 0 && errno == EINTR) {
+      continue;
+    }
+    if (written <= 0) {
+      return false;
+    }
+    chunk = chunk.subspan(static_cast<std::size_t>(written));
+  }
+  return true;
+#endif
 }
 
 const std::wstring& RecoveryFile::Path() const noexcept { return path_; }
@@ -562,9 +716,13 @@ NameChange RecoveryFile::Change() const noexcept { return change_; }
 
 CreatedFile CreateRecoveryFile(std::wstring_view directory,
                                std::wstring_view name, ExistingFile existing) {
-  const std::wstring safe = SafeFileName(name);
+  std::wstring safe = SafeFileName(name);
+#ifndef _WIN32
+  CutToUtf8Bytes(safe);
+#endif
   const NameChange first_change =
       safe == name ? NameChange::None : NameChange::Unsafe;
+  const bool replace = existing == ExistingFile::Replace;
 
   for (unsigned copy = 1; copy <= kMaxNameCopies; copy++) {
     const std::wstring candidate = copy == 1 ? safe : NumberedName(safe, copy);
@@ -574,19 +732,18 @@ CreatedFile CreateRecoveryFile(std::wstring_view directory,
       return {.file = std::nullopt, .error = CreateError::PathTooLong};
     }
 
-    // No sharing: nothing else may write the file while it is recovered.
-    const DWORD creation =
-        existing == ExistingFile::Replace ? CREATE_ALWAYS : CREATE_NEW;
-    HANDLE handle =
-        CreateFileW(extended.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr,
-                    creation, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (handle != INVALID_HANDLE_VALUE) {
+    OpenError last_error = 0;
+    const NativeFileHandle handle =
+        OpenForRecovery(extended, replace, last_error);
+    if (handle != no_file_handle) {
       return {.file = RecoveryFile(
                   handle, path, copy == 1 ? first_change : NameChange::Taken),
               .error = CreateError::Failed};
     }
-    if (existing == ExistingFile::Replace ||
-        !IsNameTaken(extended, GetLastError())) {
+    if (OpenFailedOnLength(last_error)) {
+      return {.file = std::nullopt, .error = CreateError::PathTooLong};
+    }
+    if (replace || !OpenFailedOnTakenName(extended, last_error)) {
       return {.file = std::nullopt, .error = CreateError::Failed};
     }
   }

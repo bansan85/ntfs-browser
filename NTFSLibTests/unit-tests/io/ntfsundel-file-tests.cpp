@@ -287,7 +287,8 @@ TEST_CASE("CreateRecoveryFile creates a file at a path of more than 260 units",
     CHECK(created.change == NameChange::None);
     CHECK(created.path.native().size() > 260);
     // The path a user sees has no prefix.
-    CHECK(created.path.native().substr(0, 4) != LR"(\\?\)");
+    CHECK(ToolDeviceAccess::WideFromPath(created.path).substr(0, 4) !=
+          LR"(\\?\)");
   }
 
   CHECK(ReadAll(directory.Directory() / (std::string(120, 'n') + ".bin")) ==

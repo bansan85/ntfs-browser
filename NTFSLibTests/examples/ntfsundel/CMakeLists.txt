@@ -1,8 +1,10 @@
-# The search and recovery logic, with no MFC in it, so the unit tests can
-# link it too (unit-tests/io/ntfsundel-*-tests.cpp).
+# The search, recovery and command-line logic, shared with the unit tests
+# (unit-tests/io/ntfsundel-*-tests.cpp). main.cpp only hands over argv.
 add_library(
   NtfsUndelCore
   STATIC
+  "include/ntfs-browser/example/ntfsundel/ntfsundel-cli.h"
+  "ntfsundel-cli.cpp"
   "include/ntfs-browser/example/ntfsundel/ntfsundel-core.h"
   "ntfsundel-core.cpp"
 )
@@ -10,32 +12,21 @@ target_include_directories(
   NtfsUndelCore
   PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
-target_link_libraries(NtfsUndelCore PUBLIC ${PROJECT_NAME})
+target_link_libraries(NtfsUndelCore PUBLIC ${PROJECT_NAME} NtfsDeviceAccess)
 
-# The MFC dialog app. clang-cl cannot build MFC: the root option turns it off.
-if(NTFS_BROWSER_BUILD_MFC_APPS)
-  add_executable(
-    NtfsUndel
-    WIN32
-    "ntfsundel.cpp"
-    "ntfsundelDlg.cpp"
-    "StdAfx.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/ntfsundel.clw"
-    "${CMAKE_CURRENT_SOURCE_DIR}/ntfsundel.rc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/res/ntfsundel.rc2"
+add_executable(NtfsUndel WIN32 "main.cpp")
+target_link_libraries(NtfsUndel PRIVATE ${PROJECT_NAME} NtfsUndelCore)
+if(WIN32)
+  target_sources(NtfsUndel PRIVATE "${NTFS_BROWSER_LONG_PATH_MANIFEST}")
+endif()
+set_target_properties(NtfsUndel PROPERTIES WIN32_EXECUTABLE 0)
+if(WIN32 AND BUILD_SHARED_LIBS)
+  add_custom_command(
+    TARGET NtfsUndel
+    POST_BUILD
+    COMMAND
+      ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:NtfsUndel>
+      $<TARGET_FILE_DIR:NtfsUndel>
+    COMMAND_EXPAND_LISTS
   )
-  target_compile_definitions(NtfsUndel PRIVATE _AFXDLL)
-  target_link_libraries(NtfsUndel PRIVATE ${PROJECT_NAME} NtfsUndelCore)
-  set_target_properties(NtfsUndel PROPERTIES WIN32_EXECUTABLE 1)
-  target_link_options(NtfsUndel PRIVATE "/entry:wWinMainCRTStartup")
-  if(WIN32 AND BUILD_SHARED_LIBS)
-    add_custom_command(
-      TARGET NtfsUndel
-      POST_BUILD
-      COMMAND
-        ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:NtfsUndel>
-        $<TARGET_FILE_DIR:NtfsUndel>
-      COMMAND_EXPAND_LISTS
-    )
-  endif()
 endif()

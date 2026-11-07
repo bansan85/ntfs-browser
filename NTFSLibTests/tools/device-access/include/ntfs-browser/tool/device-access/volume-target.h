@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -45,6 +46,9 @@ struct OpenedVolume {
   // no leading or trailing separator. Empty means the root.
   std::wstring inside;
   std::wstring error;
+  // What the volume is read from: the image file, the device, or on Windows the
+  // root of the drive ("c:\"). Set even when the volume does not open.
+  std::filesystem::path source;
 };
 
 // Opens the volume that target names. The target is an image file or a device

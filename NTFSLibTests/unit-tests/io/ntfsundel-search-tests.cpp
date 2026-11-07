@@ -33,8 +33,10 @@ using ExampleNtfsUndel::SearchResult;
 // $STANDARD_INFORMATION alter time the fake image writes into every record.
 constexpr std::uint64_t fake_write_time = 0x1112131415161718ULL;
 
-// fake_write_time as GetFileTime reports it: converted to local time.
+// fake_write_time as GetFileTime reports it: converted to local time on
+// Windows, and left in UTC elsewhere.
 std::uint64_t LocalFakeWriteTime() {
+#ifdef _WIN32
   const FILETIME utc{
       .dwLowDateTime = static_cast<DWORD>(fake_write_time & 0xFFFFFFFFU),
       .dwHighDateTime = static_cast<DWORD>(fake_write_time >> 32U)};
@@ -42,6 +44,9 @@ std::uint64_t LocalFakeWriteTime() {
   REQUIRE(FileTimeToLocalFileTime(&utc, &local) != 0);
   return (static_cast<std::uint64_t>(local.dwHighDateTime) << 32U) |
          local.dwLowDateTime;
+#else
+  return fake_write_time;
+#endif
 }
 
 // A volume over image. Freed records are visible only with include_deleted.

@@ -1,7 +1,7 @@
 #pragma once
 
-// Search and recovery behind the ntfsundel dialog. Plain C++ over the library,
-// with no MFC types, so the unit tests can drive it without a window.
+// Search and recovery behind the ntfsundel command. Plain C++ over the library,
+// so the unit tests drive it without a process. Builds on Windows and POSIX.
 
 #include <ntfs-browser/win-types.h>
 
@@ -22,15 +22,16 @@
 
 namespace NTFS_BROWSER_NAMESPACE::Example::NtfsUndel {
 
-// Most rows one search lists. The scan stops once this many have matched. A UI
-// bound, not an NTFS limit, so one search stays bounded on a busy volume.
+// Most rows one search lists. The scan stops once this many have matched. A
+// bound on the size of a listing, not an NTFS limit, so one search stays
+// bounded on a busy volume.
 inline constexpr std::size_t kMaxListedFiles = 5000;
 
 // Bytes per read and write while recovering a file. Keeps memory bounded for
 // files of any size.
 inline constexpr std::uint32_t kCopyChunkSize = 64 * 1024;
 
-// Recovering a file this large asks the user first. Likely a damaged size.
+// Recovering a file this large needs a yes first. Likely a damaged size.
 inline constexpr std::uint64_t kConfirmFileSize = 100 * 1024 * 1024;
 
 // One freed file whose name matched the search.
@@ -46,7 +47,7 @@ struct DeletedFile {
   std::uint64_t write_time = 0;
 };
 
-// Hooks that let the caller keep the scan responsive and stoppable.
+// Hooks that let the caller keep the scan stoppable.
 struct SearchControl {
   // Record numbers at or past this value are not scanned.
   std::uint64_t max_records = 500000;
@@ -56,7 +57,7 @@ struct SearchControl {
   // Polled before every record. True ends the scan.
   std::function<bool()> stop_requested;
   // Polled every few thousand records, at most every 100 ms. False ends the
-  // scan.
+  // scan. A window program pumps its messages here.
   std::function<bool()> pump_messages;
 };
 
@@ -78,7 +79,7 @@ std::optional<SearchResult> SearchDeletedFiles(
         NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>& volume,
     std::wstring_view filter, const SearchControl& control);
 
-// Warning the dialog shows when a search stops at kMaxListedFiles. Built from
+// Warning to show when a search stops at kMaxListedFiles. Built from
 // that constant, so the number shown is the limit the scan enforces.
 std::wstring TooManyFilesMessage();
 
@@ -168,14 +169,14 @@ RecoveryCheck
     AssessRecovery(const NTFS_BROWSER_NAMESPACE::Io::FileRecord<
                    NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>& record);
 
-// The text that names check.cause, for a dialog. Empty for None.
+// The text that names check.cause, a statement with no question in it. Empty
+// for None.
 std::wstring RecoveryMessage(const RecoveryCheck& check);
 
 // True when the copy may go on. A Proceed check is true without asking. Any
 // other check is put to confirm, whose answer is returned: the caller shows
 // the message and answers false to stop. The caller copies nothing when this
-// is false. Uses no window and no Win32 call, so a command-line tool can reuse
-// it.
+// is false.
 bool ShouldRecover(
     const NTFS_BROWSER_NAMESPACE::Io::FileRecord<
         NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>& record,
@@ -185,7 +186,8 @@ bool ShouldRecover(
 inline constexpr std::size_t kMaxFileNameUnits = 255;
 
 // Longest path Win32 takes, in UTF-16 units, with the extended-length prefix
-// and the terminator. A longer one cannot be created.
+// and the terminator. A longer one cannot be created. The same bound holds on
+// POSIX, so a recovery path has one limit on every platform.
 inline constexpr std::size_t kMaxExtendedPathUnits = 32767;
 
 // Copies of a name tried when it is taken, before the recovery gives up:
@@ -231,10 +233,17 @@ enum class CreateError : std::uint8_t {
   NoFreeName
 };
 
+// The handle of the operating system for a file: a Win32 HANDLE or a POSIX file
+// descriptor, held as an integer.
+using NativeFileHandle = std::intptr_t;
+
+// A handle that names no file. It is also what Win32 returns for a failure.
+inline constexpr NativeFileHandle no_file_handle = -1;
+
 // A file a recovery writes into. It closes when it goes.
 class RecoveryFile {
  public:
-  RecoveryFile(void* handle, std::wstring path, NameChange change);
+  RecoveryFile(NativeFileHandle handle, std::wstring path, NameChange change);
   RecoveryFile(const RecoveryFile&) = delete;
   RecoveryFile& operator=(const RecoveryFile&) = delete;
   RecoveryFile(RecoveryFile&& other) noexcept;
@@ -254,8 +263,8 @@ class RecoveryFile {
  private:
   void Close() noexcept;
 
-  // The Win32 handle, null once closed.
-  void* handle_;
+  // The handle of the open file, no_file_handle once closed.
+  NativeFileHandle handle_;
   std::wstring path_;
   NameChange change_;
 };
@@ -267,9 +276,13 @@ struct CreatedFile {
 };
 
 // Creates the file a recovery writes into, named name, in the folder
-// directory. The name goes through SafeFileName() first, and the path through
-// the extended-length form (see ToExtendedLengthPath()), so a path of up to
-// 32 767 units works whatever the LongPathsEnabled switch says. With
+// directory. The name goes through SafeFileName() first, so a file made on
+// POSIX opens on Windows too. On POSIX the name is also cut to 240 bytes of
+// UTF-8, which leaves room for a copy number under the 255 bytes a file system
+// takes. The path goes through the extended-length form (see
+// ToExtendedLengthPath()), so a path of up to 32 767 units works on Windows
+// whatever the LongPathsEnabled switch says. directory is a path as
+// WideFromPath() writes it. With
 // ExistingFile::KeepBoth, a file that exists is never overwritten. Names that
 // differ only by case are the same name in a folder Win32 reads without regard
 // to case, so two files recovered as "readme" and "README" end as "readme" and

@@ -49,6 +49,7 @@ template <Cache::Strategy S>
 OpenedVolume<S> OpenDevice(const std::filesystem::path& device,
                            const VolumeOptions& options) {
   OpenedVolume<S> opened;
+  opened.source = device;
   const std::wstring label = WideFromPath(device);
 #ifdef _WIN32
   // Win32DiskReader opens a plain file the same way as a device.
@@ -93,6 +94,7 @@ OpenedVolume<S> OpenDrive(std::wstring_view target,
   }
 
   opened.inside = JoinInsidePath(target.substr(2));
+  opened.source = std::wstring{target[0], L':', L'\\'};
   opened.volume = std::make_unique<NtfsVolume<S>>(target[0], options);
   if (!opened.volume->IsVolumeOK()) {
     opened.volume.reset();

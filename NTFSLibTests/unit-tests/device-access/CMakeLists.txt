@@ -15,6 +15,7 @@ target_sources(
     "include/ntfs-browser/test/device-access/temp-dir.h"
     "text-convert-tests.cpp"
     "tool-support-tests.cpp"
+    "volume-identity-tests.cpp"
 )
 
 target_link_libraries(NtfsBrowserTests PRIVATE NtfsDeviceAccess)
