@@ -8,7 +8,7 @@ namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 // The inputs where an $ATTRIBUTE_LIST is split or cut.
 class AttributeListFixtureScenarios {
  public:
-  // Adds attribute_list_split_attribute and attr_list_nonres_entry_past_end.
+  // Adds attribute_list_split_attribute.
   static void Register(ScenarioRegistry& registry);
 };
 
