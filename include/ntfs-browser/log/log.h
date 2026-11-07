@@ -12,8 +12,6 @@ namespace NTFS_BROWSER_NAMESPACE::Log {
 // Severity of a message, and, for a sink, the least severe message it
 // accepts. Ordered most to least severe. off never matches a message, so
 // as a sink threshold it silences that sink.
-// The names carry a k prefix because <windows.h> defines ERROR and MFC
-// defines TRACE as macros, which an ERROR or TRACE enumerator would hit.
 // One byte wide: it is only ever a small tag.
 enum class Level : std::uint8_t { Off, Error, Warn, Info, Debug, Trace };
 

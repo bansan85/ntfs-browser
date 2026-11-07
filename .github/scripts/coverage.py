@@ -26,8 +26,7 @@ Why both binaries are instrumented: each regression testcase spawns
 NtfsFuzzerAfl as a child process, so the library code those tests reach runs
 in the child. LLVM_PROFILE_FILE carries %p, one profile per process.
 
-Only NtfsBrowserTests and NtfsFuzzerAfl are built: the MFC samples are never
-compiled.
+Only NtfsBrowserTests and NtfsFuzzerAfl are built.
 """
 
 import argparse

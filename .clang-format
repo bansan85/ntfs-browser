@@ -129,10 +129,6 @@ IfMacros:
   - KJ_IF_MAYBE
 IncludeBlocks:   Regroup
 IncludeCategories:
-  - Regex:           '\"StdAfx.h\"'
-    Priority:        0
-    SortPriority:    0
-    CaseSensitive:   true
   - Regex:           '^<ntfs-browser/win-types.h>'
     Priority:        1
     SortPriority:    0

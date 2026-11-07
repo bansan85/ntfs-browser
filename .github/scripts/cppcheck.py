@@ -40,10 +40,6 @@ from pathlib import Path
 IGNORE = "*3rdparty*"
 SUPPRESS = "*:*3rdparty*"
 
-# MFC headers stop with #error unless StdAfx.h defined this guard first.
-# Defining it here lets cppcheck read the MFC demo apps.
-DEFINES = ["-D__AFXWIN_H__"]
-
 # The VS generator writes .slnx from VS 2026 on, .sln before.
 SOLUTION_SUFFIXES = (".sln", ".slnx")
 
@@ -81,7 +77,6 @@ def common_args(args):
         args.cppcheck,
         *project_args(args),
         *ANALYSIS,
-        *DEFINES,
         "-i",
         IGNORE,
         f"--suppress={SUPPRESS}",
@@ -173,7 +168,6 @@ def run(args):
                 args.cppcheck,
                 *project_args(args),
                 "--check-config",
-                *DEFINES,
                 "-i",
                 IGNORE,
                 f"--suppress={SUPPRESS}",

@@ -74,9 +74,9 @@ Rationale: a clear scope keeps the parser auditable against the on-disk specific
 ## Technical Constraints
 
 - The primary target is C++20 with MSVC on Windows. The library, the unit tests, NtfsDir,
-  NtfsMftList, NtfsCompare and NtfsFuzzerAfl MUST also build with GCC on Linux.
-- Windows-only executables MUST be guarded with `if(WIN32)` in CMake. They are NtfsDir2, NtfsAttr,
-  NtfsDump, NtfsUndel and NtfsFuzzer.
+  NtfsMftList, NtfsAttr, NtfsDump, NtfsUndel, NtfsCompare and NtfsFuzzerAfl MUST also build with
+  GCC on Linux.
+- Windows-only executables MUST be guarded with `if(WIN32)` in CMake. They are NtfsDir2 and NtfsFuzzer.
 - `include/`, `src/` and `NTFSLibTests/` MUST NOT contain a `friend` declaration. A class MUST get
   what it needs from another class through that class's methods, not through friendship.
   `.github/scripts/check-no-friend.py` enforces it in CI.
