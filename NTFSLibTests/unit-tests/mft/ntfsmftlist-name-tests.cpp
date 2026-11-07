@@ -20,14 +20,14 @@
 #include <ntfs-browser/tool/device-access/text-convert.h>
 
 using Catch::Matchers::ContainsSubstring;
-using NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree;
-using NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithNameTree;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftTree;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithNameTree;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeDataRun;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeTreeNode;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::MakeNameChain;
 using NTFS_BROWSER_NAMESPACE::Tests::ExoticNames;
-using NTFS_BROWSER_NAMESPACE::Tests::FakeDataRun;
-using NTFS_BROWSER_NAMESPACE::Tests::FakeTreeNode;
 using NTFS_BROWSER_NAMESPACE::Tests::FillerName;
 using NTFS_BROWSER_NAMESPACE::Tests::LongTempDir;
-using NTFS_BROWSER_NAMESPACE::Tests::MakeNameChain;
 using NTFS_BROWSER_NAMESPACE::Tests::sample_failure_exit_code;
 using NTFS_BROWSER_NAMESPACE::Tests::SampleRun;
 using NTFS_BROWSER_NAMESPACE::Tests::MftListSample::RunMftList;

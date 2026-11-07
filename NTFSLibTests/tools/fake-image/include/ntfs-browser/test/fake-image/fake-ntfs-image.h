@@ -27,7 +27,7 @@ struct Extent;
 }  // namespace Alloc
 }  // namespace NTFS_BROWSER_NAMESPACE
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage {
 
 // Fake record count $MFT reports; arbitrary, tests just check it survives.
 inline constexpr uint64_t sentinel_record_count = 5;
@@ -566,8 +566,8 @@ inline constexpr ULONGLONG mft_last_vcn_overflow_last_vcn =
 
 // Shared with ntfs-browser/test/fuzz/named-stream-probe.h, so a fuzz corpus
 // file built from this fixture reaches the same named stream by name.
-using NtfsFuzz::named_data_stream_name;
-using NtfsFuzz::named_data_stream_name_length;
+using NTFS_BROWSER_NAMESPACE::Test::Fuzz::named_data_stream_name;
+using NTFS_BROWSER_NAMESPACE::Test::Fuzz::named_data_stream_name_length;
 
 // Recognizable byte pattern written as this fixture's entire $DATA body.
 inline constexpr std::array<BYTE, 4> named_data_stream_content{0xCA, 0xFE, 0xBA,
@@ -601,8 +601,8 @@ inline constexpr std::wstring_view index_root_variant_b_name = L"BBB";
 
 // Shared with ntfs-browser/test/fuzz/gap-collation-probe.h, so a fuzz corpus
 // file built from this fixture reaches the same sub-node entry by name.
-using NtfsFuzz::gap_collation_search_name;
-using NtfsFuzz::gap_collation_search_name_length;
+using NTFS_BROWSER_NAMESPACE::Test::Fuzz::gap_collation_search_name;
+using NTFS_BROWSER_NAMESPACE::Test::Fuzz::gap_collation_search_name_length;
 
 // MFT reference the root-level, non-terminal $INDEX_ROOT entry declares.
 inline constexpr ULONGLONG gap_collation_non_terminal_mft_ref = 25;
@@ -1341,14 +1341,15 @@ struct FakeBadClusterOptions {
 // It composes with PutClusterBitmap() and PutFreedNonResidentRecord(). The run
 // list MUST fit in the 1 KiB record, which holds roughly 400 holes: keep the
 // extents within the first few hundred clusters.
-void PutBadClusterList(std::vector<BYTE>& image,
-                       std::span<const Alloc::Extent> bad_extents,
-                       const FakeBadClusterOptions& options = {});
+void PutBadClusterList(
+    std::vector<BYTE>& image,
+    std::span<const NTFS_BROWSER_NAMESPACE::Alloc::Extent> bad_extents,
+    const FakeBadClusterOptions& options = {});
 
 // The extents as runs of at most 255 clusters, for AllocatedBitmapFor() or a
 // freed file's run list.
-[[nodiscard]] std::vector<FakeDataRun>
-    ExtentsAsRuns(std::span<const Alloc::Extent> extents);
+[[nodiscard]] std::vector<FakeDataRun> ExtentsAsRuns(
+    std::span<const NTFS_BROWSER_NAMESPACE::Alloc::Extent> extents);
 
 // MFT index of the first of the freed files
 // BuildFakeNtfsImageWithManyDeletedFiles builds; the others follow.
@@ -2169,7 +2170,8 @@ struct FakeAccountStream {
   std::wstring name;
   // The attribute's type. Data for a stream, anything else for an attribute
   // that only owns clusters.
-  Attr::Type type = Attr::Type::Data;
+  NTFS_BROWSER_NAMESPACE::Attr::Type type =
+      NTFS_BROWSER_NAMESPACE::Attr::Type::Data;
   // The layout, sparse holes included.
   std::vector<FakeDataRun> runs;
   // Keeps only the first cut_after_runs runs on disk, then a byte no run can
@@ -2296,4 +2298,4 @@ inline constexpr ULONGLONG name_tree_write_time = 133'497'936'000'000'000;
                   const std::function<std::wstring(std::size_t)>& name_of,
                   std::wstring leaf_name);
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage

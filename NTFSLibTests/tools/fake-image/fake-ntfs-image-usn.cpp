@@ -24,7 +24,7 @@
 #include "data/usn-record.h"
 #include "fake-ntfs-image-internal.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage {
 
 namespace {
 
@@ -259,7 +259,8 @@ FakeRecord MakeExtendRecord(const FakeUsnOptions& options) {
   });
 
   const ULONGLONG root = MakeFileReference(
-      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root),
+      root_sequence_number);
   DWORD offset = attr_offset_value;
   offset += WriteStandardInformationAttr(
       record, offset, NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Normal);
@@ -291,7 +292,8 @@ FakeRecord MakeJournalRecord(const FakeUsnOptions& options,
   });
 
   const ULONGLONG extend = MakeFileReference(
-      static_cast<ULONGLONG>(Mft::Idx::Extend), extend_sequence);
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Extend),
+      extend_sequence);
   DWORD offset = attr_offset_value;
   offset += WriteStandardInformationAttr(
       record, offset, NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Normal);
@@ -301,7 +303,7 @@ FakeRecord MakeJournalRecord(const FakeUsnOptions& options,
     offset += WriteResidentDataAttr(record, offset, 0);
   } else {
     offset += WriteNonResidentAttr(
-        record, offset, Attr::Type::Data,
+        record, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::Data,
         {.comp_unit_size = 0,
          .real_size = options.forged_size.value_or(layout.stream_size),
          .runs = layout.runs,
@@ -417,7 +419,8 @@ void PutUsnJournal(std::vector<BYTE>& image, const FakeUsnOptions& options) {
           : (image.size() + cluster_size - 1) / cluster_size;
   const JournalLayout layout = MakeJournalLayout(stretches, options, first_lcn);
 
-  PutMftRecord(image, mft_addr, static_cast<ULONGLONG>(Mft::Idx::Extend),
+  PutMftRecord(image, mft_addr,
+               static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Extend),
                MakeExtendRecord(options));
   if (!options.omit_journal_record) {
     PutMftRecord(image, mft_addr, usn_journal_idx,
@@ -429,4 +432,4 @@ void PutUsnJournal(std::vector<BYTE>& image, const FakeUsnOptions& options) {
   }
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage

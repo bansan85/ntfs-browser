@@ -25,7 +25,7 @@
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Fs = std::filesystem;
 using Catch::Matchers::ContainsSubstring;
-using NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage;
 using NTFS_BROWSER_NAMESPACE::Tests::LongTempDir;
 
 #ifdef _WIN32
@@ -93,7 +93,7 @@ TEMPLATE_TEST_CASE_SIG(
   const LongTempDir directory(300);
   const Fs::path file = directory.Write(
       "image.img",
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree());
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftTree());
 
   for (const std::wstring& form : FormsOf(file)) {
     INFO(Fs::path(form).string().substr(0, 60));

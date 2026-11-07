@@ -12,7 +12,7 @@
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 
-namespace NtfsFuzz {
+namespace NTFS_BROWSER_NAMESPACE::Test::Fuzz {
 
 // A fake IDiskReader backed by a whole file in memory (the AFL testcase).
 // ReadInto() wraps back to the start of the buffer past the end, instead
@@ -45,4 +45,4 @@ class LoopingDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   mutable size_t pos_{0};
 };
 
-}  // namespace NtfsFuzz
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Fuzz

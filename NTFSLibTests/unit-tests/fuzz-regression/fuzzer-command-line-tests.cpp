@@ -18,7 +18,7 @@ namespace Fs = std::filesystem;
 using NTFS_BROWSER_NAMESPACE::Tests::InstallCaptureSink;
 
 // The argv string type of this platform, as RunCommandLine() takes it.
-using Arg = std::basic_string<NtfsFuzz::ArgChar>;
+using Arg = std::basic_string<NTFS_BROWSER_NAMESPACE::Test::Fuzz::ArgChar>;
 
 // An argument of this platform's argv type, from ASCII text.
 Arg ArgOf(std::string_view text) { return Fs::path(text).native(); }
@@ -34,7 +34,8 @@ struct CommandLineResult {
 CommandLineResult RunFuzzerInProcess(const std::vector<Arg>& args) {
   std::ostringstream err;
   CommandLineResult result;
-  result.exit_code = NtfsFuzz::RunCommandLine(args, err);
+  result.exit_code =
+      NTFS_BROWSER_NAMESPACE::Test::Fuzz::RunCommandLine(args, err);
   InstallCaptureSink();
   result.err = err.str();
   return result;

@@ -119,8 +119,8 @@ inline std::shared_ptr<TestKeyProvider>
 
 inline DWORD ClustersFor(size_t bytes) {
   return gsl::narrow<DWORD>(
-      (bytes + NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size - 1) /
-      NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
+      (bytes + NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size - 1) /
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size);
 }
 
 // An encrypted file of one unnamed stream, its key provider, and the
@@ -141,7 +141,7 @@ inline Fixture MakeFixture(Algorithm algorithm,
   const TestEfsEntry user = TestUser();
   fixture.provider = ProviderFor(user, algorithm, key);
 
-  NTFS_BROWSER_NAMESPACE::Tests::FakeEncryptedFile file;
+  NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeEncryptedFile file;
   file.efs_stream =
       NTFS_BROWSER_NAMESPACE::Tests::MakeEfsStream(std::span(&user, 1));
   file.streams.push_back(
@@ -149,8 +149,8 @@ inline Fixture MakeFixture(Algorithm algorithm,
        .cluster_bytes = NTFS_BROWSER_NAMESPACE::Tests::EfsEncrypt(
            algorithm, key, fixture.plaintext),
        .real_size = size});
-  fixture.image =
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithEncryptedFile(file);
+  fixture.image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+      BuildFakeNtfsImageWithEncryptedFile(file);
   return fixture;
 }
 
@@ -174,7 +174,8 @@ Opened<S> OpenVolume(std::vector<BYTE> image,
                      std::optional<CipherBackend> backend = std::nullopt) {
   Opened<S> opened;
   opened.volume = std::make_unique<NtfsVolume<S>>(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           std::move(image)),
       options);
   REQUIRE(opened.volume->IsVolumeOK());

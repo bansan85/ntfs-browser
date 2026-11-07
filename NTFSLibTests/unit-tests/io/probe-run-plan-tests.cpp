@@ -24,20 +24,21 @@
 #include "io/mft-runs.h"
 #include "probe-walk-support.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 class IndexEntryView;
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 namespace ProbeWalk = NTFS_BROWSER_NAMESPACE::Tests::ProbeWalk;
 using NTFS_BROWSER_NAMESPACE::IndexEntryView;
-using Tests::CountingDiskReader;
-using Tests::FakeTreeNode;
+using TestDiskReaders::CountingDiskReader;
+using TestFakeImage::FakeTreeNode;
 
 namespace {
 
@@ -64,7 +65,7 @@ const std::vector<ULONGLONG>& FileSlots() {
 
 // A node that no index names: a freed record with a name of its own.
 FakeTreeNode Free() {
-  return {.links = {{.name = L"x", .parent = Tests::name_tree_root}},
+  return {.links = {{.name = L"x", .parent = TestFakeImage::name_tree_root}},
           .in_use = false};
 }
 
@@ -78,10 +79,11 @@ FakeTreeNode File(wchar_t name) {
 // group, so one chunk.
 std::vector<FakeTreeNode> RunTree() {
   std::vector<FakeTreeNode> nodes;
-  nodes.push_back({.links = {{.name = L"dir", .parent = Tests::name_tree_root}},
-                   .directory = true});
+  nodes.push_back(
+      {.links = {{.name = L"dir", .parent = TestFakeImage::name_tree_root}},
+       .directory = true});
   const auto free_until = [&nodes](ULONGLONG slot) {
-    while (Tests::name_tree_first_record + nodes.size() < slot) {
+    while (TestFakeImage::name_tree_first_record + nodes.size() < slot) {
       nodes.push_back(Free());
     }
   };
@@ -117,7 +119,7 @@ std::vector<Run> RunsOf(const Io::ProbeRunPlan& plan) {
 // narrow hole of 64 slots, runs of 1024 at most, nothing else.
 Io::ProbeRunRules PlainRules() {
   return {.mapped = true,
-          .record_size = Tests::fake_file_record_size,
+          .record_size = TestFakeImage::fake_file_record_size,
           .max_gap_slots = 64,
           .max_run_slots = 1024,
           .wide = {},
@@ -197,7 +199,7 @@ void CheckAnnounced(const std::vector<Run>& announced,
 template <Cache::Strategy S>
 void CheckProbeRuns(const std::vector<BYTE>& image, const ProbeVariant& variant,
                     const std::vector<Run>& expected_runs) {
-  constexpr ULONGLONG directory = Tests::name_tree_first_record;
+  constexpr ULONGLONG directory = TestFakeImage::name_tree_first_record;
   auto open = ProbeWalk::Open<S>(image, variant.kind);
   REQUIRE(ProbeWalk::BlocksOf(*open.volume, directory).empty());
   const ULONGLONG mft = open.volume->GetMFTAddr();
@@ -281,7 +283,7 @@ Io::ProbeRunPlan PlanHoldingSlotE(std::span<const ULONGLONG> chunk,
         return record == slot_e ? bytes : std::span<const BYTE>();
       },
       [&held](ULONGLONG record, std::span<const BYTE> held_bytes) {
-        CHECK(held_bytes.size() == Tests::fake_file_record_size);
+        CHECK(held_bytes.size() == TestFakeImage::fake_file_record_size);
         held.push_back(record);
       });
 }
@@ -317,7 +319,7 @@ TEST_CASE("The plan of a chunk reads the records no one holds in runs",
   }
 
   SECTION("a record the store holds is not read") {
-    const std::vector<BYTE> bytes(Tests::fake_file_record_size);
+    const std::vector<BYTE> bytes(TestFakeImage::fake_file_record_size);
     std::vector<ULONGLONG> held;
     const Io::ProbeRunPlan plan = PlanHoldingSlotE(chunk, rules, bytes, held);
 
@@ -328,7 +330,7 @@ TEST_CASE("The plan of a chunk reads the records no one holds in runs",
   }
 
   SECTION("bytes of another size are not a held record") {
-    const std::vector<BYTE> shorter(Tests::fake_file_record_size - 1);
+    const std::vector<BYTE> shorter(TestFakeImage::fake_file_record_size - 1);
     std::vector<ULONGLONG> held;
 
     CHECK(PlanHoldingSlotE(chunk, rules, shorter, held).to_read == FileSlots());
@@ -363,7 +365,7 @@ TEMPLATE_TEST_CASE_SIG("A probe reads the runs that PlanProbeRuns plans",
                        "[io][probe-run-plan]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithNameTree(RunTree());
+      TestFakeImage::BuildFakeNtfsImageWithNameTree(RunTree());
   const auto check = [&image](const ProbeVariant& variant,
                               const std::vector<Run>& expected_runs) {
     CheckProbeRuns<S>(image, variant, expected_runs);
@@ -404,8 +406,8 @@ TEMPLATE_TEST_CASE_SIG(
     "[io][probe-run-plan]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
   const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithNameTree(RunTree());
-  constexpr ULONGLONG directory = Tests::name_tree_first_record;
+      TestFakeImage::BuildFakeNtfsImageWithNameTree(RunTree());
+  constexpr ULONGLONG directory = TestFakeImage::name_tree_first_record;
 
   auto plain = ProbeWalk::Open<S>(image);
   const ProbeWalk::DirectoryWalk reference =
@@ -429,12 +431,12 @@ TEMPLATE_TEST_CASE_SIG("The plain walk never calls the note of a probe store",
                        "[io][probe-run-plan]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithNameTree(RunTree());
+      TestFakeImage::BuildFakeNtfsImageWithNameTree(RunTree());
   auto open = ProbeWalk::Open<S>(image);
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(*open.volume);
   record.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
                      NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
-  REQUIRE(record.ParseFileRecord(Tests::name_tree_first_record));
+  REQUIRE(record.ParseFileRecord(TestFakeImage::name_tree_first_record));
   REQUIRE(record.ParseAttrs());
 
   std::size_t noted = 0;

@@ -70,17 +70,20 @@ TEMPLATE_TEST_CASE_SIG("ReadExtentData bounds reads by the extent",
                        "[read-bounded][characterization]",
                        ((Cache::Strategy S), S), Cache::Strategy::NoCache,
                        Cache::Strategy::FullCache) {
-  auto image =
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithForgedIndexBlock();
-  auto parsed =
-      OpenRecord<S>(image, NTFS_BROWSER_NAMESPACE::Tests::index_alloc_dir_idx);
+  auto image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+      BuildFakeNtfsImageWithForgedIndexBlock();
+  auto parsed = OpenRecord<S>(
+      image, NTFS_BROWSER_NAMESPACE::Test::FakeImage::index_alloc_dir_idx);
   REQUIRE(parsed.record->ParseAttrs());
   const auto* alloc = ForgedAllocation<S>(*parsed.record);
   REQUIRE(alloc != nullptr);
 
   const ULONGLONG extent_bytes = alloc->GetAllocatedSize();
-  REQUIRE(extent_bytes % NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size == 0);
-  REQUIRE(extent_bytes >= 5 * NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
+  REQUIRE(extent_bytes %
+              NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size ==
+          0);
+  REQUIRE(extent_bytes >=
+          5 * NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size);
 
   // One aligned read of the whole extent is the reference for every check.
   std::vector<BYTE> reference(static_cast<size_t>(extent_bytes), sentinel_byte);

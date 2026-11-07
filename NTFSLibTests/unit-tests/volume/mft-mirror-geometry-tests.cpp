@@ -14,28 +14,28 @@
 #include "data/ntfs-bpb.h"
 #include "volume/volume-geometry.h"
 
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Volume = NTFS_BROWSER_NAMESPACE::Volume;
 using Bpb = NTFS_BROWSER_NAMESPACE::Data::NtfsBpb;
 
 namespace {
 
 // The fake image's cluster size, as ParseBootSector() decodes it.
-constexpr ULONGLONG cluster_size = Tests::fake_cluster_size;
+constexpr ULONGLONG cluster_size = TestFakeImage::fake_cluster_size;
 
 // The fake image's $MFT address: one cluster in.
 constexpr ULONGLONG fake_mft_addr = cluster_size;
 
 // Bytes the 4 mirrored records span.
-constexpr ULONGLONG copy_bytes =
-    Tests::fake_mft_mirror_records * Tests::fake_file_record_size;
+constexpr ULONGLONG copy_bytes = TestFakeImage::fake_mft_mirror_records *
+                                 TestFakeImage::fake_file_record_size;
 
 // The boot sector of the fake image with a mirror, edited by edit.
 template <typename Edit>
 std::vector<BYTE> BootSector(Edit edit) {
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithMftMirror();
+  std::vector<BYTE> image = TestFakeImage::BuildFakeNtfsImageWithMftMirror();
   edit(*reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::NtfsBpb*>(image.data()));
-  image.resize(Tests::fake_bytes_per_sector);
+  image.resize(TestFakeImage::fake_bytes_per_sector);
   return image;
 }
 
@@ -89,13 +89,13 @@ TEST_CASE("ParseBootSector decodes the $MFTMirr address", "[boot-sector]") {
 
     CHECK(parse.ok);
     CHECK(parse.geometry.mft_mirr_addr ==
-          Tests::fake_mft_mirror_lcn * cluster_size);
+          TestFakeImage::fake_mft_mirror_lcn * cluster_size);
     CHECK(parse.geometry.mft_mirr_usable);
   }
 
   SECTION("the default fake image declares no mirror") {
-    std::vector<BYTE> boot_sector = Tests::BuildFakeNtfsImage();
-    boot_sector.resize(Tests::fake_bytes_per_sector);
+    std::vector<BYTE> boot_sector = TestFakeImage::BuildFakeNtfsImage();
+    boot_sector.resize(TestFakeImage::fake_bytes_per_sector);
     const Volume::BootSectorParse parse = Parse(boot_sector);
 
     CHECK(parse.ok);
@@ -116,7 +116,7 @@ TEST_CASE("ParseBootSector decodes the $MFTMirr address", "[boot-sector]") {
 
   SECTION("a mirror whose 4 records end exactly at the volume's end") {
     const ULONGLONG volume_bytes =
-        ULONGLONG{Tests::fake_bytes_per_sector} * 128;
+        ULONGLONG{TestFakeImage::fake_bytes_per_sector} * 128;
     const ULONGLONG last_lcn = (volume_bytes - copy_bytes) / cluster_size;
 
     const Volume::BootSectorParse fits =

@@ -21,22 +21,22 @@
 
 #include "alloc/bad-cluster-list.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 template <Cache::Strategy S>
 class NtfsVolume;
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using Alloc::ClusterState;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Tests::FakeDataRun;
+using TestFakeImage::FakeDataRun;
 
 namespace {
 
@@ -72,8 +72,8 @@ std::vector<Alloc::Extent> Isolated(size_t count) {
 std::vector<BYTE> Image(const std::vector<Alloc::Extent>& bad) {
   const std::vector<FakeDataRun> marked{
       FakeDataRun{.lcn = bad.back().lcn, .clusters = 1}};
-  std::vector<BYTE> image =
-      Support::WithBitmap(Tests::BuildFakeNtfsImageWithFreedFileTree(), marked);
+  std::vector<BYTE> image = Support::WithBitmap(
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(), marked);
   return Support::WithBadClusters(std::move(image), bad);
 }
 

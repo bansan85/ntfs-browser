@@ -44,7 +44,7 @@ namespace {
 // $MFT starts at cluster 1 in every fake image, so record 0 sits one cluster
 // in.
 inline constexpr size_t fake_mft_offset =
-    NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size;
+    NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size;
 
 // Root directory: MFT record 5 in every fake image.
 inline constexpr ULONGLONG root_dir_idx = 5;
@@ -55,7 +55,7 @@ void SetStdInfoPermission(std::vector<BYTE>& image, ULONGLONG idx,
                           StdInfoPermission permission) {
   const size_t record_offset =
       fake_mft_offset +
-      idx * NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size;
+      idx * NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_file_record_size;
 
   NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader header{};
   std::memcpy(&header, &image[record_offset],
@@ -109,20 +109,21 @@ TEMPLATE_TEST_CASE_SIG(
   }};
 
   for (const auto& [getter, bit] : flags) {
-    std::vector<BYTE> image =
-        NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree();
+    std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+        BuildFakeNtfsImageWithMftTree();
     SetStdInfoPermission(
-        image, NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx, bit);
+        image, NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_report_idx,
+        bit);
 
-    auto reader =
-        std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-            std::move(image));
+    auto reader = std::make_unique<
+        NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+        std::move(image));
     const NtfsVolume<S> volume(std::move(reader));
     REQUIRE(volume.IsVolumeOK());
 
     NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
     REQUIRE(record.ParseFileRecord(
-        NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx));
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_report_idx));
     REQUIRE(record.ParseAttrs());
     CHECK((record.*getter)());
   }
@@ -133,9 +134,9 @@ TEMPLATE_TEST_CASE_SIG(
     "record has no STANDARD_INFORMATION",
     "[cov-frb]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  auto reader =
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage());
+  auto reader = std::make_unique<
+      NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage());
 
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
@@ -159,16 +160,16 @@ TEMPLATE_TEST_CASE_SIG(
     "FileRecord returns the Win32 name of a record that also has a DOS alias",
     "[cov-frb]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  auto reader =
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree());
+  auto reader = std::make_unique<
+      NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftTree());
 
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(
-      NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx));
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_report_idx));
   REQUIRE(record.ParseAttrs());
 
   CHECK(record.GetFileName() == L"report.txt");

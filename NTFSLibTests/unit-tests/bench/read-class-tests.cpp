@@ -32,6 +32,7 @@ namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using NTFS_BROWSER_NAMESPACE::IDiskReader;
 using Caps = std::array<Tuning::ReaderTuning, Tuning::pattern_count>;
@@ -53,8 +54,8 @@ TEST_CASE("A reader that does not classify gives Unclassified",
           "[bench][read-class]") {
   const std::vector<BYTE> image(image_bytes, BYTE{9});
   const Io::FileReader<Cache::Strategy::NoCache> file(
-      std::make_unique<Tests::CountingDiskReader>(
-          std::make_unique<Tests::MemoryDiskReader>(image)));
+      std::make_unique<TestDiskReaders::CountingDiskReader>(
+          std::make_unique<TestDiskReaders::MemoryDiskReader>(image)));
   std::vector<BYTE> buffer(range_bytes);
   LARGE_INTEGER addr{.QuadPart = 0};
 

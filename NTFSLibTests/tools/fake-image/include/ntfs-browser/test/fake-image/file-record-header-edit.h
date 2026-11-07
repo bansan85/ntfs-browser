@@ -10,7 +10,7 @@
 
 #include "data/file-record-header.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage {
 
 // Data::FileRecordHeader is a union spanning max_file_record_size, but fixture
 // buffers are smaller (a fake record is 1024 bytes), so binding a Data& to
@@ -30,4 +30,4 @@ void EditFileRecordHeader(std::span<BYTE> buffer, const Edit& edit) {
                   min_file_record_header_size);
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage

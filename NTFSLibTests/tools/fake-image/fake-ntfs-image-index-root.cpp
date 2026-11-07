@@ -21,7 +21,7 @@
 #include "fake-ntfs-image-internal.h"
 #include "upcase/upcase.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage {
 
 namespace {
 
@@ -207,15 +207,17 @@ std::vector<BYTE> BuildFakeNtfsImageWithNonAsciiNames(NonAsciiNameLayout layout,
 
   std::vector<BYTE> image = BuildFakeNtfsImage();
 
-  const auto put_record = [&](Mft::Idx idx, const FakeRecord& record) {
+  const auto put_record = [&](NTFS_BROWSER_NAMESPACE::Mft::Idx idx,
+                              const FakeRecord& record) {
     PutMftRecord(image, static_cast<ULONGLONG>(idx), record);
   };
 
   if (layout == NonAsciiNameLayout::IndexRoot) {
-    put_record(Mft::Idx::Root, MakeIndexRootDirRecordWithNames(names));
+    put_record(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root,
+               MakeIndexRootDirRecordWithNames(names));
   } else {
     const std::vector<FakeDataRun> runs{{non_ascii_index_block_lcn, 1}};
-    put_record(Mft::Idx::Root,
+    put_record(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root,
                MakeIndexAllocationDirRecord(
                    NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive,
                    {.comp_unit_size = 0,
@@ -226,9 +228,11 @@ std::vector<BYTE> BuildFakeNtfsImageWithNonAsciiNames(NonAsciiNameLayout layout,
 
   if (with_up_case) {
     // $MFT now maps up to record 10, so $UpCase can be read through it.
-    put_record(Mft::Idx::Mft, MakeMftRecordWithRealDataRun(
-                                  static_cast<DWORD>(mft_lcn),
-                                  static_cast<DWORD>(Mft::Idx::UpCase) + 1));
+    put_record(
+        NTFS_BROWSER_NAMESPACE::Mft::Idx::Mft,
+        MakeMftRecordWithRealDataRun(
+            static_cast<DWORD>(mft_lcn),
+            static_cast<DWORD>(NTFS_BROWSER_NAMESPACE::Mft::Idx::UpCase) + 1));
 
     const std::vector<BYTE> table = MakeNonAsciiUpCaseBytes();
     const std::vector<FakeDataRun> runs{
@@ -237,10 +241,10 @@ std::vector<BYTE> BuildFakeNtfsImageWithNonAsciiNames(NonAsciiNameLayout layout,
 
     FakeRecord upcase = MakeInUseFileRecord();
     const DWORD attr_size = WriteNonResidentAttr(
-        upcase, attr_offset_value, Attr::Type::Data,
+        upcase, attr_offset_value, NTFS_BROWSER_NAMESPACE::Attr::Type::Data,
         {.comp_unit_size = 0, .real_size = table.size(), .runs = runs});
     WriteEndOfAttributesMarker(upcase, attr_offset_value + attr_size);
-    put_record(Mft::Idx::UpCase, upcase);
+    put_record(NTFS_BROWSER_NAMESPACE::Mft::Idx::UpCase, upcase);
 
     LayRunBytes(image, runs, table);
   }
@@ -276,4 +280,4 @@ std::vector<BYTE> BuildFakeNtfsImageWithSurrogatePairNames() {
       MakeUncompressedLznt1Chunk(MakeIndexBlockContent(block_names)));
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage

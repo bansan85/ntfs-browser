@@ -152,7 +152,7 @@ TEST_CASE("NtfsMftList --deleted also lists the freed records",
 TEST_CASE("NtfsMftList shows where the chain breaks in the paths under a loop",
           "[mft][sample][characterization]") {
   std::vector<BYTE> tree =
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree();
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftTree();
   NTFS_BROWSER_NAMESPACE::Tests::MftTreeParents::LoopDocsAndNewDir(tree);
   const TempTreeImage image(tree);
   const SampleRun run = RunSample({image.path.wstring()});
@@ -183,7 +183,7 @@ namespace {
 // The journal's own time, as the sample prints it.
 std::string JournalTimeText() {
   const auto local = NtfsDevice::UtcTicksToLocalTime(
-      NTFS_BROWSER_NAMESPACE::Tests::fake_usn_default_time);
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_usn_default_time);
   REQUIRE(local.has_value());
 
   char text[32]{};
@@ -195,28 +195,32 @@ std::string JournalTimeText() {
 // The tree image with a journal that names the live report.txt, the freed
 // old.tmp, and a file no record names, in Docs.
 std::vector<BYTE> ImageWithJournal() {
-  std::vector<BYTE> image =
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithFreedFileTree();
-  NTFS_BROWSER_NAMESPACE::Tests::PutUsnJournal(
+  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+      BuildFakeNtfsImageWithFreedFileTree();
+  NTFS_BROWSER_NAMESPACE::Test::FakeImage::PutUsnJournal(
       image,
       {.records = {
            {.name = L"report.txt",
-            .file_record = NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx,
+            .file_record =
+                NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_report_idx,
             .file_sequence = 3,
-            .parent_record = NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx,
+            .parent_record =
+                NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_docs_idx,
             .parent_sequence = 1,
             .reason = 0x00000100},
            {.name = L"old.tmp",
-            .file_record =
-                NTFS_BROWSER_NAMESPACE::Tests::mft_tree_deleted_file_idx,
+            .file_record = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                mft_tree_deleted_file_idx,
             .file_sequence = 1,
-            .parent_record = NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx,
+            .parent_record =
+                NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_docs_idx,
             .parent_sequence = 1,
             .reason = 0x80000200},
            {.name = L"ghost.bin",
             .file_record = 40,
             .file_sequence = 2,
-            .parent_record = NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx,
+            .parent_record =
+                NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_docs_idx,
             .parent_sequence = 1,
             .reason = 0x80000200}}});
   return image;
@@ -317,9 +321,9 @@ TEST_CASE("NtfsMftList shows one letter per DOS permission flag",
       }));
   INFO(std::string(attributes));
   std::vector<BYTE> image =
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree();
-  NTFS_BROWSER_NAMESPACE::Tests::SetStdInfoPermission(
-      image, NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx,
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftTree();
+  NTFS_BROWSER_NAMESPACE::Test::FakeImage::SetStdInfoPermission(
+      image, NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_report_idx,
       static_cast<DWORD>(permission));
   const TempTreeImage tree_image(image);
   const SampleRun run = RunSample({tree_image.path.wstring()});
@@ -381,9 +385,9 @@ constexpr ULONGLONG busy_fragment_clusters = 255;
 
 TEST_CASE("NtfsMftList lists the same with one thread as with several",
           "[mft][sample][threads]") {
-  const TempTreeImage image(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithBusyMftScan(
-          busy_slot_count, busy_fragment_clusters));
+  const TempTreeImage image(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                                BuildFakeNtfsImageWithBusyMftScan(
+                                    busy_slot_count, busy_fragment_clusters));
   const bool deleted = GENERATE(false, true);
   const bool recover = GENERATE(false, true);
   std::vector<std::wstring> options;
@@ -433,7 +437,7 @@ TEST_CASE("NtfsMftList with several threads lists the tree image as with one",
 TEST_CASE("NtfsMftList with several threads keeps the paths under a loop",
           "[mft][sample][threads]") {
   std::vector<BYTE> tree =
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree();
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftTree();
   NTFS_BROWSER_NAMESPACE::Tests::MftTreeParents::LoopDocsAndNewDir(tree);
   const TempTreeImage image(tree);
 
@@ -477,8 +481,8 @@ std::vector<BYTE> ImageWithClusters() {
   Support::Volume volume;
   volume.Put(22, Support::Freed(100, Support::Stream({{40, 4}}, 4096)));
   volume.Put(17, Support::Live(Support::Stream({{42, 1}}, 1024)));
-  volume.allocated = {
-      NTFS_BROWSER_NAMESPACE::Tests::FakeDataRun{.lcn = 42, .clusters = 1}};
+  volume.allocated = {NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeDataRun{
+      .lcn = 42, .clusters = 1}};
   return volume.Build();
 }
 

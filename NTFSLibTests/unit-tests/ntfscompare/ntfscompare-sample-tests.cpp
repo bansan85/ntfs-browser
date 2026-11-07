@@ -33,9 +33,9 @@ struct TempImage final {
   Fs::path path;
 
   TempImage()
-      : path(NTFS_BROWSER_NAMESPACE::Tests::WriteFakeNtfsImage(
-            NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithReportName(
-                L"report.txt"))) {}
+      : path(NTFS_BROWSER_NAMESPACE::Test::FakeImage::WriteFakeNtfsImage(
+            NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                BuildFakeNtfsImageWithReportName(L"report.txt"))) {}
 
   ~TempImage() {
     std::error_code ignored;

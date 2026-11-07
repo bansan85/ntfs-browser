@@ -22,7 +22,7 @@
 
 namespace {
 
-using NTFS_BROWSER_NAMESPACE::Tests::StandaloneMftDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::StandaloneMftDiskReader;
 using NTFS_BROWSER_NAMESPACE::Tests::TempFile;
 
 // Writes value at offset of bytes, little endian.

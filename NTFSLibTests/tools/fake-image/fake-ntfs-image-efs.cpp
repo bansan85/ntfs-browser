@@ -21,7 +21,7 @@
 #include "data/std-info-permission.h"
 #include "fake-ntfs-image-internal.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage {
 
 namespace {
 
@@ -33,7 +33,7 @@ DWORD WriteResidentLoggedStreamAttr(FakeRecord& record, DWORD offset,
   const std::vector<WORD> encoded_name = ToUtf16(name_value);
   auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
       &record.at(offset));
-  attr.header.type = Attr::Type::LoggedUtilityStream;
+  attr.header.type = NTFS_BROWSER_NAMESPACE::Attr::Type::LoggedUtilityStream;
   attr.header.non_resident = 0;
   attr.header.flags = 0;
   attr.header.id = 0;
@@ -71,24 +71,25 @@ DWORD WriteEncryptedStreamAttr(FakeRecord& record, DWORD offset,
   if (stream.flagged_compressed) {
     flags |= NTFS_BROWSER_NAMESPACE::Attr::flag_compressed;
   }
-  return WriteNonResidentAttr(record, offset, Attr::Type::Data,
-                              {.comp_unit_size = 0,
-                               .real_size = stream.real_size,
-                               .runs = stream.runs,
-                               .overrides = {.name = stream.name,
-                                             .flags = flags,
-                                             .ini_size = stream.ini_size}});
+  return WriteNonResidentAttr(
+      record, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::Data,
+      {.comp_unit_size = 0,
+       .real_size = stream.real_size,
+       .runs = stream.runs,
+       .overrides = {
+           .name = stream.name, .flags = flags, .ini_size = stream.ini_size}});
 }
 
 // Writes the non-resident $EFS stream at offset: size bytes laid over runs.
 // Returns its total_size.
 DWORD WriteNonResidentEfsAttr(FakeRecord& record, DWORD offset, size_t size,
                               const std::vector<FakeDataRun>& runs) {
-  return WriteNonResidentAttr(record, offset, Attr::Type::LoggedUtilityStream,
-                              {.comp_unit_size = 0,
-                               .real_size = size,
-                               .runs = runs,
-                               .overrides = {.name = L"$EFS"}});
+  return WriteNonResidentAttr(
+      record, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::LoggedUtilityStream,
+      {.comp_unit_size = 0,
+       .real_size = size,
+       .runs = runs,
+       .overrides = {.name = L"$EFS"}});
 }
 
 }  // namespace
@@ -144,8 +145,9 @@ std::vector<BYTE>
   std::vector<BYTE> image = BuildFakeNtfsImage();
   const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
   const size_t root_offset =
-      mft_addr + static_cast<size_t>(fake_file_record_size) *
-                     static_cast<size_t>(Mft::Idx::Root);
+      mft_addr +
+      static_cast<size_t>(fake_file_record_size) *
+          static_cast<size_t>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root);
   std::memcpy(&image.at(root_offset), record.data(), record.size());
 
   for (const FakeEncryptedStream& stream : file.streams) {
@@ -168,7 +170,7 @@ FakeRecord MakeResidentEncryptedDataRecord() {
 
   auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
       &record.at(attr_offset_value));
-  attr.header.type = Attr::Type::Data;
+  attr.header.type = NTFS_BROWSER_NAMESPACE::Attr::Type::Data;
   attr.header.non_resident = 0;
   attr.header.name_length = 0;
   attr.header.flags = NTFS_BROWSER_NAMESPACE::Attr::flag_encrypted;
@@ -193,8 +195,9 @@ std::vector<BYTE> BuildFakeNtfsImageWithResidentEncryptedData() {
 
   const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
   const size_t root_offset =
-      mft_addr + static_cast<size_t>(fake_file_record_size) *
-                     static_cast<size_t>(Mft::Idx::Root);
+      mft_addr +
+      static_cast<size_t>(fake_file_record_size) *
+          static_cast<size_t>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root);
   const FakeRecord record = MakeResidentEncryptedDataRecord();
   std::memcpy(&image.at(root_offset), record.data(), record.size());
 
@@ -246,4 +249,4 @@ std::vector<BYTE> BuildFakeNtfsImageWithCompressedEncryptedDirectory() {
       MakeUncompressedLznt1Chunk(MakeIndexBlockContent(block_names)));
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage

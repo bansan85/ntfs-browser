@@ -32,19 +32,20 @@ inline constexpr ULONGLONG far_lcn = 5000;
 
 // A volume whose files and bitmap a test composes, then builds.
 struct Volume {
-  std::vector<BYTE> image = BuildFakeNtfsImageWithFreedFileTree();
+  std::vector<BYTE> image =
+      Test::FakeImage::BuildFakeNtfsImageWithFreedFileTree();
   // The clusters the bitmap marks allocated.
-  std::vector<FakeDataRun> allocated;
+  std::vector<Test::FakeImage::FakeDataRun> allocated;
   // The clusters $BadClus lists.
   std::vector<Alloc::Extent> bad;
   // False leaves $Bitmap out: nothing is known of the allocation.
   bool with_bitmap = true;
   // How the bitmap is written, and how large the volume is.
-  FakeBitmapOptions bitmap_options;
+  Test::FakeImage::FakeBitmapOptions bitmap_options;
 
   // Writes file at slot idx.
-  void Put(ULONGLONG idx, const FakeAccountFile& file) {
-    PutAccountFile(image, idx, file);
+  void Put(ULONGLONG idx, const Test::FakeImage::FakeAccountFile& file) {
+    Test::FakeImage::PutAccountFile(image, idx, file);
   }
 
   // The image with its bitmap and bad list.
@@ -62,8 +63,9 @@ struct Volume {
 };
 
 // A stream of the unnamed $DATA of runs, size bytes long, fully written.
-inline FakeAccountStream Stream(std::vector<FakeDataRun> runs, ULONGLONG size) {
-  FakeAccountStream stream;
+inline Test::FakeImage::FakeAccountStream
+    Stream(std::vector<Test::FakeImage::FakeDataRun> runs, ULONGLONG size) {
+  Test::FakeImage::FakeAccountStream stream;
   stream.runs = std::move(runs);
   stream.real_size = size;
   return stream;
@@ -71,8 +73,9 @@ inline FakeAccountStream Stream(std::vector<FakeDataRun> runs, ULONGLONG size) {
 
 // A freed file whose header carries the $LogFile sequence number lsn, with one
 // stream.
-inline FakeAccountFile Freed(ULONGLONG lsn, FakeAccountStream stream) {
-  FakeAccountFile file;
+inline Test::FakeImage::FakeAccountFile
+    Freed(ULONGLONG lsn, Test::FakeImage::FakeAccountStream stream) {
+  Test::FakeImage::FakeAccountFile file;
   file.freed = true;
   file.lsn = lsn;
   file.streams.push_back(std::move(stream));
@@ -80,8 +83,9 @@ inline FakeAccountFile Freed(ULONGLONG lsn, FakeAccountStream stream) {
 }
 
 // A live file with one stream.
-inline FakeAccountFile Live(FakeAccountStream stream) {
-  FakeAccountFile file;
+inline Test::FakeImage::FakeAccountFile
+    Live(Test::FakeImage::FakeAccountStream stream) {
+  Test::FakeImage::FakeAccountFile file;
   file.freed = false;
   file.streams.push_back(std::move(stream));
   return file;

@@ -14,7 +14,7 @@
 #include "data/std-info-permission.h"
 #include "fake-ntfs-image-internal.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage {
 
 namespace {
 
@@ -107,7 +107,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithMultiClusterBitmap() {
   offset += WriteStandardInformationAttr(
       record, offset, NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive);
   offset += WriteNonResidentAttr(
-      record, offset, Attr::Type::Bitmap,
+      record, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::Bitmap,
       {.comp_unit_size = 0,
        .real_size =
            static_cast<ULONGLONG>(multi_cluster_bitmap_clusters) * cluster_size,
@@ -300,4 +300,4 @@ std::vector<BYTE> BuildFakeNtfsImageWithCompressedCompressionUnitBadLcn() {
       {{overflowing_lcn, 1}, {{}, compression_unit_clusters - 1}});
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage

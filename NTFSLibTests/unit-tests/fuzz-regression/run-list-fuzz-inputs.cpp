@@ -17,11 +17,12 @@
 #include "fuzz-input-writer.h"
 
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Tests::FakeDataRun;
-using Tests::FakeFreedStream;
-using Tests::FakeUsnOptions;
-using Tests::FakeUsnRecord;
+using TestFakeImage::FakeDataRun;
+using TestFakeImage::FakeFreedStream;
+using TestFakeImage::FakeUsnOptions;
+using TestFakeImage::FakeUsnRecord;
 
 namespace {
 
@@ -53,9 +54,10 @@ constexpr ULONGLONG past_half_range = (1ULL << 63U) + 10;
 // The freed tree with a non-resident data stream in the freed file that has
 // none of its own.
 std::vector<BYTE> ImageWith(const FakeFreedStream& stream) {
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedFileTree();
-  Tests::PutFreedNonResidentRecord(image, Tests::mft_tree_stale_child_idx,
-                                   stream);
+  std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
+  TestFakeImage::PutFreedNonResidentRecord(
+      image, TestFakeImage::mft_tree_stale_child_idx, stream);
   return image;
 }
 
@@ -68,8 +70,9 @@ std::vector<BYTE> AdjacentStretches() {
   FakeUsnOptions options{.records = {record(L"first.txt", 100)}};
   options.more_stretches.push_back(
       {.hole_bytes = 0, .records = {record(L"second.txt", 101)}});
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedFileTree();
-  Tests::PutUsnJournal(image, options);
+  std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
+  TestFakeImage::PutUsnJournal(image, options);
   return image;
 }
 
@@ -78,19 +81,19 @@ std::vector<Variant> Variants() {
   std::vector<Variant> variants;
   variants.push_back(
       {"run_list_empty_run",
-       ImageWith({.real_size = 2 * Tests::fake_cluster_size,
+       ImageWith({.real_size = 2 * TestFakeImage::fake_cluster_size,
                   .runs = {FakeDataRun{.lcn = 10, .clusters = 2}},
                   .raw_runs = empty_first_run,
                   .last_vcn = std::numeric_limits<ULONGLONG>::max()})});
   variants.push_back(
       {"run_list_overflowing_run",
-       ImageWith({.real_size = Tests::fake_cluster_size,
+       ImageWith({.real_size = TestFakeImage::fake_cluster_size,
                   .runs = {FakeDataRun{.lcn = 10, .clusters = 1}},
                   .raw_runs = overflowing_run,
                   .last_vcn = past_half_range})});
   variants.push_back(
       {"run_list_cut_after_two_runs",
-       ImageWith({.real_size = 6 * Tests::fake_cluster_size,
+       ImageWith({.real_size = 6 * TestFakeImage::fake_cluster_size,
                   .runs = {FakeDataRun{.lcn = 10, .clusters = 3},
                            FakeDataRun{.lcn = 20, .clusters = 2},
                            FakeDataRun{.lcn = 30, .clusters = 1}},

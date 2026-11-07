@@ -40,8 +40,9 @@ TEMPLATE_TEST_CASE_SIG(
     "[file-record][disk-read][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const NTFS_BROWSER_NAMESPACE::NtfsVolume<S> volume(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage()));
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage()));
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
@@ -61,8 +62,9 @@ TEMPLATE_TEST_CASE_SIG(
   // A volume whose $MFT does not parse has no extent map, so every record
   // takes the direct path.
   const NTFS_BROWSER_NAMESPACE::NtfsVolume<S> volume(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::
               BuildFakeNtfsImageWithCorruptMftRecord()));
   REQUIRE_FALSE(volume.IsVolumeOK());
 

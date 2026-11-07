@@ -21,7 +21,7 @@
 #include "data/index-root.h"
 #include "fake-ntfs-image-internal.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage {
 
 WORD WriteFilenameEntry(BYTE* dest, const FakeIndexName& name) {
   auto& entry =
@@ -95,13 +95,14 @@ WORD WriteSubNodeEntry(BYTE* dest, ULONGLONG vcn, bool last) {
 DWORD WriteResidentIndexRoot(FakeRecord& record, DWORD offset,
                              const FakeIndexBlockGeometry& geometry,
                              const IndexEntriesWriter& write_entries) {
-  auto& attr = InitResidentAttr(record, offset, Attr::Type::IndexRoot);
+  auto& attr = InitResidentAttr(record, offset,
+                                NTFS_BROWSER_NAMESPACE::Attr::Type::IndexRoot);
 
   const std::span<BYTE> body =
       std::span<BYTE>(record).subspan(offset + attr.attr_offset);
   auto& root =
       *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::IndexRoot*>(body.data());
-  root.attr_type = Attr::Type::FileName;
+  root.attr_type = NTFS_BROWSER_NAMESPACE::Attr::Type::FileName;
   root.coll_rule = 0;
   root.ib_size = geometry.ib_size;
   root.clusters_per_ib = geometry.clusters_per_ib;
@@ -197,4 +198,4 @@ void WriteIndexLeafBlockAt(std::vector<BYTE>& image,
   block.alloc_entry_size = entry_size;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage

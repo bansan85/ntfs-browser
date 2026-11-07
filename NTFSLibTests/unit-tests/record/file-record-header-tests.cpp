@@ -57,7 +57,7 @@ TEMPLATE_TEST_CASE_SIG(
   std::vector<BYTE> storage(declared_buffer_size + array_words * sizeof(WORD),
                             0);
 
-  NTFS_BROWSER_NAMESPACE::Tests::EditFileRecordHeader(
+  NTFS_BROWSER_NAMESPACE::Test::FakeImage::EditFileRecordHeader(
       storage, [](FileRecordHeader& header) {
         header.magic = FileRecordHeader::file_record_magic;
         header.offset_of_us = offset_of_us_value;
@@ -107,7 +107,7 @@ TEMPLATE_TEST_CASE_SIG(
   constexpr WORD offset_of_us_array = 48;
 
   std::vector<BYTE> storage(record_size, 0);
-  NTFS_BROWSER_NAMESPACE::Tests::EditFileRecordHeader(
+  NTFS_BROWSER_NAMESPACE::Test::FakeImage::EditFileRecordHeader(
       storage, [](FileRecordHeader& header) {
         header.magic = FileRecordHeader::file_record_magic;
         header.offset_of_us = offset_of_us_array;
@@ -152,7 +152,7 @@ std::vector<BYTE> MakeWellFormedBuffer(size_t buffer_size,
   const size_t sectors = buffer_size / FileRecordHeader::update_sequence_stride;
   const WORD offset_of_us = gsl::narrow<WORD>(buffer_size - 2 * (1 + sectors));
 
-  NTFS_BROWSER_NAMESPACE::Tests::EditFileRecordHeader(
+  NTFS_BROWSER_NAMESPACE::Test::FakeImage::EditFileRecordHeader(
       storage, [&](FileRecordHeader& header) {
         header.magic = FileRecordHeader::file_record_magic;
         header.offset_of_us = offset_of_us;

@@ -43,10 +43,10 @@ namespace {
 // sorts past its parent entry only under NTFS' real collation order.
 template <Cache::Strategy S>
 void RunFindSubEntryDescendsIntoGapCollationSubNode() {
-  auto reader =
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::
-              BuildFakeNtfsImageWithGapCollationSubNode());
+  auto reader = std::make_unique<
+      NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+          BuildFakeNtfsImageWithGapCollationSubNode());
 
   // The named records are not built, so only recover_errors shows the entries.
   const NtfsVolume<S> volume(std::move(reader),
@@ -60,10 +60,10 @@ void RunFindSubEntryDescendsIntoGapCollationSubNode() {
   REQUIRE(root.ParseAttrs());
 
   const std::optional<IndexEntry> found = root.FindSubEntry(
-      NTFS_BROWSER_NAMESPACE::Tests::gap_collation_search_name);
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::gap_collation_search_name);
   REQUIRE(found.has_value());
   CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(found).GetFileReference() ==
-        NTFS_BROWSER_NAMESPACE::Tests::gap_collation_leaf_mft_ref);
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::gap_collation_leaf_mft_ref);
 }
 
 }  // namespace

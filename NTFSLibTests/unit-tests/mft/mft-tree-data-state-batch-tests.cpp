@@ -24,10 +24,10 @@
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using Alloc::DataState;
-using Tests::FakeDataRun;
+using TestFakeImage::FakeDataRun;
 
 namespace {
 
@@ -58,7 +58,7 @@ class Overrides {
 // The image, which of its files have a reused cluster, and where the bitmap
 // data begins.
 struct Fixture {
-  Tests::FakeManyDeleted built;
+  TestFakeImage::FakeManyDeleted built;
   std::vector<bool> reused;
   std::vector<BYTE> image;
   ULONGLONG data_offset{0};
@@ -66,8 +66,8 @@ struct Fixture {
 
 Fixture MakeFixture() {
   Fixture fixture;
-  fixture.built =
-      Tests::BuildFakeNtfsImageWithManyDeletedFiles(file_count, run_clusters);
+  fixture.built = TestFakeImage::BuildFakeNtfsImageWithManyDeletedFiles(
+      file_count, run_clusters);
   std::vector<FakeDataRun> allocated;
   for (size_t i = 0; i < file_count; i++) {
     const bool reused = (i % 3) == 1;
@@ -80,9 +80,9 @@ Fixture MakeFixture() {
   }
   fixture.image = fixture.built.image;
   const std::vector<BYTE> bits =
-      Tests::AllocatedBitmapFor(fixture.image, allocated);
+      TestFakeImage::AllocatedBitmapFor(fixture.image, allocated);
   fixture.data_offset = fixture.image.size();
-  Tests::PutClusterBitmap(fixture.image, bits);
+  TestFakeImage::PutClusterBitmap(fixture.image, bits);
   return fixture;
 }
 
@@ -100,7 +100,7 @@ Scanned Scan(const Fixture& fixture) {
   Scanned scanned;
   for (size_t i = 0; i < file_count; i++) {
     const Mft::MftTree::Entry* entry =
-        tree.Find(Tests::many_deleted_first_idx + i);
+        tree.Find(TestFakeImage::many_deleted_first_idx + i);
     REQUIRE(entry != nullptr);
     scanned.states.push_back(entry->data_state);
   }
@@ -162,12 +162,13 @@ TEST_CASE("annotation bitmap reads", "[.benchmark]") {
   // would reload one for nearly every file.
   constexpr size_t many_files = 10000;
   constexpr size_t benchmark_window = 128;
-  Tests::FakeManyDeleted built =
-      Tests::BuildFakeNtfsImageWithManyDeletedFiles(many_files, run_clusters);
+  TestFakeImage::FakeManyDeleted built =
+      TestFakeImage::BuildFakeNtfsImageWithManyDeletedFiles(many_files,
+                                                            run_clusters);
   std::vector<BYTE> image = std::move(built.image);
-  const std::vector<BYTE> bits = Tests::AllocatedBitmapFor(image, {});
+  const std::vector<BYTE> bits = TestFakeImage::AllocatedBitmapFor(image, {});
   const ULONGLONG data_offset = image.size();
-  Tests::PutClusterBitmap(image, bits);
+  TestFakeImage::PutClusterBitmap(image, bits);
 
   const auto count_reads = [&](size_t pending_cap) {
     const Overrides overrides(benchmark_window, pending_cap);

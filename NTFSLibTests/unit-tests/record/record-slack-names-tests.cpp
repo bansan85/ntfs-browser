@@ -33,19 +33,20 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Record = NTFS_BROWSER_NAMESPACE::Record;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using Support::OpenVolume;
-using Tests::FakeSlackName;
+using TestFakeImage::FakeSlackName;
 
 namespace {
 
 // The live file of the fixture, in the directory Docs, and the freed file.
-constexpr ULONGLONG report_record = Tests::mft_tree_report_idx;
-constexpr ULONGLONG docs_record = Tests::mft_tree_docs_idx;
-constexpr ULONGLONG freed_record = Tests::mft_tree_deleted_file_idx;
+constexpr ULONGLONG report_record = TestFakeImage::mft_tree_report_idx;
+constexpr ULONGLONG docs_record = TestFakeImage::mft_tree_docs_idx;
+constexpr ULONGLONG freed_record = TestFakeImage::mft_tree_deleted_file_idx;
 
 // Bytes of slack the fake records keep room for, before their fixup words.
 constexpr size_t slack_room = 280;
@@ -61,10 +62,11 @@ const std::array<VolumeOptions, 3> flags_without_both{
 std::vector<BYTE> ImageWith(ULONGLONG record,
                             const std::vector<FakeSlackName>& names,
                             size_t offset_from_marker = 8) {
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedFileTree();
+  std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
   for (const FakeSlackName& name : names) {
-    const std::vector<BYTE> bytes = Tests::EncodeSlackName(name);
-    Tests::PutRecordSlack(image, record, offset_from_marker, bytes);
+    const std::vector<BYTE> bytes = TestFakeImage::EncodeSlackName(name);
+    TestFakeImage::PutRecordSlack(image, record, offset_from_marker, bytes);
     offset_from_marker += bytes.size();
   }
   return image;
@@ -132,8 +134,8 @@ void CheckSameLiveFields(const Mft::MftTree::Entry& a,
 }
 
 // Checks that two readers saw the same reads, at the same places.
-void CheckSameCalls(const Tests::CountingDiskReader& left,
-                    const Tests::CountingDiskReader& right) {
+void CheckSameCalls(const TestDiskReaders::CountingDiskReader& left,
+                    const TestDiskReaders::CountingDiskReader& right) {
   REQUIRE(left.ReadCount() == right.ReadCount());
   for (size_t i = 0; i < left.Calls().size(); ++i) {
     CHECK(left.Calls().at(i).offset == right.Calls().at(i).offset);
@@ -185,7 +187,8 @@ void CheckNamesAreCarvedByTheScan() {
 
 template <Cache::Strategy S>
 void CheckLiveFieldsAreUntouched() {
-  const std::vector<BYTE> plain = Tests::BuildFakeNtfsImageWithFreedFileTree();
+  const std::vector<BYTE> plain =
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
   const auto without = OpenVolume<S>(plain, both_flags);
   const auto with = OpenVolume<S>(ImageWithTwoOldNames(), both_flags);
 
@@ -211,19 +214,22 @@ void CheckLiveNamesAreNotRepeated() {
 template <Cache::Strategy S>
 void CheckAPartialCopyOfALiveNameIsNotRepeated() {
   // The copy lost its parent: the name alone matches the live one.
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedFileTree();
-  const std::vector<BYTE> bytes =
-      Tests::EncodeSlackName({.name = L"old.tmp", .with_entry_header = false});
+  std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
+  const std::vector<BYTE> bytes = TestFakeImage::EncodeSlackName(
+      {.name = L"old.tmp", .with_entry_header = false});
   // The structure starts on the last four bytes of the terminator.
-  Tests::PutRecordSlack(image, freed_record, 4, bytes);
+  TestFakeImage::PutRecordSlack(image, freed_record, 4, bytes);
   const auto opened = OpenVolume<S>(std::move(image), both_flags);
 
   CHECK(CarveRecord(*opened.volume, freed_record).empty());
 
   // The same bytes with another name are a new candidate, partial.
-  std::vector<BYTE> other = Tests::BuildFakeNtfsImageWithFreedFileTree();
-  Tests::PutRecordSlack(other, freed_record, 4,
-                        Tests::EncodeSlackName({.name = L"old.tm2"}));
+  std::vector<BYTE> other =
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
+  TestFakeImage::PutRecordSlack(
+      other, freed_record, 4,
+      TestFakeImage::EncodeSlackName({.name = L"old.tm2"}));
   const auto changed = OpenVolume<S>(std::move(other), both_flags);
   const auto carved = CarveRecord(*changed.volume, freed_record);
   REQUIRE(carved.size() == 1);
@@ -263,7 +269,8 @@ void CheckSlackCostsNoReadWith(const std::vector<BYTE>& plain,
 
 template <Cache::Strategy S>
 void CheckSlackNeverCostsARead() {
-  const std::vector<BYTE> plain = Tests::BuildFakeNtfsImageWithFreedFileTree();
+  const std::vector<BYTE> plain =
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
   const std::vector<BYTE> slack = ImageWithTwoOldNames();
   for (const VolumeOptions& options : flags_without_both) {
     CheckSlackCostsNoReadWith<S>(plain, slack, options);
@@ -364,7 +371,7 @@ TEST_CASE("the slack of a freed record is carved", "[record][slack]") {
 
 TEST_CASE("a slack of zeros carves nothing", "[record][slack]") {
   const auto opened = OpenVolume<Cache::Strategy::NoCache>(
-      Tests::BuildFakeNtfsImageWithFreedFileTree(), both_flags);
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(), both_flags);
 
   const Mft::MftTree tree = Scan(*opened.volume);
 
@@ -375,12 +382,13 @@ TEST_CASE("a slack of random bytes carves nothing", "[record][slack]") {
   std::mt19937 engine(99);
   std::uniform_int_distribution<unsigned> byte(0, 255);
   for (int round = 0; round < 40; ++round) {
-    std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedFileTree();
+    std::vector<BYTE> image =
+        TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
     std::vector<BYTE> noise(slack_room);
     for (BYTE& value : noise) {
       value = static_cast<BYTE>(byte(engine));
     }
-    Tests::PutRecordSlack(image, docs_record, 8, noise);
+    TestFakeImage::PutRecordSlack(image, docs_record, 8, noise);
     const auto opened =
         OpenVolume<Cache::Strategy::NoCache>(std::move(image), both_flags);
 
@@ -391,14 +399,17 @@ TEST_CASE("a slack of random bytes carves nothing", "[record][slack]") {
 
 TEST_CASE("slack up to the last byte of a record is carved",
           "[record][slack]") {
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedFileTree();
-  const std::vector<BYTE> bytes = Tests::EncodeSlackName(Old(L"last.txt"));
+  std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
+  const std::vector<BYTE> bytes =
+      TestFakeImage::EncodeSlackName(Old(L"last.txt"));
   // The fake records keep a fixup array in their last six bytes: the name ends
   // right before it.
-  const size_t marker = Tests::RecordEndMarkerOffset(image, report_record);
+  const size_t marker =
+      TestFakeImage::RecordEndMarkerOffset(image, report_record);
   constexpr size_t fixup_array = 1018;
-  Tests::PutRecordSlack(image, report_record,
-                        fixup_array - bytes.size() - marker, bytes);
+  TestFakeImage::PutRecordSlack(image, report_record,
+                                fixup_array - bytes.size() - marker, bytes);
   const auto opened =
       OpenVolume<Cache::Strategy::NoCache>(std::move(image), both_flags);
 
@@ -411,7 +422,7 @@ TEST_CASE("slack up to the last byte of a record is carved",
 TEST_CASE("a forged used size does not move the scan", "[record][slack]") {
   for (const DWORD used : {DWORD{0}, DWORD{16}, DWORD{0xFFFFFFFF}}) {
     std::vector<BYTE> image = ImageWith(report_record, {Old(L"older.txt")});
-    Tests::SetRecordUsedSize(image, report_record, used);
+    TestFakeImage::SetRecordUsedSize(image, report_record, used);
     const auto opened =
         OpenVolume<Cache::Strategy::NoCache>(std::move(image), both_flags);
 
@@ -424,16 +435,18 @@ TEST_CASE("a forged used size does not move the scan", "[record][slack]") {
 
 TEST_CASE("a record whose attributes never end carves nothing",
           "[record][slack]") {
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedFileTree();
+  std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
   // An attribute that claims more bytes than the record holds replaces the end
   // marker: the walk runs out, and the names after it are not leftovers.
   std::vector<BYTE> broken(8);
   broken.at(0) = 0x10;
   broken.at(4) = 0xFF;
   broken.at(5) = 0x7F;
-  const std::vector<BYTE> bytes = Tests::EncodeSlackName(Old(L"older.txt"));
-  Tests::PutRecordSlack(image, report_record, 8, bytes);
-  Tests::PutRecordSlack(image, report_record, 0, broken);
+  const std::vector<BYTE> bytes =
+      TestFakeImage::EncodeSlackName(Old(L"older.txt"));
+  TestFakeImage::PutRecordSlack(image, report_record, 8, bytes);
+  TestFakeImage::PutRecordSlack(image, report_record, 0, broken);
   const auto opened =
       OpenVolume<Cache::Strategy::NoCache>(std::move(image), both_flags);
 

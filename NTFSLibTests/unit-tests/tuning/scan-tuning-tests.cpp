@@ -31,10 +31,12 @@
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Kind = Tests::CountingDiskReader::Kind;
+using Kind = TestDiskReaders::CountingDiskReader::Kind;
 
 namespace {
 
@@ -54,16 +56,16 @@ VolumeOptions ScanOptions() {
 }
 
 std::vector<BYTE> ListImage() {
-  return Tests::BuildFakeNtfsImageWithListMftScan(list_record_count,
-                                                  list_fragment_clusters);
+  return TestFakeImage::BuildFakeNtfsImageWithListMftScan(
+      list_record_count, list_fragment_clusters);
 }
 
 Tests::ScanResult Scan(const std::vector<BYTE>& image,
                        const VolumeOptions& options, unsigned threads) {
   static_cast<void>(Tests::TakeCapturedLog());
-  auto reader = std::make_unique<Tests::CountingDiskReader>(
-      std::make_unique<Tests::MemoryDiskReader>(image));
-  const Tests::CountingDiskReader* const counting = reader.get();
+  auto reader = std::make_unique<TestDiskReaders::CountingDiskReader>(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(image));
+  const TestDiskReaders::CountingDiskReader* const counting = reader.get();
   const NtfsVolume<Cache::Strategy::NoCache> volume(std::move(reader), options);
   REQUIRE(volume.IsVolumeOK());
   return Tests::CaptureScan(volume, counting, threads);
@@ -71,14 +73,14 @@ Tests::ScanResult Scan(const std::vector<BYTE>& image,
 
 size_t Cancels(const Tests::ScanResult& scan) {
   return static_cast<size_t>(std::ranges::count_if(
-      scan.calls, [](const Tests::CountingDiskReader::Call& call) {
+      scan.calls, [](const TestDiskReaders::CountingDiskReader::Call& call) {
         return call.kind == Kind::CancelPrefetch;
       }));
 }
 
 size_t Reads(const Tests::ScanResult& scan) {
   return static_cast<size_t>(std::ranges::count_if(
-      scan.calls, [](const Tests::CountingDiskReader::Call& call) {
+      scan.calls, [](const TestDiskReaders::CountingDiskReader::Call& call) {
         return call.kind == Kind::Read;
       }));
 }

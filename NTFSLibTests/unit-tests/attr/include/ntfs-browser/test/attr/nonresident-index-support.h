@@ -72,7 +72,8 @@ template <Cache::Strategy S>
 ParsedRecord<S> OpenRecord(std::vector<BYTE> image, ULONGLONG idx,
                            VolumeOptions options = {}) {
   return OpenRecordFrom<S>(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           std::move(image)),
       idx, options);
 }

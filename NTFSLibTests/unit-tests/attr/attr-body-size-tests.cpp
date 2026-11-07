@@ -33,17 +33,17 @@ TEMPLATE_TEST_CASE_SIG(
     "ParseAttrs rejects a resident STANDARD_INFORMATION with an empty body",
     "[file-record][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  auto reader =
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::
-              BuildFakeNtfsImageWithEmptyStandardInformation());
+  auto reader = std::make_unique<
+      NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+          BuildFakeNtfsImageWithEmptyStandardInformation());
 
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(
-      NTFS_BROWSER_NAMESPACE::Tests::legacy_standard_information_record_idx));
+  REQUIRE(record.ParseFileRecord(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                                     legacy_standard_information_record_idx));
 
   CHECK_FALSE(record.ParseAttrs());
   CHECK(record.GetAttr(Attr::Type::StandardInformation).empty());
@@ -53,10 +53,10 @@ TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume rejects a resident VOLUME_INFORMATION with an empty body",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  auto reader =
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::
-              BuildFakeNtfsImageWithEmptyVolumeInformation());
+  auto reader = std::make_unique<
+      NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+          BuildFakeNtfsImageWithEmptyVolumeInformation());
 
   const NtfsVolume<S> volume(std::move(reader));
 
@@ -69,17 +69,17 @@ TEMPLATE_TEST_CASE_SIG(
     "currently computes to",
     "[file-record][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  auto reader =
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::
-              BuildFakeNtfsImageWithLegacyStandardInformation());
+  auto reader = std::make_unique<
+      NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+          BuildFakeNtfsImageWithLegacyStandardInformation());
 
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(
-      NTFS_BROWSER_NAMESPACE::Tests::legacy_standard_information_record_idx));
+  REQUIRE(record.ParseFileRecord(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                                     legacy_standard_information_record_idx));
 
   CHECK(record.ParseAttrs());
   CHECK_FALSE(record.GetAttr(Attr::Type::StandardInformation).empty());
@@ -92,10 +92,10 @@ TEMPLATE_TEST_CASE_SIG(
     "computes to",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  auto reader =
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::
-              BuildFakeNtfsImageWithMinimalVolumeInformation());
+  auto reader = std::make_unique<
+      NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+          BuildFakeNtfsImageWithMinimalVolumeInformation());
 
   const NtfsVolume<S> volume(std::move(reader));
 

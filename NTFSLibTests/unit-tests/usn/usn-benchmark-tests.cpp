@@ -26,10 +26,11 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Usn = NTFS_BROWSER_NAMESPACE::Usn;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Tests::FakeUsnRecord;
+using TestFakeImage::FakeUsnRecord;
 
 namespace {
 
@@ -60,7 +61,7 @@ std::vector<BYTE> RealisticStream(size_t count) {
   stream.reserve(count * 104);
   for (size_t i = 0; i < count; ++i) {
     std::wstring name = L"document-" + std::to_wstring(1000000 + i) + L".do";
-    const std::vector<BYTE> record = Tests::EncodeUsnRecord(
+    const std::vector<BYTE> record = TestFakeImage::EncodeUsnRecord(
         FakeUsnRecord{.name = std::move(name), .file_record = 100 + i},
         stream.size());
     stream.insert(stream.end(), record.begin(), record.end());
@@ -84,8 +85,9 @@ size_t HeldBytes(const Usn::Journal& journal) {
 // Reads a journal of count records and prints what it took. Returns the
 // seconds per record.
 double MeasureJournal(size_t count) {
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedFileTree();
-  Tests::PutUsnJournal(image, {.raw_stream = RealisticStream(count)});
+  std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
+  TestFakeImage::PutUsnJournal(image, {.raw_stream = RealisticStream(count)});
   const auto opened = Support::OpenVolume<Cache::Strategy::NoCache>(
       std::move(image),
       VolumeOptions{.include_deleted = true,
@@ -110,8 +112,8 @@ double MeasureJournal(size_t count) {
 // Scans the $MFT of an image of many freed files, and returns the seconds per
 // record.
 double MeasureMftScan(size_t files) {
-  const Tests::FakeManyDeleted many =
-      Tests::BuildFakeNtfsImageWithManyDeletedFiles(files, 1);
+  const TestFakeImage::FakeManyDeleted many =
+      TestFakeImage::BuildFakeNtfsImageWithManyDeletedFiles(files, 1);
   const auto opened = Support::OpenVolume<Cache::Strategy::NoCache>(
       many.image, VolumeOptions{.include_deleted = true});
 

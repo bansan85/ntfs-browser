@@ -63,6 +63,9 @@ using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 
 namespace {
 
@@ -80,7 +83,8 @@ ParsedRoot<S> ParseRoot(std::vector<BYTE> image,
                         NTFS_BROWSER_NAMESPACE::VolumeOptions options = {}) {
   ParsedRoot<S> parsed;
   parsed.volume = std::make_unique<NtfsVolume<S>>(
-      std::make_unique<Tests::MemoryDiskReader>(std::move(image)), options);
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(std::move(image)),
+      options);
   REQUIRE(parsed.volume->IsVolumeOK());
 
   parsed.record = std::make_unique<NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>>(
@@ -170,7 +174,7 @@ namespace {
 template <Cache::Strategy S>
 void CheckCompressedFileReadsBackDecompressed() {
   ParsedRoot<S> root =
-      ParseRoot<S>(Tests::BuildFakeNtfsImageWithCompressedFile());
+      ParseRoot<S>(TestFakeImage::BuildFakeNtfsImageWithCompressedFile());
 
   // Acceptance criterion: a compressed record is no longer skipped.
   REQUIRE(root.record->ParseAttrs());
@@ -181,15 +185,15 @@ void CheckCompressedFileReadsBackDecompressed() {
   // The REQUIRE above checks that there is one DATA attribute.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(root.record->GetAttr(Attr::Type::Data)[0]->GetDataSize() ==
-        Tests::xca_lznt1_example_decompressed_size);
+        TestFakeImage::xca_lznt1_example_decompressed_size);
 
   const std::optional<std::vector<BYTE>> data = ReadRootData<S>(
-      *root.record, 0, Tests::xca_lznt1_example_decompressed_size);
+      *root.record, 0, TestFakeImage::xca_lznt1_example_decompressed_size);
   REQUIRE(data.has_value());
   REQUIRE(Tests::Unwrap(data).size() ==
-          Tests::xca_lznt1_example_decompressed_size);
+          TestFakeImage::xca_lznt1_example_decompressed_size);
   CHECK(std::memcmp(Tests::Unwrap(data).data(),
-                    Tests::xca_lznt1_example_decompressed.data(),
+                    TestFakeImage::xca_lznt1_example_decompressed.data(),
                     Tests::Unwrap(data).size()) == 0);
 }
 
@@ -198,11 +202,11 @@ void CheckCompressedFileReadsBackDecompressed() {
 template <Cache::Strategy S>
 void CheckStoredCompressionUnitReadsBackVerbatim() {
   ParsedRoot<S> root = ParseRootWithAttrs<S>(
-      Tests::BuildFakeNtfsImageWithStoredCompressionUnit());
+      TestFakeImage::BuildFakeNtfsImageWithStoredCompressionUnit());
 
-  CheckRootBytes<S>(
-      *root.record, 0,
-      Tests::CompressionFixturePattern(Tests::compression_unit_size));
+  CheckRootBytes<S>(*root.record, 0,
+                    TestFakeImage::CompressionFixturePattern(
+                        TestFakeImage::compression_unit_size));
 }
 
 // I/O matrix row "Fully sparse unit": no real cluster at all, so it must
@@ -210,12 +214,12 @@ void CheckStoredCompressionUnitReadsBackVerbatim() {
 template <Cache::Strategy S>
 void CheckSparseCompressionUnitReadsBackZeroed() {
   ParsedRoot<S> root = ParseRootWithAttrs<S>(
-      Tests::BuildFakeNtfsImageWithSparseCompressionUnit());
+      TestFakeImage::BuildFakeNtfsImageWithSparseCompressionUnit());
 
   const std::optional<std::vector<BYTE>> data =
-      ReadRootData<S>(*root.record, 0, Tests::compression_unit_size);
+      ReadRootData<S>(*root.record, 0, TestFakeImage::compression_unit_size);
   REQUIRE(data.has_value());
-  REQUIRE(Tests::Unwrap(data).size() == Tests::compression_unit_size);
+  REQUIRE(Tests::Unwrap(data).size() == TestFakeImage::compression_unit_size);
 
   size_t non_zero = 0;
   for (const BYTE byte_value : Tests::Unwrap(data)) {
@@ -231,11 +235,11 @@ void CheckSparseCompressionUnitReadsBackZeroed() {
 template <Cache::Strategy S>
 void CheckFragmentedCompressedFileReadsBackDecompressed() {
   ParsedRoot<S> root = ParseRootWithAttrs<S>(
-      Tests::BuildFakeNtfsImageWithFragmentedCompressedFile());
+      TestFakeImage::BuildFakeNtfsImageWithFragmentedCompressedFile());
 
   CheckRootBytes<S>(*root.record, 0,
-                    Tests::CompressionFixturePattern(
-                        Tests::fragmented_compressed_payload_size));
+                    TestFakeImage::CompressionFixturePattern(
+                        TestFakeImage::fragmented_compressed_payload_size));
 }
 
 // I/O matrix row "Trailing partial unit at EOF": real_size is not a multiple
@@ -244,12 +248,12 @@ void CheckFragmentedCompressedFileReadsBackDecompressed() {
 template <Cache::Strategy S>
 void CheckTrailingPartialCompressionUnit() {
   ParsedRoot<S> root = ParseRootWithAttrs<S>(
-      Tests::BuildFakeNtfsImageWithTrailingPartialCompressionUnit());
+      TestFakeImage::BuildFakeNtfsImageWithTrailingPartialCompressionUnit());
 
-  const std::vector<BYTE> head = Tests::CompressionFixturePattern(
-      Tests::trailing_partial_unit_stored_size);
-  const std::vector<BYTE> tail =
-      Tests::CompressionFixturePattern(Tests::trailing_partial_unit_tail_size);
+  const std::vector<BYTE> head = TestFakeImage::CompressionFixturePattern(
+      TestFakeImage::trailing_partial_unit_stored_size);
+  const std::vector<BYTE> tail = TestFakeImage::CompressionFixturePattern(
+      TestFakeImage::trailing_partial_unit_tail_size);
   const size_t total = head.size() + tail.size();
 
   REQUIRE(root.record->GetAttr(Attr::Type::Data).size() == 1);
@@ -269,8 +273,8 @@ void CheckTrailingPartialCompressionUnit() {
 
   // Oversized read past EOF must truncate to the real count, not invent
   // bytes from sparse padding.
-  const std::optional<std::vector<BYTE>> beyond =
-      ReadRootData<S>(*root.record, head.size(), Tests::compression_unit_size);
+  const std::optional<std::vector<BYTE>> beyond = ReadRootData<S>(
+      *root.record, head.size(), TestFakeImage::compression_unit_size);
   REQUIRE(beyond.has_value());
   REQUIRE(Tests::Unwrap(beyond).size() == tail.size());
   CHECK(std::memcmp(Tests::Unwrap(beyond).data(), tail.data(), tail.size()) ==
@@ -282,12 +286,12 @@ void CheckTrailingPartialCompressionUnit() {
 template <Cache::Strategy S>
 void CheckCorruptCompressedUnitIsRejected() {
   ParsedRoot<S> root = ParseRootWithAttrs<S>(
-      Tests::BuildFakeNtfsImageWithCorruptCompressedUnit());
+      TestFakeImage::BuildFakeNtfsImageWithCorruptCompressedUnit());
 
   std::optional<std::vector<BYTE>> data;
   const std::string trace = CaptureTrace([&] {
     data = ReadRootData<S>(*root.record, 0,
-                           Tests::xca_lznt1_example_decompressed_size);
+                           TestFakeImage::xca_lznt1_example_decompressed_size);
   });
 
   CHECK_FALSE(data.has_value());
@@ -302,15 +306,16 @@ void CheckCorruptCompressedUnitIsRejected() {
 template <Cache::Strategy S>
 void CheckUnmappedCompressionUnitIsRejected() {
   ParsedRoot<S> root = ParseRootWithAttrs<S>(
-      Tests::BuildFakeNtfsImageWithUnmappedCompressionUnit());
+      TestFakeImage::BuildFakeNtfsImageWithUnmappedCompressionUnit());
 
   // Unit 0 is well-formed and must still read back.
-  CheckRootBytes<S>(
-      *root.record, 0,
-      Tests::CompressionFixturePattern(Tests::compression_unit_size));
+  CheckRootBytes<S>(*root.record, 0,
+                    TestFakeImage::CompressionFixturePattern(
+                        TestFakeImage::compression_unit_size));
 
   // Reading into unit 1 must not be answered with zeroes.
-  CheckReadRejected<S>(*root.record, 0, 2 * Tests::compression_unit_size,
+  CheckReadRejected<S>(*root.record, 0,
+                       2 * TestFakeImage::compression_unit_size,
                        "is not fully mapped");
 }
 
@@ -319,9 +324,9 @@ void CheckUnmappedCompressionUnitIsRejected() {
 template <Cache::Strategy S>
 void CheckRealClustersAfterHoleIsRejected() {
   ParsedRoot<S> root = ParseRootWithAttrs<S>(
-      Tests::BuildFakeNtfsImageWithRealClustersAfterHole());
+      TestFakeImage::BuildFakeNtfsImageWithRealClustersAfterHole());
 
-  CheckReadRejected<S>(*root.record, 0, Tests::compression_unit_size,
+  CheckReadRejected<S>(*root.record, 0, TestFakeImage::compression_unit_size,
                        "has real clusters after a hole");
 }
 
@@ -330,9 +335,9 @@ void CheckRealClustersAfterHoleIsRejected() {
 template <Cache::Strategy S>
 void CheckShortDecompressedInteriorUnitIsRejected() {
   ParsedRoot<S> root = ParseRootWithAttrs<S>(
-      Tests::BuildFakeNtfsImageWithShortDecompressedUnit());
+      TestFakeImage::BuildFakeNtfsImageWithShortDecompressedUnit());
 
-  CheckReadRejected<S>(*root.record, 0, Tests::compression_unit_size,
+  CheckReadRejected<S>(*root.record, 0, TestFakeImage::compression_unit_size,
                        "decompressed to 100 bytes, expected at least 4096");
 }
 
@@ -342,30 +347,31 @@ void CheckShortDecompressedInteriorUnitIsRejected() {
 template <Cache::Strategy S>
 void CheckSparseUnitBeforeCompressedUnitReadsBack() {
   ParsedRoot<S> root = ParseRootWithAttrs<S>(
-      Tests::BuildFakeNtfsImageWithSparseThenCompressedUnit());
+      TestFakeImage::BuildFakeNtfsImageWithSparseThenCompressedUnit());
   REQUIRE(root.record->GetAttr(Attr::Type::Data).size() == 1);
   // The REQUIRE above checks that there is one DATA attribute.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   CHECK(root.record->GetAttr(Attr::Type::Data)[0]->GetDataSize() ==
-        Tests::sparse_then_compressed_real_size);
+        TestFakeImage::sparse_then_compressed_real_size);
 
-  constexpr size_t hole_size = Tests::compression_unit_size;
-  constexpr size_t decoded_size = Tests::xca_lznt1_example_decompressed_size;
+  constexpr size_t hole_size = TestFakeImage::compression_unit_size;
+  constexpr size_t decoded_size =
+      TestFakeImage::xca_lznt1_example_decompressed_size;
 
   std::optional<std::vector<BYTE>> whole;
   const std::string trace = CaptureTrace([&] {
     whole = ReadRootData<S>(*root.record, 0,
-                            Tests::sparse_then_compressed_real_size);
+                            TestFakeImage::sparse_then_compressed_real_size);
   });
   REQUIRE(whole.has_value());
   REQUIRE(Tests::Unwrap(whole).size() ==
-          Tests::sparse_then_compressed_real_size);
+          TestFakeImage::sparse_then_compressed_real_size);
   const std::vector<BYTE>& bytes = Tests::Unwrap(whole);
   CHECK(std::all_of(bytes.begin(),
                     bytes.begin() + static_cast<std::ptrdiff_t>(hole_size),
                     [](BYTE value) { return value == 0; }));
   CHECK(std::memcmp(&bytes.at(hole_size),
-                    Tests::xca_lznt1_example_decompressed.data(),
+                    TestFakeImage::xca_lznt1_example_decompressed.data(),
                     decoded_size) == 0);
   CHECK_THAT(trace, Catch::Matchers::ContainsSubstring(
                         "Compression unit 0 is sparse"));
@@ -386,7 +392,7 @@ void CheckSparseUnitBeforeCompressedUnitReadsBack() {
                         static_cast<std::ptrdiff_t>(straddle_before),
                     [](BYTE value) { return value == 0; }));
   CHECK(std::memcmp(&straddled.at(straddle_before),
-                    Tests::xca_lznt1_example_decompressed.data(),
+                    TestFakeImage::xca_lznt1_example_decompressed.data(),
                     straddle_after) == 0);
 
   // Reading only the compressed unit truncates at real_size, not at the unit.
@@ -401,9 +407,9 @@ void CheckSparseUnitBeforeCompressedUnitReadsBack() {
 template <Cache::Strategy S>
 void CheckHoleBeforeRealClusterIsRejected() {
   ParsedRoot<S> root = ParseRootWithAttrs<S>(
-      Tests::BuildFakeNtfsImageWithHoleBeforeRealCluster());
+      TestFakeImage::BuildFakeNtfsImageWithHoleBeforeRealCluster());
 
-  CheckReadRejected<S>(*root.record, 0, Tests::compression_unit_size,
+  CheckReadRejected<S>(*root.record, 0, TestFakeImage::compression_unit_size,
                        "has real clusters after a hole");
 }
 
@@ -500,13 +506,13 @@ TEST_CASE(
     "[attr-non-resident][compression]") {
   ParsedRoot<Cache::Strategy::FullCache> root =
       ParseRoot<Cache::Strategy::FullCache>(
-          Tests::BuildFakeNtfsImageWithCompressedFile());
+          TestFakeImage::BuildFakeNtfsImageWithCompressedFile());
   REQUIRE(root.record->ParseAttrs());
 
   std::optional<std::vector<BYTE>> first;
   const std::string first_trace = CaptureTrace([&] {
     first = ReadRootData<Cache::Strategy::FullCache>(
-        *root.record, 0, Tests::xca_lznt1_example_decompressed_size);
+        *root.record, 0, TestFakeImage::xca_lznt1_example_decompressed_size);
   });
   REQUIRE(first.has_value());
   CHECK_THAT(first_trace,
@@ -516,7 +522,7 @@ TEST_CASE(
   std::optional<std::vector<BYTE>> second;
   const std::string second_trace = CaptureTrace([&] {
     second = ReadRootData<Cache::Strategy::FullCache>(
-        *root.record, 0, Tests::xca_lznt1_example_decompressed_size);
+        *root.record, 0, TestFakeImage::xca_lznt1_example_decompressed_size);
   });
 
   // Same bytes...
@@ -534,12 +540,12 @@ TEST_CASE(
     "[attr-non-resident][compression]") {
   ParsedRoot<Cache::Strategy::NoCache> root =
       ParseRoot<Cache::Strategy::NoCache>(
-          Tests::BuildFakeNtfsImageWithCompressedFile());
+          TestFakeImage::BuildFakeNtfsImageWithCompressedFile());
   REQUIRE(root.record->ParseAttrs());
 
   const auto read = [&] {
     return ReadRootData<Cache::Strategy::NoCache>(
-        *root.record, 0, Tests::xca_lznt1_example_decompressed_size);
+        *root.record, 0, TestFakeImage::xca_lznt1_example_decompressed_size);
   };
 
   std::optional<std::vector<BYTE>> first;
@@ -568,8 +574,8 @@ namespace {
 // be accepted; the conditional CompressedSize field must not have grown it.
 template <Cache::Strategy S>
 void CheckMinimalNonResidentAttributeStillAccepted() {
-  ParsedRoot<S> root =
-      ParseRoot<S>(Tests::BuildFakeNtfsImageWithMinimalNonResidentData());
+  ParsedRoot<S> root = ParseRoot<S>(
+      TestFakeImage::BuildFakeNtfsImageWithMinimalNonResidentData());
 
   std::string trace;
   bool parsed = false;
@@ -615,7 +621,8 @@ TEMPLATE_TEST_CASE_SIG(
     "[file-record][compression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   CheckCompressedHeaderRejected<S>(
-      Tests::BuildFakeNtfsImageWithCompressedAttrMissingCompressedSize(),
+      TestFakeImage::
+          BuildFakeNtfsImageWithCompressedAttrMissingCompressedSize(),
       "Compressed attribute total_size too small for its compressed size "
       "field.");
 }
@@ -625,7 +632,7 @@ TEMPLATE_TEST_CASE_SIG("An out-of-range comp_unit_size is rejected",
                        ((Cache::Strategy S), S), Cache::Strategy::NoCache,
                        Cache::Strategy::FullCache) {
   CheckCompressedHeaderRejected<S>(
-      Tests::BuildFakeNtfsImageWithCompUnitSizeOutOfRange(),
+      TestFakeImage::BuildFakeNtfsImageWithCompUnitSizeOutOfRange(),
       "Compression unit size is out of range.");
 }
 
@@ -634,7 +641,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[attr-non-resident][compression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   CheckCompressedHeaderRejected<S>(
-      Tests::BuildFakeNtfsImageWithOversizedCompressionUnit(),
+      TestFakeImage::BuildFakeNtfsImageWithOversizedCompressionUnit(),
       "Compression unit size is implausibly large.");
 }
 
@@ -643,7 +650,7 @@ TEMPLATE_TEST_CASE_SIG("A misaligned compressed start_vcn is rejected",
                        ((Cache::Strategy S), S), Cache::Strategy::NoCache,
                        Cache::Strategy::FullCache) {
   CheckCompressedHeaderRejected<S>(
-      Tests::BuildFakeNtfsImageWithMisalignedCompressedStartVcn(),
+      TestFakeImage::BuildFakeNtfsImageWithMisalignedCompressedStartVcn(),
       "Compressed attribute start VCN is not compression unit aligned.");
 }
 
@@ -659,7 +666,7 @@ template <Cache::Strategy S>
 void CheckCompressedIndexAllocationTraverses() {
   // The named record is not built: only recover_errors lists this entry.
   ParsedRoot<S> root = ParseRootWithAttrs<S>(
-      Tests::BuildFakeNtfsImageWithCompressedIndexAllocation(),
+      TestFakeImage::BuildFakeNtfsImageWithCompressedIndexAllocation(),
       {.recover_errors = true});
   CHECK(root.record->IsCompressed());
   CHECK(root.record->IsDirectory());
@@ -675,13 +682,13 @@ void CheckCompressedIndexAllocationTraverses() {
   REQUIRE(names.size() == 1);
   // The REQUIRE above checks the size of names.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(names[0] == Tests::compressed_index_entry_name);
+  CHECK(names[0] == TestFakeImage::compressed_index_entry_name);
 
   const std::optional<IndexEntry> found =
-      root.record->FindSubEntry(Tests::compressed_index_entry_name);
+      root.record->FindSubEntry(TestFakeImage::compressed_index_entry_name);
   REQUIRE(found.has_value());
   CHECK(Tests::Unwrap(found).GetFileReference() ==
-        Tests::compressed_index_entry_mft_ref);
+        TestFakeImage::compressed_index_entry_mft_ref);
 }
 
 // Malformed counterpart of the fixture above: corrupted LZNT1 bytes must
@@ -689,7 +696,7 @@ void CheckCompressedIndexAllocationTraverses() {
 template <Cache::Strategy S>
 void CheckCorruptCompressedIndexAllocationIsRejected() {
   ParsedRoot<S> root = ParseRootWithAttrs<S>(
-      Tests::BuildFakeNtfsImageWithCorruptCompressedIndexAllocation());
+      TestFakeImage::BuildFakeNtfsImageWithCorruptCompressedIndexAllocation());
 
   size_t visited = 0;
   const std::string trace = CaptureTrace([&] {
@@ -737,9 +744,9 @@ struct SeenEntry {
 template <Cache::Strategy S>
 void CheckSurrogatePairNamesTraverse() {
   // The named records are not built: only recover_errors lists these entries.
-  ParsedRoot<S> root =
-      ParseRootWithAttrs<S>(Tests::BuildFakeNtfsImageWithSurrogatePairNames(),
-                            {.recover_errors = true});
+  ParsedRoot<S> root = ParseRootWithAttrs<S>(
+      TestFakeImage::BuildFakeNtfsImageWithSurrogatePairNames(),
+      {.recover_errors = true});
   CHECK(root.record->IsCompressed());
 
   std::vector<SeenEntry> seen;
@@ -751,33 +758,33 @@ void CheckSurrogatePairNamesTraverse() {
       },
       &seen);
 
-  REQUIRE(seen.size() == Tests::surrogate_names.size());
+  REQUIRE(seen.size() == TestFakeImage::surrogate_names.size());
   for (size_t i = 0; i < seen.size(); i++) {
     INFO("entry " << i);
     // The REQUIRE above checks the size of seen.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(seen[i].name == Tests::surrogate_names[i]);
+    CHECK(seen[i].name == TestFakeImage::surrogate_names[i]);
     // The surrogate* tables hold as many entries as surrogate_names.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(seen[i].mft_ref == Tests::surrogate_name_mft_refs[i]);
+    CHECK(seen[i].mft_ref == TestFakeImage::surrogate_name_mft_refs[i]);
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK(
         seen[i].directory ==
         // The surrogate* tables hold as many entries as surrogate_names.
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        Tests::surrogate_name_is_directory[i]);
+        TestFakeImage::surrogate_name_is_directory[i]);
 
     const std::optional<IndexEntry> found =
         // The REQUIRE above makes seen as long as surrogate_names, like the
         // other tables.
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        root.record->FindSubEntry(Tests::surrogate_names[i]);
+        root.record->FindSubEntry(TestFakeImage::surrogate_names[i]);
     REQUIRE(found.has_value());
     CHECK(
         Tests::Unwrap(found).GetFileReference() ==
         // The surrogate* tables hold as many entries as surrogate_names.
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        Tests::surrogate_name_mft_refs[i]);
+        TestFakeImage::surrogate_name_mft_refs[i]);
   }
 }
 
@@ -801,8 +808,8 @@ void CheckOverflowingLcnUnitReadFails(std::vector<BYTE> image) {
 
   std::optional<std::vector<BYTE>> read;
   const std::string trace = CaptureTrace([&] {
-    REQUIRE_NOTHROW(
-        read = ReadRootData(*root.record, 0, Tests::compression_unit_size));
+    REQUIRE_NOTHROW(read = ReadRootData(*root.record, 0,
+                                        TestFakeImage::compression_unit_size));
   });
 
   CHECK_FALSE(read.has_value());
@@ -817,7 +824,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[attr-non-resident][compression][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   CheckOverflowingLcnUnitReadFails<S>(
-      Tests::BuildFakeNtfsImageWithStoredCompressionUnitBadLcn());
+      TestFakeImage::BuildFakeNtfsImageWithStoredCompressionUnitBadLcn());
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -826,5 +833,5 @@ TEMPLATE_TEST_CASE_SIG(
     "[attr-non-resident][compression][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   CheckOverflowingLcnUnitReadFails<S>(
-      Tests::BuildFakeNtfsImageWithCompressedCompressionUnitBadLcn());
+      TestFakeImage::BuildFakeNtfsImageWithCompressedCompressionUnitBadLcn());
 }

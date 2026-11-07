@@ -48,8 +48,9 @@ namespace {
 template <Cache::Strategy S>
 void CheckFindStreamReturnsNamedStream() {
   auto reader = std::make_unique<
-      NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithNamedDataStream());
+      NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+          BuildFakeNtfsImageWithNamedDataStream());
 
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
@@ -62,22 +63,24 @@ void CheckFindStreamReturnsNamedStream() {
   // (named or otherwise) in this fixture is named "nonexistent".
   CHECK(record.FindStream(L"nonexistent") == nullptr);
 
-  const NTFS_BROWSER_NAMESPACE::Attr::AttrBase<S>* stream =
-      record.FindStream(NTFS_BROWSER_NAMESPACE::Tests::named_data_stream_name);
+  const NTFS_BROWSER_NAMESPACE::Attr::AttrBase<S>* stream = record.FindStream(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::named_data_stream_name);
   REQUIRE(stream != nullptr);
 
   CHECK(stream->GetAttrName() ==
-        NTFS_BROWSER_NAMESPACE::Tests::named_data_stream_name);
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::named_data_stream_name);
 
   // Confirm it's genuinely the named stream's own data, not some other
   // attribute.
   REQUIRE(stream->GetDataSize() ==
-          NTFS_BROWSER_NAMESPACE::Tests::named_data_stream_content.size());
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::named_data_stream_content
+              .size());
   CHECK(std::memcmp(
             stream->GetData(),
-            NTFS_BROWSER_NAMESPACE::Tests::named_data_stream_content.data(),
-            NTFS_BROWSER_NAMESPACE::Tests::named_data_stream_content.size()) ==
-        0);
+            NTFS_BROWSER_NAMESPACE::Test::FakeImage::named_data_stream_content
+                .data(),
+            NTFS_BROWSER_NAMESPACE::Test::FakeImage::named_data_stream_content
+                .size()) == 0);
 
   // Requesting the unnamed stream must still correctly return nullptr: this
   // fixture's only $DATA attribute is named, not unnamed.

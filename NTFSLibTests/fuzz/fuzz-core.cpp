@@ -46,25 +46,20 @@ namespace NTFS_BROWSER_NAMESPACE {
 namespace Attr {
 
 struct HeaderCommon;
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 class AttrBase;
 
 }  // namespace Attr
 }  // namespace NTFS_BROWSER_NAMESPACE
 
 using NTFS_BROWSER_NAMESPACE::IndexEntryView;
+using NTFS_BROWSER_NAMESPACE::NtfsVolume;
+using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Attr::AttrBase;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
 using NTFS_BROWSER_NAMESPACE::Mft::MftTree;
-namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
-namespace Efs = NTFS_BROWSER_NAMESPACE::Efs;
-using NTFS_BROWSER_NAMESPACE::NtfsVolume;
-namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
-namespace Log = NTFS_BROWSER_NAMESPACE::Log;
-using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 
-namespace NtfsFuzz {
+namespace NTFS_BROWSER_NAMESPACE::Test::Fuzz {
 
 namespace {
 
@@ -189,16 +184,19 @@ void ReadFilename(const NTFS_BROWSER_NAMESPACE::Filename& name) {
 // Templated on Strategy so the same input drives both NoCache and
 // FullCache (see FuzzTestcase()): some bugs only manifest in FullCache's
 // object graph and are otherwise invisible to this fuzzer.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 void FuzzRootRecord(const NtfsVolume<S>& volume) {
   NTFS_BROWSER_NAMESPACE::Io::FileRecord file_record(volume);
   // Without DATA here, FindStream() below never sees a named $DATA
   // attribute on ROOT to walk. BITMAP and OBJECT_ID reach AttrBitmap and
   // the unhandled-attribute path of ParseAttr().
-  file_record.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation |
-                          Attr::Mask::Data | Attr::Mask::Bitmap |
-                          Attr::Mask::ObjectId);
-  if (!file_record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root))) {
+  file_record.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                          NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation |
+                          NTFS_BROWSER_NAMESPACE::Attr::Mask::Data |
+                          NTFS_BROWSER_NAMESPACE::Attr::Mask::Bitmap |
+                          NTFS_BROWSER_NAMESPACE::Attr::Mask::ObjectId);
+  if (!file_record.ParseFileRecord(
+          static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root))) {
     // file_record_ is guaranteed empty here, exercising IsDeleted()/
     // IsDirectory()'s guard against it.
     (void)file_record.IsDeleted();
@@ -254,15 +252,18 @@ constexpr size_t probe_read_bytes = 8192;
 
 // The metadata records parsed on top of the root: $MFT, $Volume, $Bitmap and
 // $UpCase. The root has its own, narrower, parse in FuzzRootRecord().
-constexpr std::array<Mft::Idx, 4> probed_records{
-    Mft::Idx::Mft, Mft::Idx::Volume, Mft::Idx::Bitmap, Mft::Idx::UpCase};
+constexpr std::array<NTFS_BROWSER_NAMESPACE::Mft::Idx, 4> probed_records{
+    NTFS_BROWSER_NAMESPACE::Mft::Idx::Mft,
+    NTFS_BROWSER_NAMESPACE::Mft::Idx::Volume,
+    NTFS_BROWSER_NAMESPACE::Mft::Idx::Bitmap,
+    NTFS_BROWSER_NAMESPACE::Mft::Idx::UpCase};
 
 // How many records past the metadata ones are parsed and read: the files and
 // folders of a small volume.
 constexpr ULONGLONG probed_user_records = 12;
 
 // Reads the start, then the middle, then the end of one attribute's data.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 void ProbeAttrData(const NTFS_BROWSER_NAMESPACE::Attr::AttrBase<S>& attr) {
   (void)attr.GetAttrType();
   (void)attr.GetAttrFlags();
@@ -300,7 +301,7 @@ void ReadCarvedNames(
 // Parses one record with every attribute type and calls the getters the
 // directory walk never needs. Reads each attribute's data, which is where
 // decompression and decryption happen.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 void ProbeRecord(const NtfsVolume<S>& volume, ULONGLONG record) {
   NTFS_BROWSER_NAMESPACE::Io::FileRecord file_record(volume);
   if (!file_record.ParseFileRecord(record) || !file_record.ParseAttrs()) {
@@ -350,9 +351,10 @@ void ProbeRecord(const NtfsVolume<S>& volume, ULONGLONG record) {
 
 // Parses the first records past the metadata ones and reads their data. Runs
 // last, so that it moves the reads of no other probe.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 void ProbeUserRecords(const NtfsVolume<S>& volume) {
-  const auto first = static_cast<ULONGLONG>(Mft::Idx::User);
+  const auto first =
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::User);
   for (ULONGLONG record = first; record < first + probed_user_records;
        ++record) {
     ProbeRecord(volume, record);
@@ -364,11 +366,13 @@ constexpr std::wstring_view supplementary_search_name = L"\U0001F41C";
 
 // Looks the root's entries up by a name outside the BMP. Runs last, like
 // ProbeUserRecords().
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 void ProbeSupplementarySearch(const NtfsVolume<S>& volume) {
   NTFS_BROWSER_NAMESPACE::Io::FileRecord file_record(volume);
-  file_record.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
-  if (file_record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)) &&
+  file_record.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                          NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+  if (file_record.ParseFileRecord(
+          static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root)) &&
       file_record.ParseAttrs()) {
     (void)file_record.FindSubEntry(supplementary_search_name);
   }
@@ -398,11 +402,13 @@ std::wstring FlippedCase(std::wstring_view name) {
 // flipped: the second spelling is found only through the rule that picks
 // between names that are equal when upcased. Runs after every other probe, like
 // ProbeSupplementarySearch(), so that it moves the reads of none.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 void ProbeCaseSearch(const NtfsVolume<S>& volume) {
   NTFS_BROWSER_NAMESPACE::Io::FileRecord file_record(volume);
-  file_record.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
-  if (!file_record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)) ||
+  file_record.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                          NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+  if (!file_record.ParseFileRecord(
+          static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root)) ||
       !file_record.ParseAttrs()) {
     return;
   }
@@ -428,15 +434,17 @@ constexpr size_t absent_name_index = 1000;
 // Rebuilds the namespace from the $MFT. The progress callback lets the scan
 // run to its second call, a few thousand records in, and stops it there: a
 // huge declared $MFT size cannot make the run long.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 void ProbeMftTree(const NtfsVolume<S>& volume) {
   const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(
       volume, {.progress = [](ULONGLONG done, ULONGLONG /*total*/) {
         return done == 0;
       }});
   (void)tree.Stats();
-  (void)tree.Find(static_cast<ULONGLONG>(Mft::Idx::Root));
-  (void)tree.Children(static_cast<ULONGLONG>(Mft::Idx::Root));
+  (void)tree.Find(
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root));
+  (void)tree.Children(
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root));
   for (const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry :
        tree.Entries()) {
     (void)tree.IsReachable(entry.record);
@@ -458,8 +466,9 @@ void ProbeMftTree(const NtfsVolume<S>& volume) {
   std::optional<ULONGLONG> no_ancestor;
   (void)tree.IsReachable(absent_record);
   (void)tree.GetPath(absent_record, &no_ancestor);
-  (void)tree.GetPath(static_cast<ULONGLONG>(Mft::Idx::Root), absent_name_index,
-                     &no_ancestor);
+  (void)tree.GetPath(
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root),
+      absent_name_index, &no_ancestor);
   // The files only the change journal names, and the path of each.
   for (size_t i = 0; i < tree.JournalOnly().size(); ++i) {
     std::optional<ULONGLONG> lost_ancestor;
@@ -472,7 +481,7 @@ void ProbeMftTree(const NtfsVolume<S>& volume) {
 // Asks the cluster bitmap about the first, last, middle and an out-of-range
 // cluster, then about the extents and the data state of each data stream of
 // the records the other probes parse. The bitmap is untrusted input too.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 void ProbeAllocation(const NtfsVolume<S>& volume) {
   const std::optional<NTFS_BROWSER_NAMESPACE::Alloc::SpaceSummary> summary =
       volume.GetSpaceSummary();
@@ -511,28 +520,29 @@ void ProbeAllocation(const NtfsVolume<S>& volume) {
 
   const auto probe_record = [&volume](ULONGLONG record) {
     NTFS_BROWSER_NAMESPACE::Io::FileRecord file_record(volume);
-    file_record.SetAttrMask(Attr::Mask::Data);
+    file_record.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::Data);
     if (!file_record.ParseFileRecord(record) || !file_record.ParseAttrs()) {
       return;
     }
     (void)file_record.GetDataState();
     (void)file_record.GetDataState(named_data_stream_name);
-    for (const auto& stream : file_record.GetAttr(Attr::Type::Data)) {
+    for (const auto& stream :
+         file_record.GetAttr(NTFS_BROWSER_NAMESPACE::Attr::Type::Data)) {
       for (const NTFS_BROWSER_NAMESPACE::Alloc::Extent& extent :
            stream->GetExtents().extents) {
         (void)volume.GetRangeState(extent.lcn, extent.clusters);
       }
     }
   };
-  probe_record(static_cast<ULONGLONG>(Mft::Idx::Root));
-  for (const Mft::Idx record : probed_records) {
+  probe_record(static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root));
+  for (const NTFS_BROWSER_NAMESPACE::Mft::Idx record : probed_records) {
     probe_record(static_cast<ULONGLONG>(record));
   }
 }
 
 // Reads the change journal, which only a recovering volume does, and walks what
 // it gave. $Extend, $UsnJrnl and $J are untrusted input like everything else.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 void ProbeJournal(const NtfsVolume<S>& volume) {
   const NTFS_BROWSER_NAMESPACE::Usn::Journal* journal = volume.GetUsnJournal();
   if (journal == nullptr) {
@@ -548,21 +558,25 @@ void ProbeJournal(const NtfsVolume<S>& volume) {
 }
 
 // Vetoes the attribute: the parse then skips it.
-void DiscardAttr(const Attr::HeaderCommon& /*attr_head*/, bool& discard) {
+void DiscardAttr(
+    const NTFS_BROWSER_NAMESPACE::Attr::HeaderCommon& /*attr_head*/,
+    bool& discard) {
   discard = true;
 }
 
 // Looks at the attribute and keeps it.
-void KeepAttr(const Attr::HeaderCommon& /*attr_head*/, bool& discard) {
+void KeepAttr(const NTFS_BROWSER_NAMESPACE::Attr::HeaderCommon& /*attr_head*/,
+              bool& discard) {
   discard = false;
 }
 
 // An attribute type past the last one the library knows.
-constexpr auto unknown_attr_type = static_cast<Attr::Type>(0xFFFF0000);
+constexpr auto unknown_attr_type =
+    static_cast<NTFS_BROWSER_NAMESPACE::Attr::Type>(0xFFFF0000);
 
 // Calls the volume getters, then parses the root record with raw attribute
 // callbacks installed on the volume and on the record.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 void ProbeVolumeApi(NtfsVolume<S>& volume) {
   (void)volume.GetOptions();
   (void)volume.GetVersion();
@@ -579,14 +593,18 @@ void ProbeVolumeApi(NtfsVolume<S>& volume) {
   volume.MinifyCache();
 
   (void)volume.InstallAttrRawCB(unknown_attr_type, DiscardAttr);
-  (void)volume.InstallAttrRawCB(Attr::Type::Data, DiscardAttr);
-  (void)volume.InstallAttrRawCB(Attr::Type::IndexRoot, KeepAttr);
+  (void)volume.InstallAttrRawCB(NTFS_BROWSER_NAMESPACE::Attr::Type::Data,
+                                DiscardAttr);
+  (void)volume.InstallAttrRawCB(NTFS_BROWSER_NAMESPACE::Attr::Type::IndexRoot,
+                                KeepAttr);
   NTFS_BROWSER_NAMESPACE::Io::FileRecord file_record(volume);
   (void)file_record.InstallAttrRawCB(unknown_attr_type, DiscardAttr);
-  (void)file_record.InstallAttrRawCB(Attr::Type::StandardInformation,
-                                     DiscardAttr);
-  (void)file_record.InstallAttrRawCB(Attr::Type::FileName, KeepAttr);
-  if (file_record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root))) {
+  (void)file_record.InstallAttrRawCB(
+      NTFS_BROWSER_NAMESPACE::Attr::Type::StandardInformation, DiscardAttr);
+  (void)file_record.InstallAttrRawCB(
+      NTFS_BROWSER_NAMESPACE::Attr::Type::FileName, KeepAttr);
+  if (file_record.ParseFileRecord(
+          static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root))) {
     (void)file_record.ParseAttrs();
   }
   file_record.ClearAttrRawCB();
@@ -599,7 +617,7 @@ void ProbeVolumeApi(NtfsVolume<S>& volume) {
 //
 // failingRead makes that one ReadInto() call fail, exercising the
 // disk-read error paths a looping reader never reaches on its own.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 void ProbeVolume(NtfsVolume<S>& volume) {
   if (!volume.IsVolumeOK()) {
     return;
@@ -613,12 +631,14 @@ void ProbeVolume(NtfsVolume<S>& volume) {
   // backend leaves the previous one in place. The read order of an input then
   // does not depend on the build, so a recorded input replays in step on every
   // configuration.
-  for (const Efs::CipherBackend backend :
-       {Efs::CipherBackend::CryptoPp, Efs::CipherBackend::BCrypt}) {
+  for (const NTFS_BROWSER_NAMESPACE::Efs::CipherBackend backend :
+       {NTFS_BROWSER_NAMESPACE::Efs::CipherBackend::CryptoPp,
+        NTFS_BROWSER_NAMESPACE::Efs::CipherBackend::BCrypt}) {
     (void)volume.SetEfsCipherBackend(backend);
-    ProbeRecord(volume, static_cast<ULONGLONG>(Mft::Idx::Root));
+    ProbeRecord(volume,
+                static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root));
   }
-  for (const Mft::Idx record : probed_records) {
+  for (const NTFS_BROWSER_NAMESPACE::Mft::Idx record : probed_records) {
     ProbeRecord(volume, static_cast<ULONGLONG>(record));
   }
   ProbeMftTree(volume);
@@ -630,7 +650,7 @@ void ProbeVolume(NtfsVolume<S>& volume) {
   ProbeCaseSearch(volume);
 }
 
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 void FuzzOnce(std::span<const BYTE> data, const VolumeOptions& options,
               std::optional<size_t> failing_read = {}) {
   NtfsVolume<S> volume(std::make_unique<LoopingDiskReader>(data, failing_read),
@@ -644,7 +664,7 @@ void FuzzOnce(std::span<const BYTE> data, const VolumeOptions& options,
 
 // Runs FuzzOnce() and swallows any thrown exception: only a real crash
 // may escape.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 void RunGuarded(std::span<const BYTE> data, const VolumeOptions& options,
                 std::optional<size_t> failing_read = {}) {
   try {
@@ -664,9 +684,11 @@ void RunGuarded(std::span<const BYTE> data, const VolumeOptions& options,
 void RunBothStrategies(std::span<const BYTE> data, const VolumeOptions& options,
                        std::optional<size_t> failing_read = {}) {
   if (options.max_cache_bytes == VolumeOptions{}.max_cache_bytes) {
-    RunGuarded<Cache::Strategy::NoCache>(data, options, failing_read);
+    RunGuarded<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>(data, options,
+                                                                 failing_read);
   }
-  RunGuarded<Cache::Strategy::FullCache>(data, options, failing_read);
+  RunGuarded<NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>(data, options,
+                                                                 failing_read);
 }
 
 // Stream offset of a range that is not on the 8-byte grid records sit on.
@@ -708,7 +730,8 @@ void FuzzJournalScanner(std::span<const BYTE> data) {
 void ProbeOnce(std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
                const VolumeOptions& options) {
   try {
-    NtfsVolume<Cache::Strategy::NoCache> volume(std::move(reader), options);
+    NtfsVolume<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache> volume(
+        std::move(reader), options);
     ProbeVolume(volume);
   }
   // NOLINTNEXTLINE(bugprone-empty-catch)
@@ -719,14 +742,16 @@ void ProbeOnce(std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
 void ProbeScanOnce(std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
                    const VolumeOptions& options) {
   static_cast<void>(
-      ScanDigestOver<Cache::Strategy::NoCache>(std::move(reader), options, 1));
+      ScanDigestOver<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>(
+          std::move(reader), options, 1));
 }
 
 void ProbeClusterAccountOnce(
     std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
     const VolumeOptions& options) {
-  static_cast<void>(AccountDigestOver<Cache::Strategy::NoCache>(
-      std::move(reader), options, 1));
+  static_cast<void>(
+      AccountDigestOver<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>(
+          std::move(reader), options, 1));
 }
 
 void FuzzTestcase(std::span<BYTE> data, bool inject_failures,
@@ -758,10 +783,12 @@ void FuzzTestcase(std::span<BYTE> data, bool inject_failures,
 namespace {
 
 #ifdef _WIN32
-constexpr std::wstring_view log_prefix = Log::option_prefix_w;
+constexpr std::wstring_view log_prefix =
+    NTFS_BROWSER_NAMESPACE::Log::option_prefix_w;
 constexpr std::wstring_view inject_option = L"--inject-read-failures";
 #else
-constexpr std::string_view log_prefix = Log::option_prefix;
+constexpr std::string_view log_prefix =
+    NTFS_BROWSER_NAMESPACE::Log::option_prefix;
 constexpr std::string_view inject_option = "--inject-read-failures";
 #endif
 
@@ -770,7 +797,7 @@ void Usage(std::ostream& err, const std::basic_string<ArgChar>& program) {
   err << std::format(
       "usage: {} [--log=...] [--inject-read-failures] <input-file>\n",
       std::filesystem::path(program).string());
-  err << std::format("  {}\n", Log::option_usage);
+  err << std::format("  {}\n", NTFS_BROWSER_NAMESPACE::Log::option_usage);
 }
 
 }  // namespace
@@ -781,7 +808,8 @@ int RunCommandLine(const std::vector<std::basic_string<ArgChar>>& args,
       args.empty() ? std::basic_string<ArgChar>() : args.front();
   // Trace on the console by default, so an afl-fuzz run and the saved
   // regression corpus both keep producing every message without a flag.
-  Log::Config log_config{.console_level = Log::Level::Trace};
+  NTFS_BROWSER_NAMESPACE::Log::Config log_config{
+      .console_level = NTFS_BROWSER_NAMESPACE::Log::Level::Trace};
   const std::basic_string<ArgChar>* input = nullptr;
   bool inject_failures = false;
 
@@ -792,7 +820,7 @@ int RunCommandLine(const std::vector<std::basic_string<ArgChar>>& args,
       continue;
     }
     if (view.starts_with(log_prefix)) {
-      if (!Log::ParseOption(view, log_config)) {
+      if (!NTFS_BROWSER_NAMESPACE::Log::ParseOption(view, log_config)) {
         Usage(err, program);
         return 1;
       }
@@ -810,7 +838,7 @@ int RunCommandLine(const std::vector<std::basic_string<ArgChar>>& args,
     return 1;
   }
 
-  if (!Log::Configure(log_config)) {
+  if (!NTFS_BROWSER_NAMESPACE::Log::Configure(log_config)) {
     err << std::format("Cannot open log file {}\n",
                        log_config.file_path.string());
   }
@@ -826,4 +854,4 @@ int RunCommandLine(const std::vector<std::basic_string<ArgChar>>& args,
   return 0;
 }
 
-}  // namespace NtfsFuzz
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Fuzz

@@ -16,10 +16,10 @@
 
 #include "usn/usn-record-scanner.h"
 
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace UsnSupport = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
 using NTFS_BROWSER_NAMESPACE::Usn::RecordScanner;
-using Tests::FakeUsnRecord;
+using TestFakeImage::FakeUsnRecord;
 
 namespace {
 
@@ -45,7 +45,7 @@ TEST_CASE("a V2 record is decoded field by field", "[usn][scanner]") {
                            .time = 0x01D87F3C11223344ULL,
                            .reason = 0x80000200,
                            .file_attributes = 0x21};
-  const std::vector<BYTE> bytes = Tests::EncodeUsnRecord(fake, 4096);
+  const std::vector<BYTE> bytes = TestFakeImage::EncodeUsnRecord(fake, 4096);
 
   const UsnSupport::ScanResult result = UsnSupport::ScanBytes(bytes, 4096);
 
@@ -73,7 +73,7 @@ TEST_CASE("a V3 record keeps the high half of its references",
   fake.major_version = 3;
   fake.file_reference_high = 0x1111;
   fake.parent_reference_high = 0x2222;
-  const std::vector<BYTE> bytes = Tests::EncodeUsnRecord(fake, 0);
+  const std::vector<BYTE> bytes = TestFakeImage::EncodeUsnRecord(fake, 0);
 
   const UsnSupport::ScanResult result = UsnSupport::ScanBytes(bytes);
 
@@ -88,9 +88,9 @@ TEST_CASE("a V3 record keeps the high half of its references",
 TEST_CASE("a V4 record is counted and not kept", "[usn][scanner]") {
   FakeUsnRecord range = Named(L"");
   range.major_version = 4;
-  std::vector<BYTE> bytes = Tests::EncodeUsnRecord(range, 0);
+  std::vector<BYTE> bytes = TestFakeImage::EncodeUsnRecord(range, 0);
   const std::vector<BYTE> next =
-      Tests::EncodeUsnRecord(Named(L"after.txt"), bytes.size());
+      TestFakeImage::EncodeUsnRecord(Named(L"after.txt"), bytes.size());
   bytes.insert(bytes.end(), next.begin(), next.end());
 
   const UsnSupport::ScanResult result = UsnSupport::ScanBytes(bytes);
@@ -102,10 +102,10 @@ TEST_CASE("a V4 record is counted and not kept", "[usn][scanner]") {
 }
 
 TEST_CASE("zero padding between records is not damage", "[usn][scanner]") {
-  std::vector<BYTE> bytes = Tests::EncodeUsnRecord(Named(L"a"), 0);
+  std::vector<BYTE> bytes = TestFakeImage::EncodeUsnRecord(Named(L"a"), 0);
   bytes.resize(bytes.size() + 4096, 0);
   const std::vector<BYTE> second =
-      Tests::EncodeUsnRecord(Named(L"b"), bytes.size());
+      TestFakeImage::EncodeUsnRecord(Named(L"b"), bytes.size());
   bytes.insert(bytes.end(), second.begin(), second.end());
 
   const UsnSupport::ScanResult result = UsnSupport::ScanBytes(bytes);
@@ -118,7 +118,8 @@ TEST_CASE("zero padding between records is not damage", "[usn][scanner]") {
 
 TEST_CASE("a record length that cannot be a record is damage",
           "[usn][scanner]") {
-  const std::vector<BYTE> good = Tests::EncodeUsnRecord(Named(L"file.txt"), 0);
+  const std::vector<BYTE> good =
+      TestFakeImage::EncodeUsnRecord(Named(L"file.txt"), 0);
 
   SECTION("not a multiple of 8") {
     std::vector<BYTE> bytes = good;
@@ -155,7 +156,8 @@ TEST_CASE("a record length that cannot be a record is damage",
 
 TEST_CASE("a name that is not well-formed makes the record damage",
           "[usn][scanner]") {
-  const std::vector<BYTE> good = Tests::EncodeUsnRecord(Named(L"file.txt"), 0);
+  const std::vector<BYTE> good =
+      TestFakeImage::EncodeUsnRecord(Named(L"file.txt"), 0);
 
   SECTION("an odd name length") {
     std::vector<BYTE> bytes = good;
@@ -209,9 +211,10 @@ TEST_CASE("a name that is not well-formed makes the record damage",
 
 TEST_CASE("a record split across two Feed calls is finished by the second",
           "[usn][scanner]") {
-  std::vector<BYTE> bytes = Tests::EncodeUsnRecord(Named(L"split.txt"), 0);
+  std::vector<BYTE> bytes =
+      TestFakeImage::EncodeUsnRecord(Named(L"split.txt"), 0);
   const std::vector<BYTE> second =
-      Tests::EncodeUsnRecord(Named(L"next.txt"), bytes.size());
+      TestFakeImage::EncodeUsnRecord(Named(L"next.txt"), bytes.size());
   bytes.insert(bytes.end(), second.begin(), second.end());
 
   for (size_t cut = 1; cut < bytes.size(); ++cut) {
@@ -232,7 +235,7 @@ TEST_CASE("a record split across two Feed calls is finished by the second",
 TEST_CASE("a record cut by the end of its range is one damaged record",
           "[usn][scanner]") {
   const std::vector<BYTE> bytes =
-      Tests::EncodeUsnRecord(Named(L"long-file-name.txt"), 0);
+      TestFakeImage::EncodeUsnRecord(Named(L"long-file-name.txt"), 0);
 
   for (size_t cut = 1; cut < bytes.size(); ++cut) {
     const UsnSupport::ScanResult result =
@@ -262,10 +265,10 @@ const std::vector<BYTE> garbage_word(8, 0xFF);
 UsnSupport::ScanResult ScanAfterDamage(const FakeUsnRecord& record) {
   std::vector<BYTE> bytes = garbage_word;
   const std::vector<BYTE> forged =
-      Tests::EncodeUsnRecord(record, garbage_word.size());
+      TestFakeImage::EncodeUsnRecord(record, garbage_word.size());
   bytes.insert(bytes.end(), forged.begin(), forged.end());
   const std::vector<BYTE> after =
-      Tests::EncodeUsnRecord(Named(L"after.txt"), bytes.size());
+      TestFakeImage::EncodeUsnRecord(Named(L"after.txt"), bytes.size());
   bytes.insert(bytes.end(), after.begin(), after.end());
   return UsnSupport::ScanBytes(bytes);
 }
@@ -278,7 +281,7 @@ TEST_CASE("a range that starts off the 8-byte grid is read from the grid",
   // Five zero bytes bring the record to offset 8.
   std::vector<BYTE> bytes(8 - off_grid, 0);
   const std::vector<BYTE> record =
-      Tests::EncodeUsnRecord(Named(L"grid.txt"), 8);
+      TestFakeImage::EncodeUsnRecord(Named(L"grid.txt"), 8);
   bytes.insert(bytes.end(), record.begin(), record.end());
 
   SECTION("zero bytes before the grid are padding") {
@@ -301,7 +304,8 @@ TEST_CASE("a range that starts off the 8-byte grid is read from the grid",
 
 TEST_CASE("a name is valid only when its surrogates have partners",
           "[usn][scanner]") {
-  const std::vector<BYTE> good = Tests::EncodeUsnRecord(Named(L"file.txt"), 0);
+  const std::vector<BYTE> good =
+      TestFakeImage::EncodeUsnRecord(Named(L"file.txt"), 0);
 
   SECTION("a high surrogate followed by an ordinary unit") {
     std::vector<BYTE> bytes = good;
@@ -331,7 +335,8 @@ TEST_CASE("a name is valid only when its surrogates have partners",
 }
 
 TEST_CASE("a name placed badly makes the record damage", "[usn][scanner]") {
-  const std::vector<BYTE> good = Tests::EncodeUsnRecord(Named(L"file.txt"), 0);
+  const std::vector<BYTE> good =
+      TestFakeImage::EncodeUsnRecord(Named(L"file.txt"), 0);
 
   SECTION("an odd name offset") {
     std::vector<BYTE> bytes = good;
@@ -352,7 +357,7 @@ TEST_CASE("a name placed badly makes the record damage", "[usn][scanner]") {
 
   SECTION("a name of no characters is a record with an empty name") {
     const UsnSupport::ScanResult result =
-        UsnSupport::ScanBytes(Tests::EncodeUsnRecord(Named(L""), 0));
+        UsnSupport::ScanBytes(TestFakeImage::EncodeUsnRecord(Named(L""), 0));
     REQUIRE(result.records.size() == 1);
     CHECK(result.records.front().name.empty());
     CHECK(result.damaged == 0);
@@ -363,7 +368,7 @@ TEST_CASE("a V4 record that claims more extents than it holds is damage",
           "[usn][scanner]") {
   FakeUsnRecord range = Named(L"");
   range.major_version = 4;
-  std::vector<BYTE> bytes = Tests::EncodeUsnRecord(range, 0);
+  std::vector<BYTE> bytes = TestFakeImage::EncodeUsnRecord(range, 0);
   UsnSupport::PutAt<WORD>(bytes, v4_extent_count_offset, too_many_extents);
 
   const UsnSupport::ScanResult result = UsnSupport::ScanBytes(bytes);

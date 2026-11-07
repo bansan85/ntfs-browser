@@ -28,9 +28,8 @@ constexpr DWORD minify_view_length = 64;
 
 TEST_CASE("MinifyCache frees the whole cache once no view is left",
           "[cache][minify]") {
-  const std::vector<BYTE> image =
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithManyIndexBlocks(
-          walk_index_blocks);
+  const std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+      BuildFakeNtfsImageWithManyIndexBlocks(walk_index_blocks);
   const auto volume = OpenWalkVolume<Cache::Strategy::FullCache>(
       image, WalkOptions(Cache::unlimited_bytes));
   const std::vector<std::wstring> expected = ExpectedWalkNames();
@@ -47,9 +46,8 @@ TEST_CASE("MinifyCache frees the whole cache once no view is left",
 }
 
 TEST_CASE("MinifyCache keeps the blocks a view still uses", "[cache][minify]") {
-  const std::vector<BYTE> image =
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithManyIndexBlocks(
-          walk_index_blocks);
+  const std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+      BuildFakeNtfsImageWithManyIndexBlocks(walk_index_blocks);
   const auto volume = OpenWalkVolume<Cache::Strategy::FullCache>(
       image, WalkOptions(Cache::unlimited_bytes));
   REQUIRE(WalkRoot(*volume) == ExpectedWalkNames());
@@ -78,9 +76,8 @@ TEST_CASE("MinifyCache keeps the blocks a view still uses", "[cache][minify]") {
 }
 
 TEST_CASE("MinifyCache does nothing under NoCache", "[cache][minify]") {
-  const std::vector<BYTE> image =
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithManyIndexBlocks(
-          walk_index_blocks);
+  const std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+      BuildFakeNtfsImageWithManyIndexBlocks(walk_index_blocks);
   const auto volume = OpenWalkVolume<Cache::Strategy::NoCache>(
       image, WalkOptions(Cache::unlimited_bytes));
   const std::vector<std::wstring> expected = ExpectedWalkNames();

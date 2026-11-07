@@ -39,8 +39,9 @@ namespace {
 template <Cache::Strategy S>
 void RunFindSubEntryOutlivesReparseTest() {
   auto reader = std::make_unique<
-      NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithIndexRootVariants());
+      NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+          BuildFakeNtfsImageWithIndexRootVariants());
 
   // The named records are not built, so only recover_errors shows the entries.
   const NtfsVolume<S> volume(std::move(reader),
@@ -49,30 +50,30 @@ void RunFindSubEntryOutlivesReparseTest() {
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(
-      NTFS_BROWSER_NAMESPACE::Tests::index_root_variant_a_dir_idx));
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::index_root_variant_a_dir_idx));
   REQUIRE(record.ParseAttrs());
 
   std::optional<IndexEntry> saved_entry = record.FindSubEntry(
-      NTFS_BROWSER_NAMESPACE::Tests::index_root_variant_a_name);
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::index_root_variant_a_name);
   REQUIRE(saved_entry.has_value());
   CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(saved_entry).GetFileReference() ==
-        NTFS_BROWSER_NAMESPACE::Tests::index_root_variant_a_mft_ref);
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::index_root_variant_a_mft_ref);
   CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(saved_entry).GetFilename() ==
-        NTFS_BROWSER_NAMESPACE::Tests::index_root_variant_a_name);
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::index_root_variant_a_name);
 
   // Reparse the SAME FileRecord object for variant B's record - same fixed
   // size (fake_file_record_size), so record_buffer_ is reused/overwritten in
   // place, not reallocated.
   REQUIRE(record.ParseFileRecord(
-      NTFS_BROWSER_NAMESPACE::Tests::index_root_variant_b_dir_idx));
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::index_root_variant_b_dir_idx));
   REQUIRE(record.ParseAttrs());
 
   // The entry saved from variant A must be entirely unaffected by parsing a
   // second, different record on the same FileRecord object.
   CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(saved_entry).GetFileReference() ==
-        NTFS_BROWSER_NAMESPACE::Tests::index_root_variant_a_mft_ref);
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::index_root_variant_a_mft_ref);
   CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(saved_entry).GetFilename() ==
-        NTFS_BROWSER_NAMESPACE::Tests::index_root_variant_a_name);
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::index_root_variant_a_name);
 }
 
 }  // namespace

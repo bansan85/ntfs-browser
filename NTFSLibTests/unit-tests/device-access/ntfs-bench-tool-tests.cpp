@@ -33,6 +33,7 @@
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace MftListSample = NTFS_BROWSER_NAMESPACE::Tests::MftListSample;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using Catch::Matchers::ContainsSubstring;
 using NtfsDevice::JsonValue;
@@ -119,8 +120,8 @@ struct RecordedRun {
   JsonValue summary;
 
   RecordedRun()
-      : image(Tests::BuildFakeNtfsImageWithListMftScan(list_record_count,
-                                                       list_fragment_clusters)),
+      : image(TestFakeImage::BuildFakeNtfsImageWithListMftScan(
+            list_record_count, list_fragment_clusters)),
         summary_path(dir.Path() / "summary.json"),
         log_path(dir.Path() / "summary.json.readlog") {
     const SampleRun run = MftListSample::RunMftList(

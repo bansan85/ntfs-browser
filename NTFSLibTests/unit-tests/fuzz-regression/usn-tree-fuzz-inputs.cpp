@@ -20,9 +20,10 @@
 #include "fuzz-input-writer.h"
 
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Tests::FakeUsnOptions;
-using Tests::FakeUsnRecord;
+using TestFakeImage::FakeUsnOptions;
+using TestFakeImage::FakeUsnRecord;
 using Tests::UsnSupport::MakeRecord;
 
 namespace {
@@ -60,27 +61,27 @@ constexpr ULONGLONG time_c = 0x01D87F3C00000300ULL;
 // A live file touched three times, and a freed one that was deleted.
 std::vector<FakeUsnRecord> LiveAndFreedHistory() {
   return {MakeRecord({.name = L"report.txt",
-                      .record = Tests::mft_tree_report_idx,
+                      .record = TestFakeImage::mft_tree_report_idx,
                       .sequence = report_sequence,
                       .reason = reason_file_create,
                       .time = time_a}),
           MakeRecord({.name = L"report.txt",
-                      .record = Tests::mft_tree_report_idx,
+                      .record = TestFakeImage::mft_tree_report_idx,
                       .sequence = report_sequence,
                       .reason = reason_data_overwrite,
                       .time = time_b}),
           MakeRecord({.name = L"report.txt",
-                      .record = Tests::mft_tree_report_idx,
+                      .record = TestFakeImage::mft_tree_report_idx,
                       .sequence = report_sequence,
                       .reason = reason_data_overwrite | reason_close,
                       .time = time_b}),
           MakeRecord({.name = L"old.tmp",
-                      .record = Tests::mft_tree_deleted_file_idx,
+                      .record = TestFakeImage::mft_tree_deleted_file_idx,
                       .sequence = 1,
                       .reason = reason_file_create,
                       .time = time_a}),
           MakeRecord({.name = L"old.tmp",
-                      .record = Tests::mft_tree_deleted_file_idx,
+                      .record = TestFakeImage::mft_tree_deleted_file_idx,
                       .sequence = 1,
                       .reason = reason_file_delete | reason_close,
                       .time = time_c})};
@@ -113,24 +114,24 @@ std::vector<FakeUsnRecord> RenameChain() {
 // The sequence rules, and a reference with a high half.
 std::vector<FakeUsnRecord> SequenceRules() {
   FakeUsnRecord wide = MakeRecord({.name = L"wide",
-                                   .record = Tests::mft_tree_report_idx,
+                                   .record = TestFakeImage::mft_tree_report_idx,
                                    .sequence = report_sequence,
                                    .reason = reason_file_create,
                                    .time = time_a});
   wide.major_version = 3;
   wide.file_reference_high = 1;
   return {MakeRecord({.name = L"zero",
-                      .record = Tests::mft_tree_hard_link_idx,
+                      .record = TestFakeImage::mft_tree_hard_link_idx,
                       .sequence = 0,
                       .reason = reason_file_create,
                       .time = time_a}),
           MakeRecord({.name = L"older",
-                      .record = Tests::mft_tree_report_idx,
+                      .record = TestFakeImage::mft_tree_report_idx,
                       .sequence = report_sequence - 1,
                       .reason = reason_file_create,
                       .time = time_b}),
           MakeRecord({.name = L"newer",
-                      .record = Tests::mft_tree_report_idx,
+                      .record = TestFakeImage::mft_tree_report_idx,
                       .sequence = report_sequence + 1,
                       .reason = reason_file_create,
                       .time = time_c}),
@@ -158,46 +159,47 @@ FakeUsnOptions JournalOnlyPaths() {
                                      .reason = reason_file_create,
                                      .time = time_a});
   folder.file_attributes = attribute_directory;
-  return {.records = {MakeRecord({.name = L"in-docs.bin",
-                                  .record = first,
-                                  .sequence = 1,
-                                  .reason = reason_file_create,
-                                  .time = time_a}),
-                      MakeRecord({.name = L"in-root.bin",
-                                  .record = first + 1,
-                                  .sequence = 1,
-                                  .reason = reason_file_create,
-                                  .time = time_a,
-                                  .parent = 5,
-                                  .parent_sequence = 5}),
-                      MakeRecord({.name = L"in-lost.bin",
-                                  .record = first + 2,
-                                  .sequence = 1,
-                                  .reason = reason_file_create,
-                                  .time = time_a,
-                                  .parent = 99,
-                                  .parent_sequence = 1}),
-                      MakeRecord({.name = L"in-old-dir.bin",
-                                  .record = first + 3,
-                                  .sequence = 1,
-                                  .reason = reason_file_create,
-                                  .time = time_a,
-                                  .parent = Tests::mft_tree_deleted_dir_idx,
-                                  .parent_sequence = 3}),
-                      MakeRecord({.name = L"in-file.bin",
-                                  .record = first + 5,
-                                  .sequence = 1,
-                                  .reason = reason_file_create,
-                                  .time = time_a,
-                                  .parent = Tests::mft_tree_report_idx,
-                                  .parent_sequence = report_sequence}),
-                      std::move(folder)}};
+  return {
+      .records = {MakeRecord({.name = L"in-docs.bin",
+                              .record = first,
+                              .sequence = 1,
+                              .reason = reason_file_create,
+                              .time = time_a}),
+                  MakeRecord({.name = L"in-root.bin",
+                              .record = first + 1,
+                              .sequence = 1,
+                              .reason = reason_file_create,
+                              .time = time_a,
+                              .parent = 5,
+                              .parent_sequence = 5}),
+                  MakeRecord({.name = L"in-lost.bin",
+                              .record = first + 2,
+                              .sequence = 1,
+                              .reason = reason_file_create,
+                              .time = time_a,
+                              .parent = 99,
+                              .parent_sequence = 1}),
+                  MakeRecord({.name = L"in-old-dir.bin",
+                              .record = first + 3,
+                              .sequence = 1,
+                              .reason = reason_file_create,
+                              .time = time_a,
+                              .parent = TestFakeImage::mft_tree_deleted_dir_idx,
+                              .parent_sequence = 3}),
+                  MakeRecord({.name = L"in-file.bin",
+                              .record = first + 5,
+                              .sequence = 1,
+                              .reason = reason_file_create,
+                              .time = time_a,
+                              .parent = TestFakeImage::mft_tree_report_idx,
+                              .parent_sequence = report_sequence}),
+                  std::move(folder)}};
 }
 
 // A short journal, for the variants that break the way to it.
 FakeUsnOptions ShortJournal() {
   return {.records = {MakeRecord({.name = L"report.txt",
-                                  .record = Tests::mft_tree_report_idx,
+                                  .record = TestFakeImage::mft_tree_report_idx,
                                   .sequence = report_sequence,
                                   .reason = reason_file_create,
                                   .time = time_a}),
@@ -229,7 +231,7 @@ std::vector<Variant> Variants() {
   // The cut shows only when a second run follows the first.
   FakeUsnOptions cut = ShortJournal();
   cut.more_stretches.push_back(
-      {.hole_bytes = Tests::fake_cluster_size,
+      {.hole_bytes = TestFakeImage::fake_cluster_size,
        .records = {MakeRecord({.name = L"later.txt",
                                .record = ghost_record + 1,
                                .sequence = 1,
@@ -255,7 +257,8 @@ std::vector<BYTE> ScannerStream() {
 
   std::vector<BYTE> stream(damaged_head, 0);
   const auto append = [&stream](const FakeUsnRecord& record, WORD unit) {
-    std::vector<BYTE> bytes = Tests::EncodeUsnRecord(record, stream.size());
+    std::vector<BYTE> bytes =
+        TestFakeImage::EncodeUsnRecord(record, stream.size());
     if (unit != 0) {
       std::memcpy(&bytes.at(v2_name_offset), &unit, sizeof(unit));
     }
@@ -301,8 +304,9 @@ TEST_CASE("write the usn tree fuzz inputs", "[.write-fuzz-inputs]") {
   const VolumeOptions recovering{.include_deleted = true,
                                  .recover_errors = true};
   for (const Variant& variant : Variants()) {
-    std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedFileTree();
-    Tests::PutUsnJournal(image, variant.options);
+    std::vector<BYTE> image =
+        TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
+    TestFakeImage::PutUsnJournal(image, variant.options);
     Tests::FuzzInputs::WriteRecordedInput(std::filesystem::path(dir) /
                                               variant.name,
                                           std::move(image), recovering);

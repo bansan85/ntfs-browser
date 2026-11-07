@@ -45,7 +45,8 @@ std::vector<Fs::path> ListRegressionTestcases() {
 
 // The boot sector fields FuzzTestcase() patches for a testcase: all of them,
 // except the one whose check the testcase tests.
-NtfsFuzz::BootSectorPatch PatchFor(std::string_view name) {
+NTFS_BROWSER_NAMESPACE::Test::Fuzz::BootSectorPatch
+    PatchFor(std::string_view name) {
   return {.marker = name != "boot_sector_missing_aa55_marker",
           .total_sectors = name != "boot_sector_total_sectors_zero" &&
                            name != "boot_sector_mft_beyond_total_sectors",
@@ -63,7 +64,7 @@ void RunRegressionTestcase(std::string_view name) {
 
   // Same as NtfsFuzzerAfl: an empty or unreadable testcase runs nothing.
   std::optional<std::vector<BYTE>> data =
-      NtfsFuzz::LoopingDiskReader::LoadFile(file);
+      NTFS_BROWSER_NAMESPACE::Test::Fuzz::LoopingDiskReader::LoadFile(file);
   if (!data) {
     return;
   }
@@ -72,7 +73,8 @@ void RunRegressionTestcase(std::string_view name) {
   (void)TakeCapturedLog();
   // A library exception escaping FuzzTestcase() is a failure here, as a
   // crash would be in the old subprocess run.
-  CHECK_NOTHROW(NtfsFuzz::FuzzTestcase(*data, true, PatchFor(name)));
+  CHECK_NOTHROW(NTFS_BROWSER_NAMESPACE::Test::Fuzz::FuzzTestcase(
+      *data, true, PatchFor(name)));
   const std::string output = TakeCapturedLog();
 
   const auto* const iterator = expected_error_messages.find(name);

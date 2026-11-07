@@ -47,7 +47,8 @@ template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
     OpenWalkVolume(const std::vector<BYTE>& image,
                    const NTFS_BROWSER_NAMESPACE::VolumeOptions& options) {
   auto volume = std::make_unique<NTFS_BROWSER_NAMESPACE::NtfsVolume<S>>(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(image),
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(image),
       options);
   REQUIRE(volume->IsVolumeOK());
   return volume;
@@ -81,7 +82,8 @@ template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
   std::vector<std::wstring> names;
   names.reserve(walk_index_blocks);
   for (DWORD vcn = 0; vcn < walk_index_blocks; vcn++) {
-    names.push_back(NTFS_BROWSER_NAMESPACE::Tests::ManyIndexBlocksName(vcn));
+    names.push_back(
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::ManyIndexBlocksName(vcn));
   }
   std::ranges::sort(names);
   return names;

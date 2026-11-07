@@ -28,11 +28,12 @@
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 namespace ReadAhead = NTFS_BROWSER_NAMESPACE::Tests::ReadAhead;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Tests::CountingDiskReader;
+using TestDiskReaders::CountingDiskReader;
 
 namespace {
 
@@ -140,8 +141,9 @@ struct Trees {
   std::deque<std::vector<BYTE>> images;
   std::vector<ReadAhead::TreeFixture> fixtures;
 
-  const std::vector<BYTE>& Add(const std::vector<Tests::FakeTreeNode>& nodes) {
-    images.push_back(Tests::BuildFakeNtfsImageWithNameTree(nodes));
+  const std::vector<BYTE>&
+      Add(const std::vector<TestFakeImage::FakeTreeNode>& nodes) {
+    images.push_back(TestFakeImage::BuildFakeNtfsImageWithNameTree(nodes));
     return images.back();
   }
 };

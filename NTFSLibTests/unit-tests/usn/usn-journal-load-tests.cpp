@@ -27,14 +27,15 @@
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Usn = NTFS_BROWSER_NAMESPACE::Usn;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
 namespace AllocSupport = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
-using Tests::FakeUsnOptions;
-using Tests::FakeUsnRecord;
+using TestFakeImage::FakeUsnOptions;
+using TestFakeImage::FakeUsnRecord;
 
 namespace {
 
@@ -49,7 +50,7 @@ FakeUsnRecord Ghost() {
   return FakeUsnRecord{.name = L"ghost.bin",
                        .file_record = 40,
                        .file_sequence = 2,
-                       .parent_record = Tests::mft_tree_docs_idx,
+                       .parent_record = TestFakeImage::mft_tree_docs_idx,
                        .parent_sequence = 1,
                        .time = 0x01D87F3C0A0B0C0DULL,
                        .reason = delete_and_close,
@@ -69,7 +70,7 @@ void CheckAFileLostFromTheMftComesBack() {
   CHECK(ghost.name == L"ghost.bin");
   CHECK(ghost.file_record == 40);
   CHECK(ghost.file_sequence == 2);
-  CHECK(ghost.parent_record == Tests::mft_tree_docs_idx);
+  CHECK(ghost.parent_record == TestFakeImage::mft_tree_docs_idx);
   CHECK(ghost.parent_sequence == 1);
   CHECK(ghost.reason == delete_and_close);
   CHECK(ghost.file_attributes == 0x20);
@@ -80,8 +81,8 @@ void CheckAFileLostFromTheMftComesBack() {
 
   const Usn::Record& second = journal->records.at(1);
   CHECK(second.name == L"second.txt");
-  CHECK(second.usn ==
-        static_cast<LONGLONG>(Tests::EncodeUsnRecord(Ghost(), 0).size()));
+  CHECK(second.usn == static_cast<LONGLONG>(
+                          TestFakeImage::EncodeUsnRecord(Ghost(), 0).size()));
   CHECK(journal->damaged_records == 0);
   CHECK_FALSE(journal->truncated);
 }
@@ -99,7 +100,7 @@ void CheckTheResultIsOwnedData() {
   // FullCache block no view holds.
   opened.volume->MinifyCache();
   FileRecord<S> record(*opened.volume);
-  REQUIRE(record.ParseFileRecord(Tests::mft_tree_docs_idx));
+  REQUIRE(record.ParseFileRecord(TestFakeImage::mft_tree_docs_idx));
   REQUIRE(record.ParseAttrs());
   opened.volume->MinifyCache();
 
@@ -208,7 +209,7 @@ void CheckADamagedRunListIsReadAsFarAsItGoes() {
   // The cut drops the run of the second stretch, which follows a hole.
   const auto opened = Support::OpenVolume<S>(Support::JournalImage(
       {.records = {Ghost()},
-       .more_stretches = {{.hole_bytes = Tests::fake_cluster_size,
+       .more_stretches = {{.hole_bytes = TestFakeImage::fake_cluster_size,
                            .records = {{.name = L"far.txt",
                                         .file_record = 41}}}},
        .cut_run_list = true}));
@@ -232,12 +233,14 @@ void CheckStrictModeLoadsNothing() {
 // The journal of image over a reader that throws on every read of its data.
 template <Cache::Strategy S>
 void CheckAThrowingReaderGivesNoJournal() {
-  const std::vector<BYTE> base = Tests::BuildFakeNtfsImageWithFreedFileTree();
+  const std::vector<BYTE> base =
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
   std::vector<BYTE> image = base;
-  Tests::PutUsnJournal(image, {.records = {Ghost()}});
-  const ULONGLONG data_start = ((base.size() + Tests::fake_cluster_size - 1) /
-                                Tests::fake_cluster_size) *
-                               Tests::fake_cluster_size;
+  TestFakeImage::PutUsnJournal(image, {.records = {Ghost()}});
+  const ULONGLONG data_start =
+      ((base.size() + TestFakeImage::fake_cluster_size - 1) /
+       TestFakeImage::fake_cluster_size) *
+      TestFakeImage::fake_cluster_size;
   const ULONGLONG image_size = image.size();
 
   auto reader = std::make_unique<Tests::ScriptedDiskReader>(std::move(image));

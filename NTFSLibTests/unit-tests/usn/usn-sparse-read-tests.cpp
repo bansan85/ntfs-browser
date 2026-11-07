@@ -13,11 +13,11 @@
 #include <ntfs-browser/usn/types.h>
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Usn = NTFS_BROWSER_NAMESPACE::Usn;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
-using Tests::FakeUsnOptions;
-using Tests::FakeUsnRecord;
+using TestFakeImage::FakeUsnOptions;
+using TestFakeImage::FakeUsnRecord;
 
 namespace {
 
@@ -96,7 +96,7 @@ void CheckARecordCutAtAHoleIsDamageAndNotCarried() {
   size_t offset = 0;
   for (const FakeUsnRecord& record : records) {
     last_start = offset;
-    offset += Tests::EncodeUsnRecord(record, offset).size();
+    offset += TestFakeImage::EncodeUsnRecord(record, offset).size();
   }
 
   FakeUsnOptions options{.records = records};

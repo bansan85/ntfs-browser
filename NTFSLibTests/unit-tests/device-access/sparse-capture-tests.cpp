@@ -36,6 +36,8 @@ namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using Catch::Matchers::ContainsSubstring;
 using NtfsDevice::SparseCapture;
 
@@ -235,7 +237,7 @@ TEST_CASE("A capture sink set in the library receives every read",
           "[device-access][capture]") {
   const Tests::TempDir dir;
   const std::filesystem::path path = dir.Path() / "capture.img";
-  const std::vector<BYTE> image = Tests::BuildFakeNtfsImage();
+  const std::vector<BYTE> image = TestFakeImage::BuildFakeNtfsImage();
   std::vector<BYTE> boot(piece);
   {
     auto capture = std::make_shared<SparseCapture>(path);
@@ -244,7 +246,7 @@ TEST_CASE("A capture sink set in the library receives every read",
     // A capture runs without a session.
     CHECK_FALSE(Bench::Enabled());
     const Io::FileReader<Cache::Strategy::NoCache> file(
-        std::make_unique<Tests::MemoryDiskReader>(image));
+        std::make_unique<TestDiskReaders::MemoryDiskReader>(image));
     LARGE_INTEGER addr{.QuadPart = 0};
     REQUIRE(file.ReadInto(addr, boot));
   }

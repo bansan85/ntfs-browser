@@ -23,10 +23,11 @@
 #include <ntfs-browser/test/fuzz/fuzz-core.h>
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
-using Tests::FakeBadClusterOptions;
-using Tests::FakeDataRun;
+using TestFakeImage::FakeBadClusterOptions;
+using TestFakeImage::FakeDataRun;
 
 namespace {
 
@@ -79,8 +80,8 @@ std::vector<Variant> Variants() {
 // $BadClus.
 std::vector<BYTE> ImageOf(const Variant& variant) {
   const std::vector<FakeDataRun> marked{FakeDataRun{.lcn = 40, .clusters = 2}};
-  std::vector<BYTE> image =
-      Support::WithBitmap(Tests::BuildFakeNtfsImageWithFreedFileTree(), marked);
+  std::vector<BYTE> image = Support::WithBitmap(
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(), marked);
   return Support::WithBadClusters(std::move(image), variant.bad,
                                   variant.options);
 }
@@ -93,7 +94,7 @@ constexpr size_t boot_sector_stream_bytes = 512;
 }  // namespace
 
 // Writes the saved fuzz inputs of the bad cluster list. An input is the byte
-// stream that NtfsFuzz::ProbeOnce() reads from the image, in read order and
+// stream that Test::Fuzz::ProbeOnce() reads from the image, in read order and
 // without addresses, which is what the fuzzer replays. The volume reads its
 // boot sector in 4096 bytes, and the fuzzer's reader advances by 512 after that
 // first read (see LoopingDiskReader), so the bytes between are cut out of the
@@ -110,8 +111,11 @@ TEST_CASE("write the bad cluster fuzz inputs", "[.write-fuzz-inputs]") {
     const std::filesystem::path path =
         std::filesystem::path(dir) / variant.name;
     {
-      NtfsFuzz::ProbeOnce(std::make_unique<Tests::RecordingDiskReader>(
-          std::make_unique<Tests::MemoryDiskReader>(ImageOf(variant)), path));
+      NTFS_BROWSER_NAMESPACE::Test::Fuzz::ProbeOnce(
+          std::make_unique<TestDiskReaders::RecordingDiskReader>(
+              std::make_unique<TestDiskReaders::MemoryDiskReader>(
+                  ImageOf(variant)),
+              path));
     }
     REQUIRE(std::filesystem::exists(path));
 

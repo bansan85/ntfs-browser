@@ -126,9 +126,9 @@ constexpr BYTE file_name_length = 5;
 // Byte offset of MFT record idx in a fake image: past the boot cluster and
 // every earlier record.
 size_t RecordOffset(ULONGLONG idx) {
-  return NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size +
+  return NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size +
          static_cast<size_t>(idx) *
-             NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size;
+             NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_file_record_size;
 }
 
 // Rounds size up to the next multiple of attr_alignment.
@@ -139,10 +139,10 @@ size_t AlignAttr(size_t size) {
 // Builds a file record in the fake image layout, with attrs after its header.
 std::vector<BYTE> MakeRecord(Data::FileRecordFlag flags, WORD seq,
                              ULONGLONG base_ref, std::span<const BYTE> attrs) {
-  std::vector<BYTE> record(NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size,
-                           0);
+  std::vector<BYTE> record(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_file_record_size, 0);
 
-  NTFS_BROWSER_NAMESPACE::Tests::EditFileRecordHeader(
+  NTFS_BROWSER_NAMESPACE::Test::FakeImage::EditFileRecordHeader(
       record, [&](Data::FileRecordHeader& header) {
         header.magic = Data::FileRecordHeader::file_record_magic;
         header.offset_of_us = us_offset;
@@ -153,7 +153,7 @@ std::vector<BYTE> MakeRecord(Data::FileRecordFlag flags, WORD seq,
         header.ref_to_base = base_ref;
         header.real_size = static_cast<DWORD>(attr_offset + attrs.size() + 4);
         header.alloc_size =
-            NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size;
+            NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_file_record_size;
       });
 
   if (!attrs.empty()) {
@@ -195,7 +195,8 @@ std::vector<BYTE> NonResidentAttr(Attr::Type type, ULONGLONG real_size) {
   header.header.non_resident = 1;
   header.last_vcn = 0;
   header.data_run_offset = static_cast<WORD>(header_size);
-  header.alloc_size = NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size;
+  header.alloc_size =
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size;
   header.real_size = real_size;
   header.ini_size = real_size;
   std::memcpy(attr.data(), &header, header_size);
@@ -260,7 +261,8 @@ std::vector<BYTE> AttrListEntry(Attr::Type type, ULONGLONG record_ref,
 // Fake volume image, with record written at idx and every other record as
 // built.
 std::vector<BYTE> ImageWith(ULONGLONG idx, const std::vector<BYTE>& record) {
-  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
+  std::vector<BYTE> image =
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage();
   std::memcpy(&image.at(RecordOffset(idx)), record.data(), record.size());
   return image;
 }
@@ -295,7 +297,8 @@ TEMPLATE_TEST_CASE_SIG("a resident bitmap attribute keeps its bytes",
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto attr = ResidentAttr(Attr::Type::Bitmap, bitmap_bytes);
   const NtfsVolume<S> volume(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           ImageWith(
               test_record_idx,
               MakeRecord(NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse, 1,
@@ -317,7 +320,8 @@ TEMPLATE_TEST_CASE_SIG("a resident bitmap attribute with no bytes is empty",
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto attr = ResidentAttr(Attr::Type::Bitmap, std::span<const BYTE>{});
   const NtfsVolume<S> volume(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           ImageWith(
               test_record_idx,
               MakeRecord(NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse, 1,
@@ -341,7 +345,8 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::FullCache) {
   const auto attr = NonResidentAttr(Attr::Type::Bitmap, short_bitmap_size);
   const NtfsVolume<S> volume(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           ImageWith(
               test_record_idx,
               MakeRecord(NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse, 1,
@@ -369,7 +374,8 @@ TEMPLATE_TEST_CASE_SIG(
   const auto attr =
       ResidentAttr(Attr::Type::StandardInformation, StdInfoBody(perms));
   const NtfsVolume<S> volume(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           ImageWith(
               test_record_idx,
               MakeRecord(NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse, 1,
@@ -410,7 +416,8 @@ TEMPLATE_TEST_CASE_SIG(
   const auto attr = ResidentAttr(Attr::Type::StandardInformation,
                                  StdInfoBody(Data::StdInfoPermission::Normal));
   const NtfsVolume<S> volume(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           ImageWith(
               test_record_idx,
               MakeRecord(NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse, 1,
@@ -424,7 +431,8 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(infos.size() == 1);
 
   const SectorProbe<S> probe(infos[0]->GetAttrHeader(), record);
-  CHECK(probe.Sector() == NTFS_BROWSER_NAMESPACE::Tests::fake_bytes_per_sector);
+  CHECK(probe.Sector() ==
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_bytes_per_sector);
   CHECK(probe.GetAttrName().empty());
 
   std::span<BYTE> nothing;
@@ -445,7 +453,8 @@ TEMPLATE_TEST_CASE_SIG(
   const auto attr = ResidentAttr(
       Attr::Type::FileName, FileNameBody(flags, L"Probe", file_name_length));
   const NtfsVolume<S> volume(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           ImageWith(
               test_record_idx,
               MakeRecord(NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse, 1,
@@ -509,7 +518,8 @@ TEMPLATE_TEST_CASE_SIG(
   const std::vector<BYTE> short_body(short_file_name_body, 0);
   const auto short_attr = ResidentAttr(Attr::Type::FileName, short_body);
   const NtfsVolume<S> short_volume(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           ImageWith(
               test_record_idx,
               MakeRecord(NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse, 1,
@@ -525,7 +535,8 @@ TEMPLATE_TEST_CASE_SIG(
       Attr::Type::FileName,
       FileNameBody(Data::FilenameFlag::None, L"P", oversized_name_length));
   const NtfsVolume<S> long_volume(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           ImageWith(
               test_record_idx,
               MakeRecord(NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse, 1,
@@ -548,7 +559,8 @@ TEMPLATE_TEST_CASE_SIG(
   std::memcpy(entry.data(), &bad_type, sizeof(bad_type));
   const auto attr = ResidentAttr(Attr::Type::AttributeList, entry);
   const NtfsVolume<S> volume(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           ImageWith(
               test_record_idx,
               MakeRecord(NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse, 1,
@@ -568,7 +580,8 @@ TEMPLATE_TEST_CASE_SIG(
       AttrListEntry(Attr::Type::StandardInformation, zero_record_idx, 0);
   const auto attr = ResidentAttr(Attr::Type::AttributeList, entry);
   const NtfsVolume<S> volume(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           ImageWith(
               test_record_idx,
               MakeRecord(NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse, 1,
@@ -601,7 +614,8 @@ TEMPLATE_TEST_CASE_SIG(
   PutRecord(image, broken_ext_record_idx, ext);
 
   const NtfsVolume<S> volume(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           std::move(image)));
   REQUIRE(volume.IsVolumeOK());
 

@@ -26,7 +26,7 @@
 
 #include "knob-effect-support.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 class IndexEntryView;
 
@@ -35,12 +35,14 @@ namespace Io {
 enum class RecordStanding : std::uint8_t;
 
 }  // namespace Io
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::IndexEntryView;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
@@ -66,10 +68,11 @@ struct RootWalk {
 template <Cache::Strategy S = Cache::Strategy::NoCache>
 RootWalk WalkRoot(const std::vector<BYTE>& image, const VolumeOptions& options,
                   Tuning::MediaKind kind = Tuning::MediaKind::Unknown) {
-  auto memory = std::make_unique<Tests::MemoryDiskReader>(image);
+  auto memory = std::make_unique<TestDiskReaders::MemoryDiskReader>(image);
   memory->SetMediaKind(kind);
-  auto reader = std::make_unique<Tests::CountingDiskReader>(std::move(memory));
-  Tests::CountingDiskReader& reads = *reader;
+  auto reader =
+      std::make_unique<TestDiskReaders::CountingDiskReader>(std::move(memory));
+  TestDiskReaders::CountingDiskReader& reads = *reader;
   const NtfsVolume<S> volume(std::move(reader), options);
   REQUIRE(volume.IsVolumeOK());
 
@@ -84,9 +87,10 @@ RootWalk WalkRoot(const std::vector<BYTE>& image, const VolumeOptions& options,
 
   RootWalk walk;
   walk.calls = reads.Calls();
-  const ULONGLONG first = Tests::FragmentedMftScanSlotOffset(
+  const ULONGLONG first = TestFakeImage::FragmentedMftScanSlotOffset(
       static_cast<ULONGLONG>(Mft::Idx::User));
-  const ULONGLONG last = Tests::FragmentedMftScanSlotOffset(scan_records);
+  const ULONGLONG last =
+      TestFakeImage::FragmentedMftScanSlotOffset(scan_records);
   for (const Call& call : walk.calls) {
     if (call.kind == Kind::CancelPrefetch) {
       walk.groups++;
@@ -112,7 +116,7 @@ template <Cache::Strategy S = Cache::Strategy::NoCache>
 std::vector<Tests::WalkedEntry>
     Entries(const std::vector<BYTE>& image, const VolumeOptions& options,
             Tuning::MediaKind kind = Tuning::MediaKind::Unknown) {
-  auto memory = std::make_unique<Tests::MemoryDiskReader>(image);
+  auto memory = std::make_unique<TestDiskReaders::MemoryDiskReader>(image);
   memory->SetMediaKind(kind);
   const NtfsVolume<S> volume(std::move(memory), options);
   REQUIRE(volume.IsVolumeOK());
@@ -121,7 +125,7 @@ std::vector<Tests::WalkedEntry>
 
 const std::vector<BYTE>& Image() {
   static const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithIndexedMftScan(scan_records);
+      TestFakeImage::BuildFakeNtfsImageWithIndexedMftScan(scan_records);
   return image;
 }
 
@@ -254,7 +258,7 @@ TEST_CASE("A volume reports the kind of device its reader says",
   for (const Tuning::MediaKind kind :
        {Tuning::MediaKind::Unknown, Tuning::MediaKind::SolidState,
         Tuning::MediaKind::Rotational}) {
-    auto memory = std::make_unique<Tests::MemoryDiskReader>(Image());
+    auto memory = std::make_unique<TestDiskReaders::MemoryDiskReader>(Image());
     memory->SetMediaKind(kind);
     const NtfsVolume<Cache::Strategy::NoCache> volume(std::move(memory), {});
     REQUIRE(volume.IsVolumeOK());
@@ -270,7 +274,7 @@ TEST_CASE("The probe knobs leave a walk of FullCache as it was",
                                          {"probe.max_known_records", 2}});
   const auto walk = [](const VolumeOptions& options) {
     const NtfsVolume<Cache::Strategy::FullCache> volume(
-        std::make_unique<Tests::MemoryDiskReader>(Image()), options);
+        std::make_unique<TestDiskReaders::MemoryDiskReader>(Image()), options);
     REQUIRE(volume.IsVolumeOK());
     return Tests::WalkVolume(volume, true);
   };

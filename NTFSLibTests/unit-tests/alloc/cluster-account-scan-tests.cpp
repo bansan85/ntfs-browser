@@ -35,6 +35,8 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AccountSupport;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace TreeSupport = NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport;
 using Alloc::ClusterCondition;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
@@ -42,9 +44,9 @@ using Support::CountOf;
 using Support::Freed;
 using Support::Live;
 using Support::Stream;
-using Tests::FakeAccountFile;
-using Tests::FakeAccountStream;
-using Tests::FakeDataRun;
+using TestFakeImage::FakeAccountFile;
+using TestFakeImage::FakeAccountStream;
+using TestFakeImage::FakeDataRun;
 
 namespace {
 
@@ -53,7 +55,7 @@ constexpr ULONGLONG live_owner = 17;
 constexpr ULONGLONG extension_slot = 24;
 // Cluster where the fake volumes put $MFT, which holds one record per KiB.
 constexpr ULONGLONG mft_cluster = 1;
-constexpr ULONGLONG cluster = Tests::fake_cluster_size;
+constexpr ULONGLONG cluster = TestFakeImage::fake_cluster_size;
 
 // A $INDEX_ALLOCATION of one cluster at lcn.
 FakeAccountStream IndexOn(ULONGLONG lcn) {
@@ -159,10 +161,11 @@ TEST_CASE("an extension record nobody can use does not fail a record",
     Support::Volume volume = WithListedIndex();
     // The extension slot no longer holds a record.
     std::vector<BYTE> image = volume.Build();
-    const size_t slot_start = (mft_cluster * cluster) +
-                              (extension_slot * Tests::fake_file_record_size);
+    const size_t slot_start =
+        (mft_cluster * cluster) +
+        (extension_slot * TestFakeImage::fake_file_record_size);
     std::fill_n(image.begin() + static_cast<std::ptrdiff_t>(slot_start),
-                Tests::fake_file_record_size, BYTE{0});
+                TestFakeImage::fake_file_record_size, BYTE{0});
     for (const bool recover : {false, true}) {
       const TreeSupport::ScannedVolume<S> off(
           image,
@@ -231,7 +234,7 @@ TEST_CASE("the account is the same whatever the thread count",
     const std::vector<BYTE> image = volume.Build();
 
     std::string expected;
-    std::vector<Tests::CountingDiskReader::Call> expected_calls;
+    std::vector<TestDiskReaders::CountingDiskReader::Call> expected_calls;
     for (const unsigned threads : {1U, 2U, 3U, 8U}) {
       Mft::MftTree::ScanOptions options =
           Support::Scan(Alloc::ClusterAccountLevel::CountsAndMap);
@@ -263,7 +266,7 @@ TEST_CASE("the account is the same whatever the thread count",
 TEST_CASE("the account reads $Bitmap once, in ascending order",
           "[alloc][cluster][scan]") {
   // Windows of one cluster of bitmap each, which cover 8192 clusters.
-  Alloc::SetBitmapWindowBytesForTests(Tests::fake_cluster_size);
+  Alloc::SetBitmapWindowBytesForTests(TestFakeImage::fake_cluster_size);
   constexpr ULONGLONG volume_clusters = 20000;
   Support::Volume volume;
   volume.bitmap_options.volume_clusters = volume_clusters;
@@ -281,9 +284,9 @@ TEST_CASE("the account reads $Bitmap once, in ascending order",
 
     INFO("annotate " << annotate);
     std::vector<ULONGLONG> offsets;
-    for (const Tests::CountingDiskReader::Call& call :
+    for (const TestDiskReaders::CountingDiskReader::Call& call :
          scanned.opened.counter->Calls()) {
-      if (call.kind == Tests::CountingDiskReader::Kind::Read &&
+      if (call.kind == TestDiskReaders::CountingDiskReader::Kind::Read &&
           call.offset >= volume_clusters * cluster) {
         offsets.push_back(call.offset);
       }

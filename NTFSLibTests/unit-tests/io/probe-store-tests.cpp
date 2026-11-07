@@ -27,25 +27,27 @@
 
 #include "io/record-window.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 namespace Io {
 
 enum class RecordStanding : std::uint8_t;
 
 }  // namespace Io
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using Io::FileRecord;
 using Io::RecordStanding;
 using NTFS_BROWSER_NAMESPACE::IndexEntryView;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Tests::CountingDiskReader;
-using Tests::MemoryDiskReader;
+using TestDiskReaders::CountingDiskReader;
+using TestDiskReaders::MemoryDiskReader;
 
 namespace {
 
@@ -100,9 +102,10 @@ RootWalk WalkRoot(const std::vector<BYTE>& image, const Store* store) {
 
 // The reads of the walk that fall in the records of $MFT the fixture lists.
 std::size_t ProbeReads(const std::vector<CountingDiskReader::Call>& calls) {
-  const ULONGLONG first = Tests::FragmentedMftScanSlotOffset(
+  const ULONGLONG first = TestFakeImage::FragmentedMftScanSlotOffset(
       static_cast<ULONGLONG>(Mft::Idx::User));
-  const ULONGLONG last = Tests::FragmentedMftScanSlotOffset(scan_records);
+  const ULONGLONG last =
+      TestFakeImage::FragmentedMftScanSlotOffset(scan_records);
   return static_cast<std::size_t>(
       std::ranges::count_if(calls, [&](const CountingDiskReader::Call& call) {
         return call.kind == CountingDiskReader::Kind::Read &&
@@ -124,11 +127,11 @@ Store StoreOver(Io::RecordWindow& window) {
 TEST_CASE("A probe store spares the probes the records it holds",
           "[io][probe-store]") {
   const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithIndexedMftScan(scan_records);
+      TestFakeImage::BuildFakeNtfsImageWithIndexedMftScan(scan_records);
   const RootWalk plain = WalkRoot(image, nullptr);
   REQUIRE(ProbeReads(plain.calls) > 0);
 
-  Io::RecordWindow window(window_bytes, Tests::fake_file_record_size);
+  Io::RecordWindow window(window_bytes, TestFakeImage::fake_file_record_size);
   const Store store = StoreOver(window);
   const RootWalk first = WalkRoot(image, &store);
   CHECK(first.entries == plain.entries);
@@ -150,16 +153,16 @@ TEST_CASE("A probe store spares the probes the records it holds",
 TEST_CASE("A probe store that only keeps changes no read",
           "[io][probe-store]") {
   const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithIndexedMftScan(scan_records);
+      TestFakeImage::BuildFakeNtfsImageWithIndexedMftScan(scan_records);
   const RootWalk plain = WalkRoot(image, nullptr);
 
   std::size_t runs = 0;
-  const Store store{.find = {},
-                    .keep = [&runs](ULONGLONG, std::span<const BYTE> bytes) {
-                      CHECK_FALSE(bytes.empty());
-                      CHECK(bytes.size() % Tests::fake_file_record_size == 0);
-                      runs++;
-                    }};
+  const Store store{
+      .find = {}, .keep = [&runs](ULONGLONG, std::span<const BYTE> bytes) {
+        CHECK_FALSE(bytes.empty());
+        CHECK(bytes.size() % TestFakeImage::fake_file_record_size == 0);
+        runs++;
+      }};
   const RootWalk kept = WalkRoot(image, &store);
   CHECK(runs > 0);
   CHECK(kept.entries == plain.entries);
@@ -175,7 +178,7 @@ TEST_CASE("A probe store that only keeps changes no read",
 TEST_CASE("A probe store that finds nothing leaves the walk as it was",
           "[io][probe-store]") {
   const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithIndexedMftScan(scan_records);
+      TestFakeImage::BuildFakeNtfsImageWithIndexedMftScan(scan_records);
   const RootWalk plain = WalkRoot(image, nullptr);
 
   std::size_t asked = 0;
@@ -194,7 +197,7 @@ TEST_CASE("A probe store that finds nothing leaves the walk as it was",
 
 TEST_CASE("The plain walk never asks the probe store", "[io][probe-store]") {
   const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithIndexedMftScan(scan_records);
+      TestFakeImage::BuildFakeNtfsImageWithIndexedMftScan(scan_records);
   auto reader = std::make_unique<MemoryDiskReader>(image);
   NtfsVolume<walk_cache> volume(std::move(reader), VolumeOptions{});
   REQUIRE(volume.IsVolumeOK());

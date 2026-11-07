@@ -26,13 +26,13 @@ namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using Alloc::ClusterState;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using Support::ThrowingCallback;
-using Tests::FakeBadClusterOptions;
-using Tests::FakeDataRun;
+using TestFakeImage::FakeBadClusterOptions;
+using TestFakeImage::FakeDataRun;
 
 namespace {
 
@@ -52,8 +52,9 @@ constexpr ULONGLONG fake_mft_lcn = 1;
 // The freed tree and a bitmap marking 40, 41 and the bad clusters. Record 8
 // is left as the base builds it: zero-filled.
 std::vector<BYTE> ImageWithoutList() {
-  return Support::WithBitmap(Tests::BuildFakeNtfsImageWithFreedFileTree(),
-                             Support::WithBadRuns(allocated_runs, bad_marked));
+  return Support::WithBitmap(
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(),
+      Support::WithBadRuns(allocated_runs, bad_marked));
 }
 
 // That image with a bad list shaped by options.
@@ -78,17 +79,17 @@ struct RecordRange {
 
 RecordRange BadClusRecord() {
   const ULONGLONG first =
-      fake_mft_lcn * Tests::fake_cluster_size +
+      fake_mft_lcn * TestFakeImage::fake_cluster_size +
       static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::BadCluster) *
-          Tests::fake_file_record_size;
-  return {first, first + Tests::fake_file_record_size};
+          TestFakeImage::fake_file_record_size;
+  return {first, first + TestFakeImage::fake_file_record_size};
 }
 
 template <Cache::Strategy S>
 void CheckNothingIsReadBeforeAQuery() {
   const auto opened = OpenBadMarked<S>();
   const auto record = Support::ParsedRecord(
-      *opened.volume, static_cast<ULONGLONG>(Tests::mft_tree_docs_idx));
+      *opened.volume, static_cast<ULONGLONG>(TestFakeImage::mft_tree_docs_idx));
 
   if constexpr (S == Cache::Strategy::NoCache) {
     const RecordRange range = BadClusRecord();
@@ -177,7 +178,7 @@ template <Cache::Strategy S>
 void CheckAMissingBitmapKeepsTheBadClusters() {
   // Record 6 is zero-filled: there is no bitmap, but the list is whole.
   const std::vector<BYTE> image = Support::WithBadClusters(
-      Tests::BuildFakeNtfsImageWithFreedFileTree(), bad_marked);
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(), bad_marked);
   const auto opened = Support::OpenVolume<S>(image);
 
   REQUIRE(opened.volume->GetBadClusters() != nullptr);
@@ -189,8 +190,8 @@ void CheckAMissingBitmapKeepsTheBadClusters() {
 
 template <Cache::Strategy S>
 void CheckNeitherFileUsable() {
-  const auto opened =
-      Support::OpenVolume<S>(Tests::BuildFakeNtfsImageWithFreedFileTree());
+  const auto opened = Support::OpenVolume<S>(
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree());
 
   CHECK(opened.volume->GetBadClusters() == nullptr);
   CHECK(opened.volume->GetClusterState(45) == ClusterState::Unknown);
@@ -238,11 +239,12 @@ void CheckAFreedRecordIsStillRead() {
 template <Cache::Strategy S>
 void CheckAnImageSmallerThanTheVolume() {
   std::vector<BYTE> image = Image({});
-  const ULONGLONG real_clusters = image.size() / Tests::fake_cluster_size;
+  const ULONGLONG real_clusters =
+      image.size() / TestFakeImage::fake_cluster_size;
   // The boot sector claims 1000 more clusters than the image holds.
   auto& bpb =
       *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::NtfsBpb*>(image.data());
-  bpb.total_sectors += 1000ULL * Tests::fake_sectors_per_cluster;
+  bpb.total_sectors += 1000ULL * TestFakeImage::fake_sectors_per_cluster;
   const std::vector<Alloc::Extent> tail{
       {.lcn = real_clusters - 2, .clusters = 10},
       {.lcn = real_clusters + 5, .clusters = 3}};

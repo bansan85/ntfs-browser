@@ -35,6 +35,8 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Record = NTFS_BROWSER_NAMESPACE::Record;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 
@@ -119,11 +121,12 @@ std::vector<BYTE> ImageOfState(std::string_view state) {
     std::vector<BYTE> block(first, first + index_block_bytes);
     RetargetParent(
         block, zimmerman_parent | (zimmerman_sequence << 48U),
-        Tests::index_slack_directory_record |
-            (std::uint64_t{Tests::index_slack_directory_sequence} << 48U));
+        TestFakeImage::index_slack_directory_record |
+            (std::uint64_t{TestFakeImage::index_slack_directory_sequence}
+             << 48U));
     blocks.push_back(std::move(block));
   }
-  return Tests::BuildFakeNtfsImageWithIndexBlocks(blocks);
+  return TestFakeImage::BuildFakeNtfsImageWithIndexBlocks(blocks);
 }
 
 // The names a state gives: the live listing and the slack candidates, DOS
@@ -137,11 +140,12 @@ struct Listing {
 
 Listing ListState(std::string_view state) {
   NtfsVolume<Cache::Strategy::NoCache> volume(
-      std::make_unique<Tests::MemoryDiskReader>(ImageOfState(state)),
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(ImageOfState(state)),
       both_flags);
   REQUIRE(volume.IsVolumeOK());
   Io::FileRecord<Cache::Strategy::NoCache> directory(volume);
-  REQUIRE(directory.ParseFileRecord(Tests::index_slack_directory_record));
+  REQUIRE(
+      directory.ParseFileRecord(TestFakeImage::index_slack_directory_record));
   REQUIRE(directory.ParseAttrs());
 
   Listing listing;
@@ -232,10 +236,11 @@ TEST_CASE("Both cache strategies give the index slack of a $I30 state",
   const std::vector<BYTE> image = ImageOfState("SecondDelete");
   const auto carve = [&image](auto strategy) {
     NtfsVolume<decltype(strategy)::value> volume(
-        std::make_unique<Tests::MemoryDiskReader>(image), both_flags);
+        std::make_unique<TestDiskReaders::MemoryDiskReader>(image), both_flags);
     REQUIRE(volume.IsVolumeOK());
     Io::FileRecord<decltype(strategy)::value> directory(volume);
-    REQUIRE(directory.ParseFileRecord(Tests::index_slack_directory_record));
+    REQUIRE(
+        directory.ParseFileRecord(TestFakeImage::index_slack_directory_record));
     REQUIRE(directory.ParseAttrs());
     return directory.CarveIndexSlackNames();
   };
@@ -255,10 +260,12 @@ TEST_CASE("Both cache strategies give the index slack of a $I30 state",
 TEST_CASE("Strict mode lists the live entries of a $I30 state only",
           "[dfir-corpora][integration][i30]") {
   NtfsVolume<Cache::Strategy::NoCache> volume(
-      std::make_unique<Tests::MemoryDiskReader>(ImageOfState("Start")));
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(
+          ImageOfState("Start")));
   REQUIRE(volume.IsVolumeOK());
   Io::FileRecord<Cache::Strategy::NoCache> directory(volume);
-  REQUIRE(directory.ParseFileRecord(Tests::index_slack_directory_record));
+  REQUIRE(
+      directory.ParseFileRecord(TestFakeImage::index_slack_directory_record));
   REQUIRE(directory.ParseAttrs());
 
   CHECK(directory.CarveIndexSlackNames().empty());
@@ -269,7 +276,7 @@ TEST_CASE("The index slack of ntfs_index.raw names its one deleted file",
   const std::filesystem::path image = Tests::RequireCorpusFile(
       Tests::DfirNtfsDir() / u8"test_data" / u8"ntfs_index.raw");
   // The volume starts at byte 65536 of the image.
-  auto reader = std::make_unique<Tests::PartitionDiskReader>(65536);
+  auto reader = std::make_unique<TestDiskReaders::PartitionDiskReader>(65536);
   REQUIRE(reader->Open(image.wstring()));
   const NtfsVolume<Cache::Strategy::NoCache> volume(std::move(reader),
                                                     both_flags);

@@ -19,7 +19,7 @@
 #include "data/header-resident.h"
 #include "fake-ntfs-image-internal.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage {
 
 namespace {
 
@@ -86,7 +86,8 @@ DWORD WriteExtensionList(FakeRecord& record, DWORD offset, ULONGLONG ext_idx,
                          const std::vector<FakeAccountStream>& streams) {
   constexpr WORD entry_size = static_cast<WORD>(AlignAttrSize(
       NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size));
-  auto& attr = InitResidentAttr(record, offset, Attr::Type::AttributeList);
+  auto& attr = InitResidentAttr(
+      record, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::AttributeList);
   attr.attr_size = static_cast<DWORD>(entry_size * streams.size());
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
   for (std::size_t i = 0; i < streams.size(); i++) {
@@ -114,7 +115,9 @@ void PutAccountFile(std::vector<BYTE>& image, ULONGLONG idx,
       attr_offset_value, file.freed ? FileRecordFlag{} : FileRecordFlag::InUse,
       file.sequence);
   EditFileRecordHeader(
-      record, [&](Data::FileRecordHeader& header) { header.lsn = file.lsn; });
+      record, [&](NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader& header) {
+        header.lsn = file.lsn;
+      });
 
   const std::wstring name = L"account" + std::to_wstring(idx) + L".bin";
   DWORD offset = attr_offset_value;
@@ -148,7 +151,9 @@ void PutAccountFile(std::vector<BYTE>& image, ULONGLONG idx,
 void SetRecordLsn(std::vector<BYTE>& image, ULONGLONG idx, ULONGLONG lsn) {
   EditFileRecordHeader(
       MftRecordBytes(image, idx),
-      [lsn](Data::FileRecordHeader& header) { header.lsn = lsn; });
+      [lsn](NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader& header) {
+        header.lsn = lsn;
+      });
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage

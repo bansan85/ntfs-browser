@@ -23,28 +23,31 @@ namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 
 namespace {
 
 // The ways another file can leave a list damaged.
-constexpr auto overwritten_forms = {Tests::FakeListBytes::InvalidTypeFirst,
-                                    Tests::FakeListBytes::InvalidTypeSecond,
-                                    Tests::FakeListBytes::ZeroRecordSize,
-                                    Tests::FakeListBytes::RecordSizeBelowHeader,
-                                    Tests::FakeListBytes::RecordSizePastEnd,
-                                    Tests::FakeListBytes::CutLastEntry};
+constexpr auto overwritten_forms = {
+    TestFakeImage::FakeListBytes::InvalidTypeFirst,
+    TestFakeImage::FakeListBytes::InvalidTypeSecond,
+    TestFakeImage::FakeListBytes::ZeroRecordSize,
+    TestFakeImage::FakeListBytes::RecordSizeBelowHeader,
+    TestFakeImage::FakeListBytes::RecordSizePastEnd,
+    TestFakeImage::FakeListBytes::CutLastEntry};
 
 // The listed file of the fixture, with its list in the state and residency
 // asked for, whose attributes are not parsed yet.
 template <Cache::Strategy S>
-ParsedRecord<S> OpenListed(Tests::FakeListResidency residency,
-                           Tests::FakeListedState state,
-                           Tests::FakeListBytes bytes, bool recover) {
+ParsedRecord<S> OpenListed(TestFakeImage::FakeListResidency residency,
+                           TestFakeImage::FakeListedState state,
+                           TestFakeImage::FakeListBytes bytes, bool recover) {
   return OpenRecord<S>(
-      Tests::BuildFakeNtfsImageWithMftTreeAttributeList(
-          Tests::FakeListedExtension::Genuine, residency, state, bytes),
-      Tests::mft_tree_list_base_idx,
+      TestFakeImage::BuildFakeNtfsImageWithMftTreeAttributeList(
+          TestFakeImage::FakeListedExtension::Genuine, residency, state, bytes),
+      TestFakeImage::mft_tree_list_base_idx,
       VolumeOptions{.include_deleted = true, .recover_errors = recover});
 }
 
@@ -56,10 +59,11 @@ TEMPLATE_TEST_CASE_SIG(
     "[attr-list][overwritten]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const bool recover = GENERATE(false, true);
-  const Tests::FakeListBytes bytes = GENERATE(from_range(overwritten_forms));
+  const TestFakeImage::FakeListBytes bytes =
+      GENERATE(from_range(overwritten_forms));
   const ParsedRecord<S> opened =
-      OpenListed<S>(Tests::FakeListResidency::NonResident,
-                    Tests::FakeListedState::Freed, bytes, recover);
+      OpenListed<S>(TestFakeImage::FakeListResidency::NonResident,
+                    TestFakeImage::FakeListedState::Freed, bytes, recover);
 
   const Tests::RecordLevels levels;
   CHECK(opened.record->ParseAttrs());
@@ -67,7 +71,7 @@ TEMPLATE_TEST_CASE_SIG(
   CHECK(opened.record->HasOverwrittenAttrList());
   CHECK(opened.record->GetAttr(Attr::Type::StandardInformation).size() == 1);
   CHECK(opened.record->GetAttr(Attr::Type::FileName).size() ==
-        Tests::FakeListNamesBeforeDamage(bytes));
+        TestFakeImage::FakeListNamesBeforeDamage(bytes));
   CHECK_FALSE(opened.record->IsSalvaged());
   CHECK_FALSE(levels.Levels().Logged(Log::Level::Warn));
   CHECK_FALSE(levels.Levels().Logged(Log::Level::Error));
@@ -79,9 +83,10 @@ TEMPLATE_TEST_CASE_SIG(
     "[attr-list][overwritten]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const bool recover = GENERATE(false, true);
-  const ParsedRecord<S> opened = OpenListed<S>(
-      Tests::FakeListResidency::NonResident, Tests::FakeListedState::Freed,
-      Tests::FakeListBytes::Intact, recover);
+  const ParsedRecord<S> opened =
+      OpenListed<S>(TestFakeImage::FakeListResidency::NonResident,
+                    TestFakeImage::FakeListedState::Freed,
+                    TestFakeImage::FakeListBytes::Intact, recover);
 
   CHECK(opened.record->ParseAttrs());
 
@@ -96,16 +101,17 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const bool recover = GENERATE(false, true);
   const auto [residency, state] =
-      GENERATE(std::pair{Tests::FakeListResidency::NonResident,
-                         Tests::FakeListedState::Live},
-               std::pair{Tests::FakeListResidency::Resident,
-                         Tests::FakeListedState::Freed},
-               std::pair{Tests::FakeListResidency::Resident,
-                         Tests::FakeListedState::Live});
+      GENERATE(std::pair{TestFakeImage::FakeListResidency::NonResident,
+                         TestFakeImage::FakeListedState::Live},
+               std::pair{TestFakeImage::FakeListResidency::Resident,
+                         TestFakeImage::FakeListedState::Freed},
+               std::pair{TestFakeImage::FakeListResidency::Resident,
+                         TestFakeImage::FakeListedState::Live});
 
   SECTION("an attribute type that is not one") {
-    const ParsedRecord<S> opened = OpenListed<S>(
-        residency, state, Tests::FakeListBytes::InvalidTypeFirst, recover);
+    const ParsedRecord<S> opened =
+        OpenListed<S>(residency, state,
+                      TestFakeImage::FakeListBytes::InvalidTypeFirst, recover);
     const Tests::RecordLevels levels;
 
     CHECK_FALSE(opened.record->ParseAttrs());
@@ -117,7 +123,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   SECTION("a cut last entry") {
     const ParsedRecord<S> opened = OpenListed<S>(
-        residency, state, Tests::FakeListBytes::CutLastEntry, recover);
+        residency, state, TestFakeImage::FakeListBytes::CutLastEntry, recover);
     const Tests::RecordLevels levels;
 
     // Strict rejects the cut list. Recovering keeps what it read.
@@ -135,22 +141,23 @@ TEMPLATE_TEST_CASE_SIG(
     "[attr-list][overwritten]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const bool recover = GENERATE(false, true);
-  const Tests::FakeListBytes bytes = GENERATE(from_range(overwritten_forms));
-  const auto reads_of = [&](Tests::FakeListedState state) {
-    auto reader = std::make_unique<Tests::CountingDiskReader>(
-        std::make_unique<Tests::MemoryDiskReader>(
-            Tests::BuildFakeNtfsImageWithMftTreeAttributeList(
-                Tests::FakeListedExtension::Genuine,
-                Tests::FakeListResidency::NonResident, state, bytes)));
-    const Tests::CountingDiskReader* const counting = reader.get();
+  const TestFakeImage::FakeListBytes bytes =
+      GENERATE(from_range(overwritten_forms));
+  const auto reads_of = [&](TestFakeImage::FakeListedState state) {
+    auto reader = std::make_unique<TestDiskReaders::CountingDiskReader>(
+        std::make_unique<TestDiskReaders::MemoryDiskReader>(
+            TestFakeImage::BuildFakeNtfsImageWithMftTreeAttributeList(
+                TestFakeImage::FakeListedExtension::Genuine,
+                TestFakeImage::FakeListResidency::NonResident, state, bytes)));
+    const TestDiskReaders::CountingDiskReader* const counting = reader.get();
     const ParsedRecord<S> opened = OpenRecordFrom<S>(
-        std::move(reader), Tests::mft_tree_list_base_idx,
+        std::move(reader), TestFakeImage::mft_tree_list_base_idx,
         VolumeOptions{.include_deleted = true, .recover_errors = recover});
     const size_t before = counting->Calls().size();
     (void)opened.record->ParseAttrs();
     return counting->Calls().size() - before;
   };
 
-  CHECK(reads_of(Tests::FakeListedState::Freed) ==
-        reads_of(Tests::FakeListedState::Live));
+  CHECK(reads_of(TestFakeImage::FakeListedState::Freed) ==
+        reads_of(TestFakeImage::FakeListedState::Live));
 }

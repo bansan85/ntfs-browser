@@ -26,7 +26,7 @@
 #include "data/std-info-permission.h"
 #include "fake-ntfs-image-internal.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage {
 
 namespace {
 
@@ -75,17 +75,18 @@ FakeRecord MakeScanMftRecord(ULONGLONG record_count,
   }
 
   const ULONGLONG root = MakeFileReference(
-      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root),
+      root_sequence_number);
   DWORD offset = attr_offset_value;
   offset += WriteStandardInformationAttr(
       record, offset, NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Normal);
   offset += WriteFileNameAttr(record, offset,
                               {.name = L"$MFT", .parent_ref = root}, false);
-  offset +=
-      WriteNonResidentAttr(record, offset, Attr::Type::Data,
-                           {.comp_unit_size = 0,
-                            .real_size = record_count * fake_file_record_size,
-                            .runs = runs});
+  offset += WriteNonResidentAttr(
+      record, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::Data,
+      {.comp_unit_size = 0,
+       .real_size = record_count * fake_file_record_size,
+       .runs = runs});
   WriteEndOfAttributesMarker(record, offset);
   return record;
 }
@@ -97,7 +98,8 @@ FakeRecord MakeScanSlotRecord(ULONGLONG idx) {
   using NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission;
 
   const ULONGLONG root = MakeFileReference(
-      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root),
+      root_sequence_number);
   const std::wstring name = L"f" + std::to_wstring(idx);
   const FileRecordFlag file = FileRecordFlag::InUse;
 
@@ -149,7 +151,8 @@ FakeRecord MakeBusyLoggedStreamRecord(ULONGLONG idx) {
       MakeRecordHeader(attr_offset_value,
                        NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse, 1);
   const ULONGLONG root = MakeFileReference(
-      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root),
+      root_sequence_number);
   DWORD offset = attr_offset_value;
   offset += WriteStandardInformationAttr(
       record, offset, NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Normal);
@@ -158,8 +161,8 @@ FakeRecord MakeBusyLoggedStreamRecord(ULONGLONG idx) {
       false);
   offset +=
       WriteResidentDataAttr(record, offset, static_cast<DWORD>(idx % 100));
-  auto& stream =
-      InitResidentAttr(record, offset, Attr::Type::LoggedUtilityStream);
+  auto& stream = InitResidentAttr(
+      record, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::LoggedUtilityStream);
   stream.attr_size = busy_logged_stream_size;
   stream.header.total_size = AlignAttrSize(sizeof(stream) + stream.attr_size);
   offset += stream.header.total_size;
@@ -178,12 +181,13 @@ FakeRecord MakeBusyListBaseRecord(ULONGLONG idx) {
       record, offset, NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Normal);
 
   NTFS_BROWSER_NAMESPACE::Data::AttributeList entry{};
-  entry.attr_type = Attr::Type::FileName;
+  entry.attr_type = NTFS_BROWSER_NAMESPACE::Attr::Type::FileName;
   entry.record_size = static_cast<WORD>(AlignAttrSize(
       NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size));
   entry.base_ref.segment_number = idx + 1;
   entry.base_ref.sequence_number = busy_list_extension_sequence;
-  auto& list = InitResidentAttr(record, offset, Attr::Type::AttributeList);
+  auto& list = InitResidentAttr(
+      record, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::AttributeList);
   list.attr_size = entry.record_size;
   list.header.total_size = AlignAttrSize(sizeof(list) + list.attr_size);
   std::memcpy(&record.at(offset + list.attr_offset), &entry,
@@ -201,7 +205,8 @@ FakeRecord MakeBusySlotRecord(ULONGLONG idx) {
   using NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission;
 
   const ULONGLONG root = MakeFileReference(
-      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root),
+      root_sequence_number);
   const std::wstring name = L"f" + std::to_wstring(idx);
   const FileRecordFlag file = FileRecordFlag::InUse;
 
@@ -263,7 +268,7 @@ struct ListScanEntry {
 // The bytes of an $ATTRIBUTE_LIST made of entries, one after the other.
 std::vector<BYTE> ListScanBytes(std::span<const ListScanEntry> entries) {
   NTFS_BROWSER_NAMESPACE::Data::AttributeList raw{};
-  raw.attr_type = Attr::Type::FileName;
+  raw.attr_type = NTFS_BROWSER_NAMESPACE::Attr::Type::FileName;
   raw.record_size = static_cast<WORD>(AlignAttrSize(
       NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size));
   std::vector<BYTE> bytes(static_cast<size_t>(raw.record_size) * entries.size(),
@@ -294,10 +299,11 @@ FakeRecord MakeListScanBase(NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag flags,
       record, offset, NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Normal);
   if (run) {
     offset += WriteNonResidentAttr(
-        record, offset, Attr::Type::AttributeList,
+        record, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::AttributeList,
         {.comp_unit_size = 0, .real_size = list.size(), .runs = {*run}});
   } else {
-    auto& attr = InitResidentAttr(record, offset, Attr::Type::AttributeList);
+    auto& attr = InitResidentAttr(
+        record, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::AttributeList);
     attr.attr_size = static_cast<DWORD>(list.size());
     attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
     std::memcpy(&record.at(offset + attr.attr_offset), list.data(),
@@ -313,7 +319,8 @@ FakeRecord
     MakeListScanExtension(NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag flags,
                           WORD sequence, ULONGLONG idx, ULONGLONG base) {
   const ULONGLONG root = MakeFileReference(
-      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root),
+      root_sequence_number);
   return MakeMftTreeRecord(
       flags, sequence,
       {{.name = L"listed" + std::to_wstring(idx), .parent_ref = root}}, {},
@@ -369,7 +376,8 @@ std::wstring IndexedScanName(ULONGLONG idx) {
 // stale one that names another sequence number.
 std::vector<IndexedScanEntry> IndexedScanEntries(ULONGLONG record_count) {
   std::vector<IndexedScanEntry> entries;
-  for (ULONGLONG idx = static_cast<ULONGLONG>(Mft::Idx::User);
+  for (ULONGLONG idx =
+           static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::User);
        idx < record_count; idx++) {
     const bool directory = idx % slot_kind_count == 3;
     entries.push_back(
@@ -437,7 +445,8 @@ FakeRecord MakeListScanSlotRecord(ULONGLONG idx) {
   using NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag;
 
   const ULONGLONG root = MakeFileReference(
-      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root),
+      root_sequence_number);
   const FileRecordFlag file = FileRecordFlag::InUse;
   const std::wstring name = L"f" + std::to_wstring(idx);
   // The list of a base record names the slot after it, or before it.
@@ -575,18 +584,22 @@ std::vector<BYTE>
   std::vector<BYTE> image = BuildFakeNtfsImage();
 
   const ULONGLONG root = MakeFileReference(
-      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
-  PutScanRecord(image, static_cast<ULONGLONG>(Mft::Idx::Root),
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root),
+      root_sequence_number);
+  PutScanRecord(image,
+                static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root),
                 fragment_clusters,
                 MakeMftTreeRecord(FileRecordFlag::InUse | FileRecordFlag::Dir,
                                   root_sequence_number,
                                   {{.name = L".", .parent_ref = root}}));
-  for (ULONGLONG idx = static_cast<ULONGLONG>(Mft::Idx::User);
+  for (ULONGLONG idx =
+           static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::User);
        idx < record_count; idx++) {
     PutScanRecord(image, idx, fragment_clusters, MakeScanSlotRecord(idx));
   }
-  PutScanRecord(image, static_cast<ULONGLONG>(Mft::Idx::Mft), fragment_clusters,
-                MakeScanMftRecord(record_count, fragment_clusters));
+  PutScanRecord(
+      image, static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Mft),
+      fragment_clusters, MakeScanMftRecord(record_count, fragment_clusters));
   return image;
 }
 
@@ -598,18 +611,22 @@ std::vector<BYTE>
   std::vector<BYTE> image = BuildFakeNtfsImage();
 
   const ULONGLONG root = MakeFileReference(
-      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
-  PutScanRecord(image, static_cast<ULONGLONG>(Mft::Idx::Root),
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root),
+      root_sequence_number);
+  PutScanRecord(image,
+                static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root),
                 fragment_clusters,
                 MakeMftTreeRecord(FileRecordFlag::InUse | FileRecordFlag::Dir,
                                   root_sequence_number,
                                   {{.name = L".", .parent_ref = root}}));
-  for (ULONGLONG idx = static_cast<ULONGLONG>(Mft::Idx::User);
+  for (ULONGLONG idx =
+           static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::User);
        idx < record_count; idx++) {
     PutScanRecord(image, idx, fragment_clusters, MakeBusySlotRecord(idx));
   }
-  PutScanRecord(image, static_cast<ULONGLONG>(Mft::Idx::Mft), fragment_clusters,
-                MakeScanMftRecord(record_count, fragment_clusters));
+  PutScanRecord(
+      image, static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Mft),
+      fragment_clusters, MakeScanMftRecord(record_count, fragment_clusters));
   return image;
 }
 
@@ -621,19 +638,23 @@ std::vector<BYTE>
   std::vector<BYTE> image = BuildFakeNtfsImage();
 
   const ULONGLONG root = MakeFileReference(
-      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
-  PutScanRecord(image, static_cast<ULONGLONG>(Mft::Idx::Root),
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root),
+      root_sequence_number);
+  PutScanRecord(image,
+                static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root),
                 fragment_clusters,
                 MakeMftTreeRecord(FileRecordFlag::InUse | FileRecordFlag::Dir,
                                   root_sequence_number,
                                   {{.name = L".", .parent_ref = root}}));
   ULONGLONG next_list_lcn = list_scan_lists_lcn;
-  for (ULONGLONG idx = static_cast<ULONGLONG>(Mft::Idx::User);
+  for (ULONGLONG idx =
+           static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::User);
        idx < record_count; idx++) {
     PutListScanSlot(image, idx, fragment_clusters, next_list_lcn);
   }
-  PutScanRecord(image, static_cast<ULONGLONG>(Mft::Idx::Mft), fragment_clusters,
-                MakeScanMftRecord(record_count, fragment_clusters));
+  PutScanRecord(
+      image, static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Mft),
+      fragment_clusters, MakeScanMftRecord(record_count, fragment_clusters));
   return image;
 }
 
@@ -647,13 +668,16 @@ std::vector<BYTE>
       BuildFakeNtfsImageWithFragmentedMftScan(record_count, fragment_clusters);
 
   const ULONGLONG root = MakeFileReference(
-      static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
-  PutScanRecord(image, static_cast<ULONGLONG>(Mft::Idx::Root),
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root),
+      root_sequence_number);
+  PutScanRecord(image,
+                static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root),
                 fragment_clusters,
                 MakeMftTreeRecord(FileRecordFlag::InUse | FileRecordFlag::Dir,
                                   root_sequence_number,
                                   {{.name = L".", .parent_ref = root}}));
-  const ULONGLONG first = static_cast<ULONGLONG>(Mft::Idx::User);
+  const ULONGLONG first =
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::User);
   for (ULONGLONG idx = first; idx < record_count; idx++) {
     const ULONGLONG at = (idx - first) % (extension_count + 1);
     if (at != 0) {
@@ -671,8 +695,9 @@ std::vector<BYTE>
                   MakeListScanBase(FileRecordFlag::InUse,
                                    ListScanBytes(entries), std::nullopt));
   }
-  PutScanRecord(image, static_cast<ULONGLONG>(Mft::Idx::Mft), fragment_clusters,
-                MakeScanMftRecord(record_count, fragment_clusters));
+  PutScanRecord(
+      image, static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Mft),
+      fragment_clusters, MakeScanMftRecord(record_count, fragment_clusters));
   return image;
 }
 
@@ -734,9 +759,10 @@ std::vector<BYTE>
     write_block(j + 1, leaf_vcn(j), leaves.at(j), std::nullopt);
   }
 
-  PutScanRecord(image, static_cast<ULONGLONG>(Mft::Idx::Root),
+  PutScanRecord(image,
+                static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root),
                 fragment_clusters, MakeIndexedScanRoot(block_count));
   return image;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage

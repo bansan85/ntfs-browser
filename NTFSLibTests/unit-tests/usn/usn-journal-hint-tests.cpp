@@ -22,12 +22,13 @@
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using Support::MakeRecord;
-using Tests::CountingDiskReader;
-using Tests::FakeUsnOptions;
+using TestDiskReaders::CountingDiskReader;
+using TestFakeImage::FakeUsnOptions;
 
 namespace {
 
@@ -37,7 +38,7 @@ using Kind = CountingDiskReader::Kind;
 // Where the data of $J starts in the fixture: it goes past the end of the base
 // image.
 ULONGLONG JournalStart() {
-  return Tests::BuildFakeNtfsImageWithFreedFileTree().size();
+  return TestFakeImage::BuildFakeNtfsImageWithFreedFileTree().size();
 }
 
 // The calls of a kind that touch the data of $J.

@@ -27,7 +27,7 @@
 #include "io/file-reader.h"
 
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 using NTFS_BROWSER_NAMESPACE::IDiskReader;
 
@@ -107,23 +107,25 @@ TEST_CASE("a reader that overrides nothing has no size",
 
 TEST_CASE("MemoryDiskReader reports the size of its buffer",
           "[disk-reader][size]") {
-  CHECK(Tests::MemoryDiskReader(std::vector<BYTE>(buffer_bytes)).Size() ==
-        buffer_bytes);
-  CHECK(Tests::MemoryDiskReader({}).Size() == 0);
+  CHECK(TestDiskReaders::MemoryDiskReader(std::vector<BYTE>(buffer_bytes))
+            .Size() == buffer_bytes);
+  CHECK(TestDiskReaders::MemoryDiskReader({}).Size() == 0);
 }
 
 TEST_CASE("SequentialDiskReader has no size", "[disk-reader][size]") {
-  const Tests::SequentialDiskReader reader(
-      Tests::MakeMemoryProducer(std::vector<BYTE>(buffer_bytes)));
+  const TestDiskReaders::SequentialDiskReader reader(
+      TestDiskReaders::MakeMemoryProducer(std::vector<BYTE>(buffer_bytes)));
   CHECK_FALSE(reader.Size().has_value());
 }
 
 TEST_CASE("PartitionDiskReader reports the length it was given",
           "[disk-reader][size]") {
-  CHECK_FALSE(Tests::PartitionDiskReader(partition_offset).Size().has_value());
-  CHECK(Tests::PartitionDiskReader(partition_offset, partition_length).Size() ==
-        partition_length);
-  CHECK(Tests::PartitionDiskReader(0, 0).Size() == 0);
+  CHECK_FALSE(TestDiskReaders::PartitionDiskReader(partition_offset)
+                  .Size()
+                  .has_value());
+  CHECK(TestDiskReaders::PartitionDiskReader(partition_offset, partition_length)
+            .Size() == partition_length);
+  CHECK(TestDiskReaders::PartitionDiskReader(0, 0).Size() == 0);
 }
 
 TEST_CASE("RecordingDiskReader forwards the size and records nothing",
@@ -131,7 +133,8 @@ TEST_CASE("RecordingDiskReader forwards the size and records nothing",
   const TempPath trace;
   auto inner = std::make_unique<CountingReader>(buffer_bytes);
   const CountingReader& counted = *inner;
-  const Tests::RecordingDiskReader reader(std::move(inner), trace.path);
+  const TestDiskReaders::RecordingDiskReader reader(std::move(inner),
+                                                    trace.path);
 
   CHECK(reader.Size() == buffer_bytes);
   CHECK(counted.sizes == 1);
@@ -142,7 +145,7 @@ TEST_CASE("RecordingDiskReader forwards the size and records nothing",
 TEST_CASE("RecordingDiskReader forwards a missing size",
           "[disk-reader][size]") {
   const TempPath trace;
-  const Tests::RecordingDiskReader reader(
+  const TestDiskReaders::RecordingDiskReader reader(
       std::make_unique<CountingReader>(std::nullopt), trace.path);
 
   CHECK_FALSE(reader.Size().has_value());
@@ -176,8 +179,9 @@ TEMPLATE_TEST_CASE_SIG("FileReader reports the size of its reader",
   const Io::FileReader<S> without_reader;
   CHECK_FALSE(without_reader.Size().has_value());
 
-  const Io::FileReader<S> sized(std::make_unique<Tests::MemoryDiskReader>(
-      std::vector<BYTE>(buffer_bytes)));
+  const Io::FileReader<S> sized(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(
+          std::vector<BYTE>(buffer_bytes)));
   CHECK(sized.Size() == buffer_bytes);
 
   const Io::FileReader<S> unsized(std::make_unique<MinimalReader>());

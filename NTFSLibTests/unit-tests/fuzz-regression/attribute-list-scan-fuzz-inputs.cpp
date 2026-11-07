@@ -15,6 +15,7 @@
 #include "fuzz-input-writer.h"
 
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 
 namespace {
@@ -29,18 +30,19 @@ struct Variant {
 // clusters.
 std::vector<Variant> Variants() {
   std::vector<Variant> variants;
-  variants.push_back({"attribute_list_scan_both_sides",
-                      Tests::BuildFakeNtfsImageWithMftTreeAttributeList()});
+  variants.push_back(
+      {"attribute_list_scan_both_sides",
+       TestFakeImage::BuildFakeNtfsImageWithMftTreeAttributeList()});
   variants.push_back({"attribute_list_scan_foreign_extension",
-                      Tests::BuildFakeNtfsImageWithMftTreeAttributeList(
-                          Tests::FakeListedExtension::Foreign)});
+                      TestFakeImage::BuildFakeNtfsImageWithMftTreeAttributeList(
+                          TestFakeImage::FakeListedExtension::Foreign)});
   variants.push_back(
       {"attribute_list_multi_cluster",
-       Tests::BuildFakeNtfsImageWithMultiClusterAttributeList()});
+       TestFakeImage::BuildFakeNtfsImageWithMultiClusterAttributeList()});
   variants.push_back({"attribute_list_scan_non_resident",
-                      Tests::BuildFakeNtfsImageWithMftTreeAttributeList(
-                          Tests::FakeListedExtension::Genuine,
-                          Tests::FakeListResidency::NonResident)});
+                      TestFakeImage::BuildFakeNtfsImageWithMftTreeAttributeList(
+                          TestFakeImage::FakeListedExtension::Genuine,
+                          TestFakeImage::FakeListResidency::NonResident)});
   return variants;
 }
 
@@ -79,10 +81,10 @@ TEST_CASE("write the waiting scan fuzz inputs", "[.write-fuzz-inputs]") {
   constexpr ULONGLONG slots = 16 + 14 * 5;
   Tests::FuzzInputs::WriteRecordedScanInput(
       std::filesystem::path(dir) / "scan_threads_waiting_strict",
-      Tests::BuildFakeNtfsImageWithListMftScan(slots), VolumeOptions{});
+      TestFakeImage::BuildFakeNtfsImageWithListMftScan(slots), VolumeOptions{});
   Tests::FuzzInputs::WriteRecordedScanInput(
       std::filesystem::path(dir) / "scan_threads_waiting_recovering",
-      Tests::BuildFakeNtfsImageWithListMftScan(slots),
+      TestFakeImage::BuildFakeNtfsImageWithListMftScan(slots),
       VolumeOptions{.include_deleted = true, .recover_errors = true});
 }
 
@@ -101,16 +103,18 @@ TEST_CASE("write the overwritten attribute list fuzz inputs",
   const VolumeOptions options{.include_deleted = true, .recover_errors = true};
   Tests::FuzzInputs::WriteRecordedInput(
       std::filesystem::path(dir) / "attribute_list_overwritten_invalid_type",
-      Tests::BuildFakeNtfsImageWithMftTreeAttributeList(
-          Tests::FakeListedExtension::Genuine,
-          Tests::FakeListResidency::NonResident, Tests::FakeListedState::Freed,
-          Tests::FakeListBytes::InvalidTypeFirst),
+      TestFakeImage::BuildFakeNtfsImageWithMftTreeAttributeList(
+          TestFakeImage::FakeListedExtension::Genuine,
+          TestFakeImage::FakeListResidency::NonResident,
+          TestFakeImage::FakeListedState::Freed,
+          TestFakeImage::FakeListBytes::InvalidTypeFirst),
       options);
   Tests::FuzzInputs::WriteRecordedInput(
       std::filesystem::path(dir) / "attribute_list_overwritten_cut_entry",
-      Tests::BuildFakeNtfsImageWithMftTreeAttributeList(
-          Tests::FakeListedExtension::Genuine,
-          Tests::FakeListResidency::NonResident, Tests::FakeListedState::Freed,
-          Tests::FakeListBytes::CutLastEntry),
+      TestFakeImage::BuildFakeNtfsImageWithMftTreeAttributeList(
+          TestFakeImage::FakeListedExtension::Genuine,
+          TestFakeImage::FakeListResidency::NonResident,
+          TestFakeImage::FakeListedState::Freed,
+          TestFakeImage::FakeListBytes::CutLastEntry),
       options);
 }

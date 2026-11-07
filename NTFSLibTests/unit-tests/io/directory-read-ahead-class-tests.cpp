@@ -32,7 +32,7 @@
 #include "directory-read-ahead-support.h"
 #include "log/ntfs-common.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 class IndexEntryView;
 
@@ -44,18 +44,20 @@ enum class RecordStanding : std::uint8_t;
 template <Cache::Strategy S>
 class NtfsVolume;
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace ReadAhead = NTFS_BROWSER_NAMESPACE::Tests::ReadAhead;
 using NTFS_BROWSER_NAMESPACE::IndexEntryView;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Tests::CountingDiskReader;
+using TestDiskReaders::CountingDiskReader;
 
 namespace {
 
@@ -67,7 +69,7 @@ constexpr std::uint64_t large_budget = std::uint64_t{16} << 20U;
 
 // The record number of big directory number.
 ULONGLONG BigDirectory(std::size_t number) {
-  return Tests::name_tree_first_record +
+  return TestFakeImage::name_tree_first_record +
          (number * ReadAhead::big_directory_nodes);
 }
 
@@ -84,19 +86,19 @@ std::vector<ULONGLONG> AllBigDirectories() {
 // parses its root: what a listing starts from.
 template <Cache::Strategy S>
 struct Rig {
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   CountingDiskReader* reads{nullptr};
-  const Tests::ThrottledDiskReader* disk{nullptr};
+  const TestDiskReaders::ThrottledDiskReader* disk{nullptr};
   std::unique_ptr<NtfsVolume<S>> volume;
   std::unique_ptr<Io::FileRecord<S>> listing;
 
   Rig(const std::vector<BYTE>& image, VolumeOptions options, std::size_t dirs,
-      std::uint64_t bytes, const Tests::DiskModel& model = {}) {
+      std::uint64_t bytes, const TestDiskReaders::DiskModel& model = {}) {
     options.tuning.walk.read_ahead_dirs = dirs;
     options.tuning.walk.read_ahead_bytes = bytes;
-    auto throttled = std::make_unique<Tests::ThrottledDiskReader>(
-        std::make_unique<Tests::MemoryDiskReader>(image), model, clock,
-        options.tuning.reader);
+    auto throttled = std::make_unique<TestDiskReaders::ThrottledDiskReader>(
+        std::make_unique<TestDiskReaders::MemoryDiskReader>(image), model,
+        clock, options.tuning.reader);
     disk = throttled.get();
     auto counting = std::make_unique<CountingDiskReader>(std::move(throttled));
     reads = counting.get();
@@ -148,7 +150,7 @@ TEMPLATE_TEST_CASE_SIG(
     "directories",
     "[io][directory-read-ahead]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::BigDirectoryTree(big_directories));
   Rig<S> rig(image, {}, 8, large_budget);
   Io::DirectoryReadAhead<S> ahead(*rig.volume);
@@ -173,7 +175,7 @@ TEMPLATE_TEST_CASE_SIG(
     "The read ahead announces each batch before it reads it, in one sweep",
     "[io][directory-read-ahead]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::BigDirectoryTree(big_directories));
   Rig<S> rig(image, {}, 8, large_budget);
   Io::DirectoryReadAhead<S> ahead(*rig.volume);
@@ -213,7 +215,7 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG("The read ahead withdraws no announcement unused",
                        "[io][directory-read-ahead]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::BigDirectoryTree(big_directories));
   Rig<S> rig(image, {}, 8, large_budget, ReadAhead::HardDiskModel());
   Io::DirectoryReadAhead<S> ahead(*rig.volume);
@@ -233,7 +235,7 @@ TEMPLATE_TEST_CASE_SIG(
     "The listing takes everything the read ahead held, and nothing stays held",
     "[io][directory-read-ahead]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::BigDirectoryTree(big_directories));
   Rig<S> rig(image, {}, 8, large_budget);
   Io::DirectoryReadAhead<S> ahead(*rig.volume);
@@ -270,7 +272,7 @@ TEMPLATE_TEST_CASE_SIG(
     "A directory released unused is counted, and frees its bytes",
     "[io][directory-read-ahead]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::BigDirectoryTree(big_directories));
   Rig<S> rig(image, {}, 8, large_budget);
   Io::DirectoryReadAhead<S> ahead(*rig.volume);
@@ -294,7 +296,7 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG("The read ahead never holds more than its budget",
                        "[io][directory-read-ahead]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::BigDirectoryTree(big_directories));
   std::uint64_t unlimited_blocks = 0;
   {
@@ -335,7 +337,7 @@ TEMPLATE_TEST_CASE_SIG("The read ahead never holds more than its budget",
 TEMPLATE_TEST_CASE_SIG("The read ahead plans nothing within a budget of zero",
                        "[io][directory-read-ahead]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::BigDirectoryTree(big_directories));
   Rig<S> rig(image, {}, 8, 0);
   Io::DirectoryReadAhead<S> ahead(*rig.volume);
@@ -372,7 +374,7 @@ TEMPLATE_TEST_CASE_SIG(
     std::vector<ULONGLONG> records;
     // Nodes both trees hold: a run of records MUST NOT reach past $MFT.
     for (std::size_t node = 0; node < 30; node++) {
-      records.push_back(Tests::name_tree_first_record + node);
+      records.push_back(TestFakeImage::name_tree_first_record + node);
     }
     (void)Tests::TakeCapturedLog();
     const std::uint64_t salvaged = Log::Detail::RecoveredCount();
@@ -388,7 +390,7 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG("The read ahead reads the first blocks of the start",
                        "[io][directory-read-ahead]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::BigDirectoryTree(big_directories));
   Rig<S> rig(image, {}, 8, large_budget);
   Io::DirectoryReadAhead<S> ahead(*rig.volume);
@@ -420,7 +422,7 @@ TEMPLATE_TEST_CASE_SIG("The read ahead reads the first blocks of the start",
 TEMPLATE_TEST_CASE_SIG("The read ahead does nothing while it is off",
                        "[io][directory-read-ahead]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::BigDirectoryTree(big_directories));
   Rig<S> rig(image, {}, 0, large_budget);
   Io::DirectoryReadAhead<S> ahead(*rig.volume);
@@ -445,13 +447,13 @@ TEMPLATE_TEST_CASE_SIG(
     "[io][directory-read-ahead]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto image =
-      Tests::BuildFakeNtfsImageWithNameTree(ReadAhead::WideTree(40));
+      TestFakeImage::BuildFakeNtfsImageWithNameTree(ReadAhead::WideTree(40));
   Rig<S> rig(image, {}, 8, large_budget);
   Io::DirectoryReadAhead<S> ahead(*rig.volume);
   ahead.Attach(*rig.listing);
   // Directory number d of the wide tree is node 4 * d.
   const auto directory = [](std::size_t number) {
-    return Tests::name_tree_first_record + (4 * number);
+    return TestFakeImage::name_tree_first_record + (4 * number);
   };
   std::vector<ULONGLONG> window;
   for (std::size_t number = 0; number < 8; number++) {
@@ -488,13 +490,13 @@ TEMPLATE_TEST_CASE_SIG(
     "[io][directory-read-ahead]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto image =
-      Tests::BuildFakeNtfsImageWithNameTree(ReadAhead::WideTree(40));
+      TestFakeImage::BuildFakeNtfsImageWithNameTree(ReadAhead::WideTree(40));
   Rig<S> rig(image, {}, 8, large_budget);
   Io::DirectoryReadAhead<S> ahead(*rig.volume);
   ahead.Attach(*rig.listing);
   // Directory number d of the wide tree is node 4 * d.
   const auto directory = [](std::size_t number) {
-    return Tests::name_tree_first_record + (4 * number);
+    return TestFakeImage::name_tree_first_record + (4 * number);
   };
   std::vector<ULONGLONG> window;
   for (std::size_t number = 0; number < 8; number++) {
@@ -529,12 +531,12 @@ TEMPLATE_TEST_CASE_SIG(
     "[io][directory-read-ahead]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto image =
-      Tests::BuildFakeNtfsImageWithNameTree(ReadAhead::WideTree(40));
+      TestFakeImage::BuildFakeNtfsImageWithNameTree(ReadAhead::WideTree(40));
   Rig<S> rig(image, {}, 8, large_budget);
   Io::DirectoryReadAhead<S> ahead(*rig.volume);
   ahead.Attach(*rig.listing);
   const auto directory = [](std::size_t number) {
-    return Tests::name_tree_first_record + (4 * number);
+    return TestFakeImage::name_tree_first_record + (4 * number);
   };
   std::vector<ULONGLONG> held;
   for (std::size_t number = 0; number < 4; number++) {
@@ -559,7 +561,7 @@ TEMPLATE_TEST_CASE_SIG(
     "The listing takes the blocks of a directory the read ahead read alone",
     "[io][directory-read-ahead]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::BigDirectoryTree(big_directories));
   Rig<S> rig(image, {}, 8, large_budget);
   Io::DirectoryReadAhead<S> ahead(*rig.volume);
@@ -603,7 +605,7 @@ TEMPLATE_TEST_CASE_SIG(
     "The read ahead reads the next directory within its budget only",
     "[io][directory-read-ahead]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::BigDirectoryTree(big_directories));
   std::vector<ULONGLONG> window;
   for (std::size_t number = 1; number < big_directories; number++) {
@@ -639,7 +641,7 @@ TEMPLATE_TEST_CASE_SIG(
     "attribute callback",
     "[io][directory-read-ahead]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::BigDirectoryTree(big_directories));
   Rig<S> rig(image, {}, 8, large_budget);
   REQUIRE(rig.volume->InstallAttrRawCB(
@@ -672,7 +674,7 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   // The blocks of the root chain, each naming the next one, past the depth
   // limit of the walk.
-  const auto image = Tests::BuildFakeNtfsImageWithDeepIndexBlockChain();
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithDeepIndexBlockChain();
   Rig<S> rig(image, {}, 8, large_budget);
   Io::DirectoryReadAhead<S> ahead(*rig.volume);
   ahead.Attach(*rig.listing);
@@ -702,7 +704,7 @@ TEMPLATE_TEST_CASE_SIG(
     "directory",
     "[io][directory-read-ahead]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithDeepIndexBlockChain();
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithDeepIndexBlockChain();
   std::uint32_t block_size = 0;
   {
     Rig<S> rig(image, {}, 8, large_budget);
@@ -729,7 +731,7 @@ TEMPLATE_TEST_CASE_SIG(
 TEST_CASE("The record memo gives the probes of a listing the records it kept",
           "[io][directory-read-ahead]") {
   constexpr Cache::Strategy S = Cache::Strategy::NoCache;
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::BigDirectoryTree(big_directories));
   // The window would serve the second listing too: leave it out.
   VolumeOptions options;

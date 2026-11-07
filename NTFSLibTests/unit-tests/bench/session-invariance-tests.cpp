@@ -37,11 +37,13 @@ namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Call = Tests::CountingDiskReader::Call;
-using Kind = Tests::CountingDiskReader::Kind;
+using Call = TestDiskReaders::CountingDiskReader::Call;
+using Kind = TestDiskReaders::CountingDiskReader::Kind;
 
 namespace {
 
@@ -135,9 +137,9 @@ void ReadTo(const Io::FileReader<S>& reader, LONGLONG offset, DWORD length,
 // end of the medium.
 template <Cache::Strategy S>
 ScriptRun RunScript(const std::vector<BYTE>& image) {
-  auto counting = std::make_unique<Tests::CountingDiskReader>(
-      std::make_unique<Tests::MemoryDiskReader>(image));
-  const Tests::CountingDiskReader* const reader = counting.get();
+  auto counting = std::make_unique<TestDiskReaders::CountingDiskReader>(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(image));
+  const TestDiskReaders::CountingDiskReader* const reader = counting.get();
   const Io::FileReader<S> file(std::move(counting));
 
   ScriptRun run;
@@ -202,9 +204,9 @@ template <Cache::Strategy S>
 Tests::ScanResult ScanList(const std::vector<BYTE>& image,
                            const VolumeOptions& options, unsigned threads) {
   static_cast<void>(Tests::TakeCapturedLog());
-  auto reader = std::make_unique<Tests::CountingDiskReader>(
-      std::make_unique<Tests::MemoryDiskReader>(image));
-  const Tests::CountingDiskReader* const counting = reader.get();
+  auto reader = std::make_unique<TestDiskReaders::CountingDiskReader>(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(image));
+  const TestDiskReaders::CountingDiskReader* const counting = reader.get();
   const NtfsVolume<S> volume(std::move(reader), options);
   REQUIRE(volume.IsVolumeOK());
   return Tests::CaptureScan(volume, counting, threads);
@@ -220,9 +222,9 @@ template <Cache::Strategy S>
 WalkRun WalkIndexed(const std::vector<BYTE>& image,
                     const VolumeOptions& options) {
   static_cast<void>(Tests::TakeCapturedLog());
-  auto reader = std::make_unique<Tests::CountingDiskReader>(
-      std::make_unique<Tests::MemoryDiskReader>(image));
-  const Tests::CountingDiskReader* const counting = reader.get();
+  auto reader = std::make_unique<TestDiskReaders::CountingDiskReader>(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(image));
+  const TestDiskReaders::CountingDiskReader* const counting = reader.get();
   const NtfsVolume<S> volume(std::move(reader), options);
   REQUIRE(volume.IsVolumeOK());
   WalkRun run;
@@ -290,8 +292,9 @@ TEMPLATE_TEST_CASE_SIG(
   const unsigned threads = GENERATE(1U, 3U);
   const VolumeOptions options{.include_deleted = include_deleted,
                               .recover_errors = true};
-  const std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithListMftScan(
-      list_record_count, list_fragment_clusters);
+  const std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithListMftScan(list_record_count,
+                                                       list_fragment_clusters);
   INFO("include_deleted " << include_deleted << ", threads " << threads);
 
   const Tests::ScanResult plain = ScanList<S>(image, options, threads);
@@ -324,7 +327,7 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const VolumeOptions options{.include_deleted = true, .recover_errors = true};
   const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithIndexedMftScan(walk_record_count);
+      TestFakeImage::BuildFakeNtfsImageWithIndexedMftScan(walk_record_count);
 
   WalkRun plain = WalkIndexed<S>(image, options);
   CHECK_FALSE(plain.walk.entries.empty());

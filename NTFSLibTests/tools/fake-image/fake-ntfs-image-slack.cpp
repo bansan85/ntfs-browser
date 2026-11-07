@@ -16,7 +16,7 @@
 #include "data/filename.h"
 #include "fake-ntfs-image-internal.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage {
 
 namespace {
 
@@ -87,7 +87,7 @@ size_t RecordEndMarkerOffset(const std::vector<BYTE>& image, ULONGLONG idx) {
     DWORD type = 0;
     DWORD total_size = 0;
     std::memcpy(&type, &image.at(start + offset), sizeof(type));
-    if (type == static_cast<DWORD>(Attr::Type::All)) {
+    if (type == static_cast<DWORD>(NTFS_BROWSER_NAMESPACE::Attr::Type::All)) {
       return offset;
     }
     std::memcpy(&total_size, &image.at(start + offset + 4), sizeof(total_size));
@@ -125,4 +125,4 @@ void SetRecordUsedSize(std::vector<BYTE>& image, ULONGLONG idx,
   Store<DWORD>(image, RecordStart(idx) + used_size_offset, used_size);
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage

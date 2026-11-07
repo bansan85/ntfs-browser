@@ -29,7 +29,7 @@
 #include "io/file-record-index.h"
 #include "log/ntfs-common.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 namespace Cache {
 
 enum class Strategy : std::uint8_t;
@@ -44,7 +44,7 @@ enum class RecordStanding : std::uint8_t;
 template <Cache::Strategy S>
 class NtfsVolume;
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 // What the tests of the probes of a directory walk share: a volume over a
 // counting reader, the blocks of a directory's index, and a walk that notes
@@ -57,7 +57,7 @@ inline constexpr ULONGLONG first_mapped_slot = 16;
 // A volume over an image, and the reader that counts what it is asked.
 template <Cache::Strategy S>
 struct OpenVolume {
-  CountingDiskReader* reads{nullptr};
+  Test::DiskReaders::CountingDiskReader* reads{nullptr};
   std::unique_ptr<NtfsVolume<S>> volume;
 };
 
@@ -66,9 +66,10 @@ template <Cache::Strategy S>
 [[nodiscard]] OpenVolume<S>
     Open(const std::vector<BYTE>& image,
          Tuning::MediaKind kind = Tuning::MediaKind::Unknown) {
-  auto memory = std::make_unique<MemoryDiskReader>(image);
+  auto memory = std::make_unique<Test::DiskReaders::MemoryDiskReader>(image);
   memory->SetMediaKind(kind);
-  auto counting = std::make_unique<CountingDiskReader>(std::move(memory));
+  auto counting = std::make_unique<Test::DiskReaders::CountingDiskReader>(
+      std::move(memory));
   OpenVolume<S> open;
   open.reads = counting.get();
   open.volume =
@@ -122,7 +123,7 @@ struct DirectoryWalk {
   // The runs the probes made, as (first slot, count), in order.
   std::vector<std::pair<ULONGLONG, ULONGLONG>> ran;
   // The announcements and reads of the walk.
-  std::vector<CountingDiskReader::Call> calls;
+  std::vector<Test::DiskReaders::CountingDiskReader::Call> calls;
   // The file references the walk delivered.
   std::vector<ULONGLONG> listed;
 };

@@ -61,8 +61,8 @@ constexpr DWORD second_read_size = 2048;
 template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 NTFS_BROWSER_NAMESPACE::Io::FileReader<S>
     OpenOnDisk(const std::filesystem::path& path) {
-  auto reader =
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::PartitionDiskReader>(0);
+  auto reader = std::make_unique<
+      NTFS_BROWSER_NAMESPACE::Test::DiskReaders::PartitionDiskReader>(0);
   REQUIRE(reader->Open(path.wstring()));
   return NTFS_BROWSER_NAMESPACE::Io::FileReader<S>(std::move(reader));
 }
@@ -152,7 +152,8 @@ TEST_CASE("FileReader NoCache Read grows its buffer before filling it",
 
   const NTFS_BROWSER_NAMESPACE::Io::FileReader<
       NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>
-      reader(std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      reader(std::make_unique<
+             NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           content));
 
   LARGE_INTEGER first_addr{.QuadPart = 0};
@@ -223,9 +224,8 @@ TEST_CASE(
     backing[i] = static_cast<BYTE>(i);
   }
 
-  auto reader_double =
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-          backing);
+  auto reader_double = std::make_unique<
+      NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(backing);
   const FileReader<Cache::Strategy::FullCache> reader(std::move(reader_double));
 
   // Straddles the boundary between the first and second cache blocks.
@@ -262,10 +262,12 @@ TEST_CASE(
   }
 
   const FileReader<Cache::Strategy::FullCache> full(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           backing));
   const FileReader<Cache::Strategy::NoCache> exact(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           backing));
 
   struct Range {
@@ -328,7 +330,8 @@ TEST_CASE(
   }
 
   const FileReader<Cache::Strategy::FullCache> full(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           backing));
 
   LARGE_INTEGER addr{.QuadPart = inner_length};
@@ -347,7 +350,8 @@ TEST_CASE(
     "[file-reader][regression]") {
   const std::vector<BYTE> backing(cache_block_size);
   const FileReader<Cache::Strategy::FullCache> full(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           backing));
 
   LARGE_INTEGER addr{.QuadPart = -1};
@@ -360,7 +364,8 @@ TEST_CASE(
     "[file-reader][regression]") {
   const std::vector<BYTE> backing(cache_block_size);
   const FileReader<Cache::Strategy::FullCache> full(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           backing));
 
   constexpr DWORD length_value = 100;
@@ -395,7 +400,7 @@ class SwitchableDiskReader final : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   }
 
  private:
-  NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader inner_;
+  NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader inner_;
   std::shared_ptr<bool> failing_;
 };
 
@@ -425,11 +430,13 @@ TEST_CASE(
     "read and returns the bytes NoCache returns",
     "[file-reader][cache]") {
   const FileReader<Cache::Strategy::FullCache> full(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           BoundedBacking()),
       Cache::unlimited_bytes);
   const FileReader<Cache::Strategy::NoCache> exact(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           BoundedBacking()));
 
   LARGE_INTEGER addr_full{.QuadPart = cache_block_size - straddle_before};
@@ -455,7 +462,8 @@ TEST_CASE(
 TEST_CASE("FileReader<FullCache>::Read serves a read larger than the ceiling",
           "[file-reader][cache]") {
   const FileReader<Cache::Strategy::FullCache> full(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           BoundedBacking()),
       cache_block_size);
 
@@ -511,7 +519,8 @@ TEST_CASE(
     "while other reads evict blocks",
     "[file-reader][cache]") {
   const FileReader<Cache::Strategy::FullCache> full(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           BoundedBacking()),
       0);
 
@@ -534,7 +543,8 @@ TEST_CASE(
 TEST_CASE("FileReader<FullCache>::Minify frees only the blocks no view uses",
           "[file-reader][cache]") {
   const FileReader<Cache::Strategy::FullCache> full(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           BoundedBacking()),
       Cache::unlimited_bytes);
 
@@ -555,7 +565,8 @@ TEST_CASE("FileReader<FullCache>::Minify frees only the blocks no view uses",
 TEST_CASE("FileReader<NoCache> keeps no cache to report or minify",
           "[file-reader][cache]") {
   const FileReader<Cache::Strategy::NoCache> exact(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           BoundedBacking()));
   LARGE_INTEGER addr{.QuadPart = 0};
   REQUIRE(exact.Read(addr, inner_length).has_value());
@@ -604,8 +615,8 @@ TEMPLATE_TEST_CASE_SIG("A FileReader with no reader ignores a read ahead",
 
 TEST_CASE("A FullCache FileReader announces only the blocks it lacks",
           "[file-reader]") {
-  using NTFS_BROWSER_NAMESPACE::Tests::CountingDiskReader;
-  using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
+  using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::CountingDiskReader;
+  using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
   constexpr ULONGLONG block = cache_block_size;
   constexpr size_t blocks = 4;
 

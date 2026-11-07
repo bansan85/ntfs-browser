@@ -29,8 +29,8 @@ using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
-using NTFS_BROWSER_NAMESPACE::Tests::NonAsciiNameLayout;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::NonAsciiNameLayout;
 
 namespace {
 
@@ -71,9 +71,8 @@ TEMPLATE_TEST_CASE_SIG(
     "FindSubEntry still finds a name when $UpCase is unusable", "[cov-vol]",
     ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  std::vector<BYTE> image =
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithNonAsciiNames(
-          NonAsciiNameLayout::IndexRoot, true);
+  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+      BuildFakeNtfsImageWithNonAsciiNames(NonAsciiNameLayout::IndexRoot, true);
 
   SECTION("$UpCase record does not parse") { ZeroRecord(image, upcase_idx); }
 
@@ -93,10 +92,12 @@ TEMPLATE_TEST_CASE_SIG(
 
   SECTION("$UpCase table does not map a to A") {
     const size_t attr = FirstAttr(image, upcase_idx, Attr::Type::Data);
-    const auto table_offset = FirstRunLcn(image, attr) *
-                              NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size;
+    const auto table_offset =
+        FirstRunLcn(image, attr) *
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size;
     std::fill_n(image.begin() + static_cast<std::ptrdiff_t>(table_offset),
-                NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size, BYTE{0});
+                NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size,
+                BYTE{0});
   }
 
   // The named record is not built: only recover_errors lists this entry.
@@ -111,25 +112,26 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(root.ParseAttrs());
 
   const std::optional<NTFS_BROWSER_NAMESPACE::IndexEntry> found =
-      root.FindSubEntry(NTFS_BROWSER_NAMESPACE::Tests::non_ascii_acute_name);
+      root.FindSubEntry(
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::non_ascii_acute_name);
   REQUIRE(found.has_value());
   CHECK(found->GetFileReference() ==
-        NTFS_BROWSER_NAMESPACE::Tests::non_ascii_acute_mft_ref);
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::non_ascii_acute_mft_ref);
 }
 
 TEST_CASE("FindSubEntry falls back when a $UpCase read is refused",
           "[cov-vol]") {
-  std::vector<BYTE> image =
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithNonAsciiNames(
-          NonAsciiNameLayout::IndexRoot, true);
+  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+      BuildFakeNtfsImageWithNonAsciiNames(NonAsciiNameLayout::IndexRoot, true);
   const ULONGLONG table_begin =
       FirstRunLcn(image, FirstAttr(image, upcase_idx, Attr::Type::Data)) *
-      NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size;
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size;
   auto refused = std::make_shared<size_t>(0);
   const NtfsVolume<Cache::Strategy::NoCache> volume(
       std::make_unique<RefusingDiskReader>(
           std::move(image), table_begin,
-          table_begin + NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size,
+          table_begin +
+              NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size,
           refused),
       NTFS_BROWSER_NAMESPACE::VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
@@ -140,9 +142,10 @@ TEST_CASE("FindSubEntry falls back when a $UpCase read is refused",
   REQUIRE(root.ParseAttrs());
 
   const std::optional<NTFS_BROWSER_NAMESPACE::IndexEntry> found =
-      root.FindSubEntry(NTFS_BROWSER_NAMESPACE::Tests::non_ascii_acute_name);
+      root.FindSubEntry(
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::non_ascii_acute_name);
   REQUIRE(found.has_value());
   CHECK(found->GetFileReference() ==
-        NTFS_BROWSER_NAMESPACE::Tests::non_ascii_acute_mft_ref);
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::non_ascii_acute_mft_ref);
   CHECK(*refused > 0);
 }

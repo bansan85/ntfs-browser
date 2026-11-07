@@ -22,7 +22,7 @@
 #include "data/ntfs-bpb.h"
 #include "fake-ntfs-image-internal.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage {
 
 namespace {
 
@@ -40,8 +40,8 @@ constexpr DWORD forged_index_block_lcn = 20;
 DWORD WriteSingleRunIndexAllocAttr(FakeRecord& record, DWORD offset,
                                    const FakeIndexAllocExtent& extent,
                                    ULONGLONG real_size) {
-  auto& alloc_attr =
-      InitNonResidentAttr(record, offset, Attr::Type::IndexAllocation);
+  auto& alloc_attr = InitNonResidentAttr(
+      record, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::IndexAllocation);
   alloc_attr.start_vcn = extent.start_vcn;
   alloc_attr.last_vcn = extent.start_vcn + extent.clusters - 1;
   alloc_attr.data_run_offset = static_cast<WORD>(sizeof(alloc_attr));
@@ -347,7 +347,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithBadIndexBlockEntry() {
   // Only "Good" gets a record: "First" stays unbuilt, so only recovery reports
   // it. A live record keeps "Good" in strict mode too. The base $MFT maps only
   // the first few records, so its run is widened to reach "Good"'s slot.
-  PutMftRecord(image, static_cast<ULONGLONG>(Mft::Idx::Mft),
+  PutMftRecord(image,
+               static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Mft),
                MakeMftRecordWithRealDataRun(static_cast<DWORD>(mft_lcn),
                                             bad_index_block_mft_clusters));
   const FakeRecord good_record = MakeMftTreeRecord(
@@ -413,7 +414,8 @@ namespace {
 FakeRecord MakeNoEndMarkerRecord() {
   FakeRecord record = MakeInUseFileRecord();
 
-  auto& attr = InitResidentAttr(record, attr_offset_value, Attr::Type::Data);
+  auto& attr = InitResidentAttr(record, attr_offset_value,
+                                NTFS_BROWSER_NAMESPACE::Attr::Type::Data);
 
   // Fills the record exactly to its own end, leaving no room for a marker.
   const DWORD total_size = fake_file_record_size - attr_offset_value;
@@ -432,4 +434,4 @@ std::vector<BYTE> BuildFakeNtfsImageWithNoEndMarker() {
   return image;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage

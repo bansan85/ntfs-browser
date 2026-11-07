@@ -15,8 +15,8 @@
 
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::Cache::Strategy;
-using NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree;
-using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftTree;
 using NtfsCompare::comparison_volume_options;
 
 TEST_CASE("The comparison volume options are the library defaults",
@@ -47,8 +47,8 @@ TEMPLATE_TEST_CASE_SIG(
   #include <ntfs-browser/tool/device-access/device-path.h>
   #include <ntfs-browser/tool/device-access/text-convert.h>
 
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::WriteFakeNtfsImage;
 using NTFS_BROWSER_NAMESPACE::Tests::TempDir;
-using NTFS_BROWSER_NAMESPACE::Tests::WriteFakeNtfsImage;
 using NtfsCompare::FindMountOfDevice;
 using NtfsCompare::OpenDeviceVolume;
 

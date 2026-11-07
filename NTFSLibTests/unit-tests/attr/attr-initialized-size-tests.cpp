@@ -46,16 +46,18 @@ constexpr BYTE sentinel_byte = 0xCC;
 // past the real size.
 std::vector<BYTE> ExpectedBytes(ULONGLONG offset, size_t length) {
   const std::vector<BYTE> residue =
-      NTFS_BROWSER_NAMESPACE::Tests::CompressionFixturePattern(
-          NTFS_BROWSER_NAMESPACE::Tests::uninitialized_tail_real_size);
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::CompressionFixturePattern(
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+              uninitialized_tail_real_size);
 
   std::vector<BYTE> expected;
   for (ULONGLONG at = offset;
-       at < offset + length &&
-       at < NTFS_BROWSER_NAMESPACE::Tests::uninitialized_tail_real_size;
+       at < offset + length && at < NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                                        uninitialized_tail_real_size;
        at++) {
     expected.push_back(
-        at < NTFS_BROWSER_NAMESPACE::Tests::uninitialized_tail_ini_size
+        at < NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                    uninitialized_tail_ini_size
             // at < uninitialized_tail_real_size = residue.size() by the loop
             // condition.
             // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
@@ -68,8 +70,9 @@ std::vector<BYTE> ExpectedBytes(ULONGLONG offset, size_t length) {
 template <Cache::Strategy S>
 void CheckReadsBeyondTheInitializedSizeAreZero() {
   const NtfsVolume<S> volume(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::
               BuildFakeNtfsImageWithUninitializedTail()));
   REQUIRE(volume.IsVolumeOK());
 

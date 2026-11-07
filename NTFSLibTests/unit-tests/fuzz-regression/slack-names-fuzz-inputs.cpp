@@ -19,8 +19,9 @@
 #include "fuzz-input-writer.h"
 
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Tests::FakeSlackName;
+using TestFakeImage::FakeSlackName;
 
 namespace {
 
@@ -38,7 +39,7 @@ constexpr size_t record_slack_room = 490;
 constexpr size_t index_slack_room = 800;
 
 // Index block size of the fake volume: one cluster.
-constexpr DWORD block_size = Tests::fake_cluster_size;
+constexpr DWORD block_size = TestFakeImage::fake_cluster_size;
 
 // Where the length byte of a $FILE_NAME sits, from the start of the structure.
 // A slack that starts there has lost every field before the name.
@@ -58,40 +59,44 @@ FakeSlackName InRecord(std::wstring name) {
 
 // The same, for a block of the root directory: filed under the root.
 FakeSlackName InBlock(std::wstring name) {
-  return FakeSlackName{.name = std::move(name),
-                       .parent_record = Tests::index_slack_directory_record,
-                       .parent_sequence = Tests::index_slack_directory_sequence,
-                       .with_entry_header = true};
+  return FakeSlackName{
+      .name = std::move(name),
+      .parent_record = TestFakeImage::index_slack_directory_record,
+      .parent_sequence = TestFakeImage::index_slack_directory_sequence,
+      .with_entry_header = true};
 }
 
 // Writes the structure of name at the end of slack.
 void Append(std::vector<BYTE>& slack, const FakeSlackName& name) {
-  const std::vector<BYTE> bytes = Tests::EncodeSlackName(name);
+  const std::vector<BYTE> bytes = TestFakeImage::EncodeSlackName(name);
   slack.insert(slack.end(), bytes.begin(), bytes.end());
 }
 
 // The freed tree with bytes written into the slack of the Docs directory.
 std::vector<BYTE> RecordWith(std::span<const BYTE> slack) {
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedFileTree();
-  Tests::PutRecordSlack(image, Tests::mft_tree_docs_idx, 8,
-                        slack.first(std::min(slack.size(), record_slack_room)));
+  std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
+  TestFakeImage::PutRecordSlack(
+      image, TestFakeImage::mft_tree_docs_idx, 8,
+      slack.first(std::min(slack.size(), record_slack_room)));
   return image;
 }
 
 // The root directory with one block, whose slack is given.
 std::vector<BYTE> BlockWith(std::vector<BYTE> slack) {
   slack.resize(std::min(slack.size(), index_slack_room));
-  const std::vector<std::vector<BYTE>> blocks{Tests::BuildFakeIndexBlock(
-      Tests::FakeIndexBlock{.live = {InBlock(L"live.txt")},
-                            .slack = std::move(slack)},
-      block_size)};
-  return Tests::BuildFakeNtfsImageWithIndexBlocks(blocks);
+  const std::vector<std::vector<BYTE>> blocks{
+      TestFakeImage::BuildFakeIndexBlock(
+          TestFakeImage::FakeIndexBlock{.live = {InBlock(L"live.txt")},
+                                        .slack = std::move(slack)},
+          block_size)};
+  return TestFakeImage::BuildFakeNtfsImageWithIndexBlocks(blocks);
 }
 
 // The tail of a structure, from its length byte on: what a slack holds when the
 // end marker has overwritten the start of the structure.
 std::vector<BYTE> TailOf(const FakeSlackName& name) {
-  std::vector<BYTE> bytes = Tests::EncodeSlackName(name);
+  std::vector<BYTE> bytes = TestFakeImage::EncodeSlackName(name);
   bytes.erase(bytes.begin(),
               bytes.begin() + static_cast<std::ptrdiff_t>(name_length_offset));
   return bytes;
@@ -203,7 +208,7 @@ std::vector<BYTE> LiveNames() {
   Append(slack, elsewhere);
   FakeSlackName same = InRecord(L"Docs");
   same.parent_record = root_record;
-  same.parent_sequence = Tests::index_slack_directory_sequence;
+  same.parent_sequence = TestFakeImage::index_slack_directory_sequence;
   Append(slack, same);
   FakeSlackName unknown_parent = InRecord(L"Docs");
   unknown_parent.parent_record = 0xFFFFFFFF;

@@ -25,7 +25,7 @@
 #include "data/ntfs-bpb.h"
 #include "fake-ntfs-image-internal.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage {
 
 namespace {
 
@@ -60,8 +60,8 @@ static_assert(FakeIndexAllocShape{}.declared_block_count ==
 // attribute's total_size.
 DWORD WriteShapedIndexAllocAttr(FakeRecord& record, DWORD offset,
                                 const FakeIndexAllocShape& shape) {
-  auto& alloc_attr =
-      InitNonResidentAttr(record, offset, Attr::Type::IndexAllocation);
+  auto& alloc_attr = InitNonResidentAttr(
+      record, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::IndexAllocation);
   alloc_attr.start_vcn = shape.start_vcn;
   alloc_attr.last_vcn = shape.last_vcn;
   alloc_attr.data_run_offset = static_cast<WORD>(sizeof(alloc_attr));
@@ -547,7 +547,8 @@ std::vector<BYTE>
   std::vector<BYTE> image = BuildFakeNtfsImageWithOrphanedIndexBlocks();
 
   EditFileRecordHeader(
-      MftRecordBytes(image, static_cast<ULONGLONG>(Mft::Idx::Root)),
+      MftRecordBytes(image, static_cast<ULONGLONG>(
+                                NTFS_BROWSER_NAMESPACE::Mft::Idx::Root)),
       [&](FileRecordHeader& header) {
         header.seq_no = link.record_sequence;
         header.flags =
@@ -561,17 +562,19 @@ std::vector<BYTE>
   // reported whatever generation the record is on.
   WriteOrphanedIndexLeafBlock(
       image, 1, orphaned_block_orphan_mft_ref,
-      MakeFileReference(static_cast<ULONGLONG>(Mft::Idx::Root), 0),
+      MakeFileReference(
+          static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root), 0),
       orphaned_block_orphan_name);
 
   // Replace VCN 2's foreign-parent entry: same directory, this generation.
   WriteOrphanedIndexLeafBlock(
       image, 2, orphaned_block_generation_mft_ref,
-      MakeFileReference(static_cast<ULONGLONG>(Mft::Idx::Root),
-                        link.entry_parent_sequence),
+      MakeFileReference(
+          static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root),
+          link.entry_parent_sequence),
       orphaned_block_generation_name);
 
   return image;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage

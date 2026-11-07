@@ -20,7 +20,7 @@
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace AllocSupport = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AccountSupport;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace TreeSupport = NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport;
 using Alloc::ClusterCondition;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
@@ -28,9 +28,9 @@ using Support::CountOf;
 using Support::Freed;
 using Support::Live;
 using Support::Stream;
-using Tests::FakeAccountFile;
-using Tests::FakeAccountStream;
-using Tests::FakeDataRun;
+using TestFakeImage::FakeAccountFile;
+using TestFakeImage::FakeAccountStream;
+using TestFakeImage::FakeDataRun;
 
 namespace {
 
@@ -44,7 +44,7 @@ const std::vector<FakeDataRun> subject_runs{
     FakeDataRun{.lcn = 40, .clusters = 4}};
 
 // Cluster size of the fake volumes, and four clusters of bytes.
-constexpr ULONGLONG cluster = Tests::fake_cluster_size;
+constexpr ULONGLONG cluster = TestFakeImage::fake_cluster_size;
 constexpr ULONGLONG four_clusters = 4 * cluster;
 
 template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>

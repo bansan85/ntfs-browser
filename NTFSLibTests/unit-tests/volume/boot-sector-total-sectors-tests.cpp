@@ -35,13 +35,14 @@ constexpr const char* total_sectors_message = "Total sectors = ";
 
 // The fake image's $MFT address: one cluster in.
 constexpr ULONGLONG fake_mft_addr =
-    NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size;
+    NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size;
 
 // Sectors from the start of the volume to the end of the fake image's first
 // $MFT record.
 constexpr ULONGLONG sectors_to_first_record_end =
-    (fake_mft_addr + NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size) /
-    NTFS_BROWSER_NAMESPACE::Tests::fake_bytes_per_sector;
+    (fake_mft_addr +
+     NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_file_record_size) /
+    NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_bytes_per_sector;
 
 // lcn_mft of the largest plausible MFT address: (2^52 - 1) clusters of 1024
 // bytes, the last address under 2^62.
@@ -52,8 +53,9 @@ constexpr ULONGLONG largest_mft_addr = 0x3FFFFFFFFFFFFC00ULL;
 
 // Sectors to the end of the first record at largest_mft_addr.
 constexpr ULONGLONG largest_record_end_sectors =
-    (largest_mft_addr + NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size) /
-    NTFS_BROWSER_NAMESPACE::Tests::fake_bytes_per_sector;
+    (largest_mft_addr +
+     NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_file_record_size) /
+    NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_bytes_per_sector;
 
 // Image whose total_sectors is the given value.
 BootImageMaker WithTotalSectors(ULONGLONG total_sectors) {
@@ -197,13 +199,13 @@ TEMPLATE_TEST_CASE_SIG("NtfsVolume checks total_sectors",
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   SECTION("the fake image declares the sectors it holds") {
     const std::vector<BYTE> image =
-        NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage();
     const auto& bpb =
         *reinterpret_cast<const NTFS_BROWSER_NAMESPACE::Data::NtfsBpb*>(
             image.data());
 
     CHECK(bpb.total_sectors *
-              NTFS_BROWSER_NAMESPACE::Tests::fake_bytes_per_sector ==
+              NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_bytes_per_sector ==
           image.size());
   }
 

@@ -36,12 +36,14 @@ namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using NTFS_BROWSER_NAMESPACE::IDiskReader;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Call = Tests::CountingDiskReader::Call;
-using CallKind = Tests::CountingDiskReader::Kind;
+using Call = TestDiskReaders::CountingDiskReader::Call;
+using CallKind = TestDiskReaders::CountingDiskReader::Kind;
 
 namespace {
 
@@ -177,13 +179,13 @@ struct RecordedScan {
 
 RecordedScan RecordScan() {
   RecordedScan recorded;
-  recorded.image = Tests::BuildFakeNtfsImageWithListMftScan(
+  recorded.image = TestFakeImage::BuildFakeNtfsImageWithListMftScan(
       list_record_count, list_fragment_clusters);
   Tests::BenchSessionGuard session;
   {
-    auto reader = std::make_unique<Tests::CountingDiskReader>(
-        std::make_unique<Tests::MemoryDiskReader>(recorded.image));
-    const Tests::CountingDiskReader* const counting = reader.get();
+    auto reader = std::make_unique<TestDiskReaders::CountingDiskReader>(
+        std::make_unique<TestDiskReaders::MemoryDiskReader>(recorded.image));
+    const TestDiskReaders::CountingDiskReader* const counting = reader.get();
     const NtfsVolume<Cache::Strategy::NoCache> volume(
         std::move(reader),
         VolumeOptions{.include_deleted = true, .recover_errors = true});
@@ -288,10 +290,10 @@ TEST_CASE("An as-recorded replay sends the standing lane calls in place",
 
 TEST_CASE("An as-recorded replay shows the lane calls to a counting reader",
           "[bench][replay][standing]") {
-  auto counting = std::make_unique<Tests::CountingDiskReader>(
-      std::make_unique<Tests::MemoryDiskReader>(
+  auto counting = std::make_unique<TestDiskReaders::CountingDiskReader>(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(
           std::vector<BYTE>(16384, BYTE{1})));
-  const Tests::CountingDiskReader* const reader = counting.get();
+  const TestDiskReaders::CountingDiskReader* const reader = counting.get();
 
   static_cast<void>(Bench::Replay(*counting, StandingLog(), {}));
 
@@ -315,10 +317,10 @@ TEST_CASE("An as-recorded replay shows the lane calls to a counting reader",
 
 TEST_CASE("An all-announced replay drops the standing lane calls",
           "[bench][replay][standing]") {
-  auto counting = std::make_unique<Tests::CountingDiskReader>(
-      std::make_unique<Tests::MemoryDiskReader>(
+  auto counting = std::make_unique<TestDiskReaders::CountingDiskReader>(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(
           std::vector<BYTE>(16384, BYTE{1})));
-  const Tests::CountingDiskReader* const reader = counting.get();
+  const TestDiskReaders::CountingDiskReader* const reader = counting.get();
   const Bench::ReplayOptions options{.mode = Bench::ReplayMode::AllAnnounced,
                                      .announce_ahead = 1};
 
@@ -403,9 +405,9 @@ TEST_CASE("An as-recorded replay reads what the original run read",
   const std::vector<Call> original = MovingCalls(recorded.calls);
   REQUIRE(original.size() > 100);
 
-  auto counting = std::make_unique<Tests::CountingDiskReader>(
-      std::make_unique<Tests::MemoryDiskReader>(recorded.image));
-  const Tests::CountingDiskReader* const reader = counting.get();
+  auto counting = std::make_unique<TestDiskReaders::CountingDiskReader>(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(recorded.image));
+  const TestDiskReaders::CountingDiskReader* const reader = counting.get();
   const Bench::ReplayResult result = Bench::Replay(*counting, recorded.log, {});
 
   // The log holds what reached the reader: the replay makes the same reads
@@ -424,7 +426,7 @@ TEST_CASE("An as-recorded replay reads what the original run read",
 TEST_CASE("A replay inside a session is timed like the real run",
           "[bench][replay]") {
   const RecordedScan recorded = RecordScan();
-  const Tests::MemoryDiskReader reader(recorded.image);
+  const TestDiskReaders::MemoryDiskReader reader(recorded.image);
 
   Tests::BenchSessionGuard session;
   const Bench::ReplayResult result = Bench::Replay(reader, recorded.log, {});
@@ -449,15 +451,15 @@ TEST_CASE("A replay over a simulated disk serves the reads it announced",
   const Bench::ReplayMode mode =
       GENERATE(Bench::ReplayMode::AsRecorded, Bench::ReplayMode::AllAnnounced);
   INFO("all announced " << (mode == Bench::ReplayMode::AllAnnounced));
-  Tests::SimulatedClock clock;
-  const Tests::ThrottledDiskReader reader(
-      std::make_unique<Tests::MemoryDiskReader>(recorded.image),
-      Tests::DiskModel{}, clock);
+  TestDiskReaders::SimulatedClock clock;
+  const TestDiskReaders::ThrottledDiskReader reader(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(recorded.image),
+      TestDiskReaders::DiskModel{}, clock);
 
   const Bench::ReplayResult result =
       Bench::Replay(reader, recorded.log, {.mode = mode});
 
-  const Tests::ThrottleStats& stats = reader.Stats();
+  const TestDiskReaders::ThrottleStats& stats = reader.Stats();
   CHECK(result.failed_reads == 0);
   CHECK(result.reads == recorded.report.requested_reads);
   CHECK(stats.served_reads + stats.unannounced_reads == result.reads);
@@ -475,10 +477,10 @@ TEST_CASE("Replaying the same log over the same simulated disk is repeatable",
   const RecordedScan recorded = RecordScan();
   std::array<std::uint64_t, 2> elapsed{};
   for (std::uint64_t& slot : elapsed) {
-    Tests::SimulatedClock clock;
-    const Tests::ThrottledDiskReader reader(
-        std::make_unique<Tests::MemoryDiskReader>(recorded.image),
-        Tests::DiskModel{}, clock);
+    TestDiskReaders::SimulatedClock clock;
+    const TestDiskReaders::ThrottledDiskReader reader(
+        std::make_unique<TestDiskReaders::MemoryDiskReader>(recorded.image),
+        TestDiskReaders::DiskModel{}, clock);
     static_cast<void>(Bench::Replay(reader, recorded.log, {}));
     slot = clock.NowNs();
   }

@@ -35,16 +35,19 @@ using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 
 TEMPLATE_TEST_CASE_SIG(
     "FindSubEntry follows $ATTRIBUTE_LIST to a relocated $INDEX_ROOT",
     "[file-record][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const ParsedRecord<S> dir =
-      OpenListRecord<S>(Tests::BuildFakeNtfsImageWithAttributeListDirectory(),
-                        Tests::attribute_list_dir_idx,
-                        Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation,
-                        VolumeOptions{.recover_errors = true});
+  const ParsedRecord<S> dir = OpenListRecord<S>(
+      TestFakeImage::BuildFakeNtfsImageWithAttributeListDirectory(),
+      TestFakeImage::attribute_list_dir_idx,
+      Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation,
+      VolumeOptions{.recover_errors = true});
   REQUIRE(dir.record->ParseAttrs());
 
   CHECK_FALSE(dir.record->GetAttr(Attr::Type::IndexRoot).empty());
@@ -60,8 +63,8 @@ TEMPLATE_TEST_CASE_SIG(
     "[file-record][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const ParsedRecord<S> dir = OpenListRecord<S>(
-      Tests::BuildFakeNtfsImageWithMultiTypeAttributeListDirectory(),
-      Tests::attr_list_multi_type_dir_idx,
+      TestFakeImage::BuildFakeNtfsImageWithMultiTypeAttributeListDirectory(),
+      TestFakeImage::attr_list_multi_type_dir_idx,
       Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
   REQUIRE(dir.record->ParseAttrs());
 
@@ -76,15 +79,15 @@ TEMPLATE_TEST_CASE_SIG(
     "calls on a reused FileRecord",
     "[file-record][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const ParsedRecord<S> dir =
-      OpenListRecord<S>(Tests::BuildFakeNtfsImageWithAttributeListDirectory(),
-                        Tests::attribute_list_dir_idx,
-                        Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  const ParsedRecord<S> dir = OpenListRecord<S>(
+      TestFakeImage::BuildFakeNtfsImageWithAttributeListDirectory(),
+      TestFakeImage::attribute_list_dir_idx,
+      Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
   REQUIRE(dir.record->ParseAttrs());
   CHECK_FALSE(dir.record->GetAttr(Attr::Type::IndexRoot).empty());
 
   // Same FileRecord, same directory: it relocates to the same record again.
-  REQUIRE(dir.record->ParseFileRecord(Tests::attribute_list_dir_idx));
+  REQUIRE(dir.record->ParseFileRecord(TestFakeImage::attribute_list_dir_idx));
   REQUIRE(dir.record->ParseAttrs());
   CHECK_FALSE(dir.record->GetAttr(Attr::Type::IndexRoot).empty());
 }
@@ -95,12 +98,12 @@ TEMPLATE_TEST_CASE_SIG(
     "[file-record][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const ParsedRecord<S> dir = OpenListRecord<S>(
-      Tests::BuildFakeNtfsImageWithFragmentedAttributeListDirectory(),
-      Tests::uaf_attr_list_dir_idx, Attr::Mask::IndexAllocation);
+      TestFakeImage::BuildFakeNtfsImageWithFragmentedAttributeListDirectory(),
+      TestFakeImage::uaf_attr_list_dir_idx, Attr::Mask::IndexAllocation);
   REQUIRE(dir.record->ParseAttrs());
 
   const auto& alloc_attrs = dir.record->GetAttr(Attr::Type::IndexAllocation);
-  REQUIRE(alloc_attrs.size() == Tests::uaf_real_size_sentinels.size());
+  REQUIRE(alloc_attrs.size() == TestFakeImage::uaf_real_size_sentinels.size());
 
   // Each GetDataSize() reads through a reference bound at that extension
   // record's construction time, so a moved FileRecord reads stale memory.
@@ -112,7 +115,7 @@ TEMPLATE_TEST_CASE_SIG(
         // The REQUIRE above makes allocAttrs as long as
         // uaf_real_size_sentinels.
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        Tests::uaf_real_size_sentinels[i]);
+        TestFakeImage::uaf_real_size_sentinels[i]);
   }
 }
 
@@ -122,7 +125,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[attr-list][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const ParsedRecord<S> record =
-      OpenRecord<S>(Tests::BuildFakeNtfsImageWithAttributeListCycle(),
+      OpenRecord<S>(TestFakeImage::BuildFakeNtfsImageWithAttributeListCycle(),
                     static_cast<ULONGLONG>(Mft::Idx::Root));
   CHECK(record.record->ParseAttrs());
 }
@@ -134,8 +137,9 @@ TEMPLATE_TEST_CASE_SIG(
     "[attr-list][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const ParsedRecord<S> dir = OpenListRecord<S>(
-      Tests::BuildFakeNtfsImageWithTightlyPackedAttributeListDirectory(),
-      Tests::attr_list_tight_pack_dir_idx,
+      TestFakeImage::
+          BuildFakeNtfsImageWithTightlyPackedAttributeListDirectory(),
+      TestFakeImage::attr_list_tight_pack_dir_idx,
       Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation,
       VolumeOptions{.recover_errors = true});
   REQUIRE(dir.record->ParseAttrs());
@@ -148,7 +152,8 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(alloc_attrs.size() == 1);
   // The REQUIRE above checks the size of allocAttrs.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(alloc_attrs[0]->GetDataSize() == Tests::attr_list_tight_pack_real_size);
+  CHECK(alloc_attrs[0]->GetDataSize() ==
+        TestFakeImage::attr_list_tight_pack_real_size);
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -157,11 +162,12 @@ TEMPLATE_TEST_CASE_SIG(
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const ParsedRecord<S> opened = OpenUnparsed<S>(
-      Tests::BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList());
+      TestFakeImage::BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList());
   // mft_data_ must be the base extent, not whichever instance parsed first.
   CHECK(opened.volume->GetRecordsCount() == 1);
 
-  CHECK(opened.record->ParseFileRecord(Tests::mft_data_split_target_idx));
+  CHECK(
+      opened.record->ParseFileRecord(TestFakeImage::mft_data_split_target_idx));
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -169,11 +175,12 @@ TEMPLATE_TEST_CASE_SIG(
     "where an earlier $ATTRIBUTE_LIST entry depends on a later one",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const ParsedRecord<S> opened =
-      OpenUnparsed<S>(Tests::BuildFakeNtfsImageWithMftDataExtentChain());
+  const ParsedRecord<S> opened = OpenUnparsed<S>(
+      TestFakeImage::BuildFakeNtfsImageWithMftDataExtentChain());
 
-  CHECK(opened.record->ParseFileRecord(Tests::mft_chain_ext_a));
-  CHECK(opened.record->ParseFileRecord(Tests::mft_chain_ext_a_start_vcn));
+  CHECK(opened.record->ParseFileRecord(TestFakeImage::mft_chain_ext_a));
+  CHECK(
+      opened.record->ParseFileRecord(TestFakeImage::mft_chain_ext_a_start_vcn));
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -181,11 +188,13 @@ TEMPLATE_TEST_CASE_SIG(
     "an earlier, resolvable one in the same $ATTRIBUTE_LIST",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const ParsedRecord<S> opened =
-      OpenUnparsed<S>(Tests::BuildFakeNtfsImageWithUnresolvableMftDataExtent());
+  const ParsedRecord<S> opened = OpenUnparsed<S>(
+      TestFakeImage::BuildFakeNtfsImageWithUnresolvableMftDataExtent());
 
-  CHECK(opened.record->ParseFileRecord(Tests::mft_unresolvable_good_record));
-  CHECK_FALSE(opened.record->ParseFileRecord(Tests::mft_unresolvable_ext_idx));
+  CHECK(opened.record->ParseFileRecord(
+      TestFakeImage::mft_unresolvable_good_record));
+  CHECK_FALSE(
+      opened.record->ParseFileRecord(TestFakeImage::mft_unresolvable_ext_idx));
 }
 
 namespace {
@@ -205,7 +214,8 @@ bool OpensWithinTimeout(std::vector<BYTE> image) {
   std::thread worker([done, image = std::move(image)]() mutable {
     try {
       const NtfsVolume<S> volume(
-          std::make_unique<Tests::MemoryDiskReader>(std::move(image)));
+          std::make_unique<TestDiskReaders::MemoryDiskReader>(
+              std::move(image)));
       done->set_value();
     } catch (...) {
       done->set_exception(std::current_exception());
@@ -229,7 +239,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   CHECK(OpensWithinTimeout<S>(
-      Tests::BuildFakeNtfsImageWithMftDataLastVcnOverflow()));
+      TestFakeImage::BuildFakeNtfsImageWithMftDataLastVcnOverflow()));
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -238,10 +248,11 @@ TEMPLATE_TEST_CASE_SIG(
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const ParsedRecord<S> opened =
-      OpenUnparsed<S>(Tests::BuildFakeNtfsImageWithMftDataSplitLink(
+      OpenUnparsed<S>(TestFakeImage::BuildFakeNtfsImageWithMftDataSplitLink(
           {.entry_sequence = 3, .record_sequence = 4}));
 
-  CHECK_FALSE(opened.record->ParseFileRecord(Tests::mft_data_split_target_idx));
+  CHECK_FALSE(
+      opened.record->ParseFileRecord(TestFakeImage::mft_data_split_target_idx));
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -250,10 +261,11 @@ TEMPLATE_TEST_CASE_SIG(
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const ParsedRecord<S> opened =
-      OpenUnparsed<S>(Tests::BuildFakeNtfsImageWithMftDataSplitLink(
+      OpenUnparsed<S>(TestFakeImage::BuildFakeNtfsImageWithMftDataSplitLink(
           {.entry_sequence = 3, .record_sequence = 3}));
 
-  CHECK(opened.record->ParseFileRecord(Tests::mft_data_split_target_idx));
+  CHECK(
+      opened.record->ParseFileRecord(TestFakeImage::mft_data_split_target_idx));
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -261,8 +273,10 @@ TEMPLATE_TEST_CASE_SIG(
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const ParsedRecord<S> opened = OpenUnparsed<S>(
-      Tests::BuildFakeNtfsImageWithMftDataTwoExtentsInOneRecord());
+      TestFakeImage::BuildFakeNtfsImageWithMftDataTwoExtentsInOneRecord());
 
-  CHECK(opened.record->ParseFileRecord(Tests::mft_two_extents_first_vcn));
-  CHECK(opened.record->ParseFileRecord(Tests::mft_two_extents_second_vcn));
+  CHECK(
+      opened.record->ParseFileRecord(TestFakeImage::mft_two_extents_first_vcn));
+  CHECK(opened.record->ParseFileRecord(
+      TestFakeImage::mft_two_extents_second_vcn));
 }

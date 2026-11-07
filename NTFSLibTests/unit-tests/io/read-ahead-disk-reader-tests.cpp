@@ -42,7 +42,7 @@ using NTFS_BROWSER_NAMESPACE::IDiskReader;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Mft::MftTree;
-using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
 using NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog;
 
 namespace {
@@ -677,11 +677,11 @@ TEST_CASE("NtfsVolume with read_ahead_bytes lists what it lists without",
   };
 
   const auto list = [&]<Cache::Strategy S>(std::uint64_t read_ahead_bytes) {
-    NtfsVolume<S> volume(
-        std::make_unique<MemoryDiskReader>(
-            NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree()),
-        VolumeOptions{.include_deleted = true,
-                      .read_ahead_bytes = read_ahead_bytes});
+    NtfsVolume<S> volume(std::make_unique<MemoryDiskReader>(
+                             NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                                 BuildFakeNtfsImageWithMftTree()),
+                         VolumeOptions{.include_deleted = true,
+                                       .read_ahead_bytes = read_ahead_bytes});
     REQUIRE(volume.IsVolumeOK());
     CHECK(volume.GetOptions().read_ahead_bytes == read_ahead_bytes);
     return describe(MftTree(volume));

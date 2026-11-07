@@ -48,7 +48,8 @@ template <Cache::Strategy S>
 ParsedRecord<S> OpenUnparsed(std::vector<BYTE> image,
                              VolumeOptions options = {}) {
   return OpenVolumeFrom<S>(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           std::move(image)),
       options);
 }

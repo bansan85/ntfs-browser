@@ -56,7 +56,7 @@ class ScriptedDiskReader final : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   }
 
  private:
-  MemoryDiskReader inner_;
+  Test::DiskReaders::MemoryDiskReader inner_;
   bool size_set_{false};
   std::optional<ULONGLONG> size_;
   ULONGLONG first_{0};

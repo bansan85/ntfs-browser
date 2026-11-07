@@ -20,12 +20,12 @@
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using Alloc::ClusterState;
-using Tests::FakeBitmapOptions;
-using Tests::FakeBitmapShape;
-using Tests::FakeDataRun;
+using TestFakeImage::FakeBitmapOptions;
+using TestFakeImage::FakeBitmapShape;
+using TestFakeImage::FakeDataRun;
 
 namespace {
 
@@ -53,10 +53,13 @@ void CheckEveryClusterIsAnsweredFromOneWindow() {
   const WindowOverride window(tiny_window);
   const std::vector<FakeDataRun> allocated{
       FakeDataRun{.lcn = 40, .clusters = 2}};
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedFileTree();
-  const std::vector<BYTE> bits = Tests::AllocatedBitmapFor(image, allocated);
+  std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
+  const std::vector<BYTE> bits =
+      TestFakeImage::AllocatedBitmapFor(image, allocated);
   // The volume grows to four windows before the bitmap sees it.
-  Tests::PutClusterBitmap(image, bits, {.volume_clusters = four_window_volume});
+  TestFakeImage::PutClusterBitmap(image, bits,
+                                  {.volume_clusters = four_window_volume});
   const auto opened = Support::OpenVolume<S>(image);
 
   size_t answered = 0;
@@ -87,9 +90,11 @@ struct TwoCalls {
 // is 16 bytes a window, in one cluster each.
 TwoCalls BitmapCostOfTwoCalls(ULONGLONG keep_bytes) {
   const WindowOverride window(tiny_window);
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedFileTree();
-  const std::vector<BYTE> bits = Tests::AllocatedBitmapFor(image, {});
-  Tests::PutClusterBitmap(image, bits, {.volume_clusters = four_window_volume});
+  std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
+  const std::vector<BYTE> bits = TestFakeImage::AllocatedBitmapFor(image, {});
+  TestFakeImage::PutClusterBitmap(image, bits,
+                                  {.volume_clusters = four_window_volume});
   const ULONGLONG end = image.size();
   const auto opened = Support::OpenVolume<Cache::Strategy::NoCache>(image);
   opened.volume->KeepBitmapWindows(keep_bytes);

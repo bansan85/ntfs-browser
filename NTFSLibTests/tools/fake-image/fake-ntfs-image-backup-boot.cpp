@@ -10,7 +10,7 @@
 
 #include "data/ntfs-bpb.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage {
 
 namespace {
 
@@ -33,13 +33,17 @@ void Damage(std::vector<BYTE>& image, size_t offset, BootSectorDamage kind) {
       std::memset(&image.at(offset), 0, boot_sector_bytes);
       break;
     case BootSectorDamage::Signature:
-      std::memset(&image.at(offset + offsetof(Data::NtfsBpb, signature)), 0,
-                  sizeof(Data::NtfsBpb::signature));
+      std::memset(
+          &image.at(offset +
+                    offsetof(NTFS_BROWSER_NAMESPACE::Data::NtfsBpb, signature)),
+          0, sizeof(NTFS_BROWSER_NAMESPACE::Data::NtfsBpb::signature));
       break;
     case BootSectorDamage::SectorSize: {
       const WORD odd = odd_sector_size;
-      std::memcpy(&image.at(offset + offsetof(Data::NtfsBpb, bytes_per_sector)),
-                  &odd, sizeof(odd));
+      std::memcpy(
+          &image.at(offset + offsetof(NTFS_BROWSER_NAMESPACE::Data::NtfsBpb,
+                                      bytes_per_sector)),
+          &odd, sizeof(odd));
       break;
     }
   }
@@ -50,7 +54,8 @@ void Damage(std::vector<BYTE>& image, size_t offset, BootSectorDamage kind) {
 std::vector<BYTE>
     BuildFakeNtfsImageWithBackupBootSector(const BackupBootSector& spec) {
   std::vector<BYTE> image = BuildFakeNtfsImage();
-  auto bpb = *reinterpret_cast<Data::NtfsBpb*>(image.data());
+  auto bpb =
+      *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::NtfsBpb*>(image.data());
 
   const DWORD cluster = std::max<DWORD>(min_cluster_bytes, spec.sector_size);
   bpb.bytes_per_sector = spec.sector_size;
@@ -70,4 +75,4 @@ std::vector<BYTE>
   return image;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage

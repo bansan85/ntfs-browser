@@ -10,7 +10,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/disk-readers/partition-disk-reader.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders {
 
 PartitionDiskReader::PartitionDiskReader(
     ULONGLONG partition_offset, std::optional<ULONGLONG> partition_length)
@@ -40,4 +40,4 @@ std::optional<ULONGLONG> PartitionDiskReader::Size() const {
   return partition_length_;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders

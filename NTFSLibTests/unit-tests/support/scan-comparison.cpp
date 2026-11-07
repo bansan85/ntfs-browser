@@ -23,12 +23,12 @@
 
 #include "mft/tree-testing.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 template <Cache::Strategy S>
 class NtfsVolume;
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 
@@ -50,8 +50,8 @@ ULONGLONG Ticks(const FILETIME& time) {
 
 template <Cache::Strategy S>
 ScanResult Capture(const NtfsVolume<S>& volume,
-                   const CountingDiskReader* reader, unsigned threads,
-                   size_t progress_stops_at) {
+                   const Test::DiskReaders::CountingDiskReader* reader,
+                   unsigned threads, size_t progress_stops_at) {
   Mft::MftTree::ScanOptions scan;
   scan.threads = threads;
   size_t progress_calls = 0;
@@ -161,14 +161,14 @@ void CheckSameScan(const ScanResult& one, const ScanResult& many) {
 }
 
 ScanResult CaptureScan(const NtfsVolume<Cache::Strategy::NoCache>& volume,
-                       const CountingDiskReader* reader, unsigned threads,
-                       size_t progress_stops_at) {
+                       const Test::DiskReaders::CountingDiskReader* reader,
+                       unsigned threads, size_t progress_stops_at) {
   return Capture(volume, reader, threads, progress_stops_at);
 }
 
 ScanResult CaptureScan(const NtfsVolume<Cache::Strategy::FullCache>& volume,
-                       const CountingDiskReader* reader, unsigned threads,
-                       size_t progress_stops_at) {
+                       const Test::DiskReaders::CountingDiskReader* reader,
+                       unsigned threads, size_t progress_stops_at) {
   return Capture(volume, reader, threads, progress_stops_at);
 }
 

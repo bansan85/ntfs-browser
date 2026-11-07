@@ -45,10 +45,12 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Util = NTFS_BROWSER_NAMESPACE::Util;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Kind = Tests::CountingDiskReader::Kind;
+using Kind = TestDiskReaders::CountingDiskReader::Kind;
 
 namespace {
 
@@ -112,7 +114,7 @@ struct SessionScan {
   Bench::Report report;
   Bench::ReadLog log;
   Mft::MftTree::ScanStats stats;
-  std::vector<Tests::CountingDiskReader::Call> calls;
+  std::vector<TestDiskReaders::CountingDiskReader::Call> calls;
 };
 
 // Opens and scans the image over a counting reader, with a session when asked:
@@ -129,9 +131,9 @@ SessionScan ScanInSession(const std::vector<BYTE>& image,
   }
   SessionScan result;
   {
-    auto reader = std::make_unique<Tests::CountingDiskReader>(
-        std::make_unique<Tests::MemoryDiskReader>(image));
-    const Tests::CountingDiskReader* const counting = reader.get();
+    auto reader = std::make_unique<TestDiskReaders::CountingDiskReader>(
+        std::make_unique<TestDiskReaders::MemoryDiskReader>(image));
+    const TestDiskReaders::CountingDiskReader* const counting = reader.get();
     const NtfsVolume<S> volume(std::move(reader), volume_options);
     REQUIRE(volume.IsVolumeOK());
     const Mft::MftTree tree(volume, scan_options);
@@ -145,15 +147,16 @@ SessionScan ScanInSession(const std::vector<BYTE>& image,
   return result;
 }
 
-size_t CountKind(const std::vector<Tests::CountingDiskReader::Call>& calls,
-                 Kind kind) {
+size_t CountKind(
+    const std::vector<TestDiskReaders::CountingDiskReader::Call>& calls,
+    Kind kind) {
   return static_cast<size_t>(std::ranges::count_if(
       calls, [kind](const auto& call) { return call.kind == kind; }));
 }
 
 std::vector<BYTE> ListImage() {
-  return Tests::BuildFakeNtfsImageWithListMftScan(list_record_count,
-                                                  list_fragment_clusters);
+  return TestFakeImage::BuildFakeNtfsImageWithListMftScan(
+      list_record_count, list_fragment_clusters);
 }
 
 Mft::MftTree::ScanOptions OneThread() {
@@ -205,7 +208,7 @@ TEST_CASE("A phase scope nests, repeats and adds its repeats",
 
 TEST_CASE("A read counts for the innermost phase only", "[bench][phase]") {
   const std::vector<BYTE> image(small_image_size, BYTE{1});
-  auto reader = std::make_unique<Tests::MemoryDiskReader>(image);
+  auto reader = std::make_unique<TestDiskReaders::MemoryDiskReader>(image);
   const Io::FileReader<Cache::Strategy::NoCache> file(std::move(reader));
   std::vector<BYTE> buffer(100);
   LARGE_INTEGER addr{.QuadPart = 0};
@@ -351,13 +354,13 @@ TEST_CASE("The cluster account times its flushes, sweep and content check",
   constexpr ULONGLONG subject = 22;
   constexpr ULONGLONG first_cluster = 40;
   AccountSupport::Volume volume;
-  volume.Put(subject,
-             AccountSupport::Freed(
-                 100, AccountSupport::Stream({{first_cluster, 4}},
-                                             4 * Tests::fake_cluster_size)));
+  volume.Put(subject, AccountSupport::Freed(
+                          100, AccountSupport::Stream(
+                                   {{first_cluster, 4}},
+                                   4 * TestFakeImage::fake_cluster_size)));
   // Data the content check finds neither empty nor metadata.
-  for (size_t i = 0; i < 4 * Tests::fake_cluster_size; i++) {
-    volume.image.at((first_cluster * Tests::fake_cluster_size) + i) =
+  for (size_t i = 0; i < 4 * TestFakeImage::fake_cluster_size; i++) {
+    volume.image.at((first_cluster * TestFakeImage::fake_cluster_size) + i) =
         static_cast<BYTE>((i % 251) + 1);
   }
 

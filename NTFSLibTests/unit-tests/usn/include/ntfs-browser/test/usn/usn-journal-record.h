@@ -18,21 +18,22 @@ struct JournalRecordSpec {
   DWORD reason;
   ULONGLONG time;
   // The docs directory of the MftTree fixture, unless a test names another.
-  ULONGLONG parent{mft_tree_docs_idx};
+  ULONGLONG parent{Test::FakeImage::mft_tree_docs_idx};
   WORD parent_sequence{1};
 };
 
 // A V2 record of the file spec names, filed under its parent. The file is an
 // archive file, as the fixtures' files are.
-inline FakeUsnRecord MakeRecord(JournalRecordSpec spec) {
-  return FakeUsnRecord{.name = std::move(spec.name),
-                       .file_record = spec.record,
-                       .file_sequence = spec.sequence,
-                       .parent_record = spec.parent,
-                       .parent_sequence = spec.parent_sequence,
-                       .time = spec.time,
-                       .reason = spec.reason,
-                       .file_attributes = fake_usn_default_attributes};
+inline Test::FakeImage::FakeUsnRecord MakeRecord(JournalRecordSpec spec) {
+  return Test::FakeImage::FakeUsnRecord{
+      .name = std::move(spec.name),
+      .file_record = spec.record,
+      .file_sequence = spec.sequence,
+      .parent_record = spec.parent,
+      .parent_sequence = spec.parent_sequence,
+      .time = spec.time,
+      .reason = spec.reason,
+      .file_attributes = Test::FakeImage::fake_usn_default_attributes};
 }
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Tests::UsnSupport

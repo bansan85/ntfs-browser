@@ -45,16 +45,16 @@ namespace {
 // per WriteStandardInformationAttr(), four distinct timestamps.
 template <Cache::Strategy S>
 void RunFileRecordExposesExtendedMetadata() {
-  auto reader =
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree());
+  auto reader = std::make_unique<
+      NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftTree());
 
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> report(volume);
   REQUIRE(report.ParseFileRecord(
-      NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx));
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_report_idx));
   REQUIRE(report.ParseAttrs());
 
   CHECK(report.IsReadOnly());
@@ -62,8 +62,9 @@ void RunFileRecordExposesExtendedMetadata() {
 
   // The unnamed $DATA's own padded allocation, not $FILE_NAME's stale
   // mft_tree_report_stale_size.
-  CHECK(report.GetAllocatedSize() ==
-        NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_allocated_size);
+  CHECK(
+      report.GetAllocatedSize() ==
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_report_allocated_size);
 
   FILETIME write_tm{};
   FILETIME create_tm{};
@@ -83,16 +84,16 @@ void RunFileRecordExposesExtendedMetadata() {
 // option here.
 template <Cache::Strategy S>
 void RunFilenameExposesExtendedMetadata() {
-  auto reader =
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree());
+  auto reader = std::make_unique<
+      NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftTree());
 
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> report(volume);
   REQUIRE(report.ParseFileRecord(
-      NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx));
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_report_idx));
   REQUIRE(report.ParseAttrs());
 
   const auto& file_name_attrs = report.GetAttr(Attr::Type::FileName);

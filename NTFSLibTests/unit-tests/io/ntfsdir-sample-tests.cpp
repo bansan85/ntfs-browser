@@ -27,7 +27,7 @@
 #include <ntfs-browser/test/support/sample-run.h>
 
 using Catch::Matchers::ContainsSubstring;
-using NTFS_BROWSER_NAMESPACE::Tests::dump_broken_alter_time;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::dump_broken_alter_time;
 using NTFS_BROWSER_NAMESPACE::Tests::sample_failure_exit_code;
 using NTFS_BROWSER_NAMESPACE::Tests::SampleRun;
 using NTFS_BROWSER_NAMESPACE::Tests::DirSample::Below;
@@ -178,8 +178,8 @@ TEST_CASE("NtfsDir --recursive enters a directory once when an entry loops",
           "[io][sample][characterization]") {
   const Fs::path exe = GENERATE_COPY(from_range(SampleExes()));
   INFO(exe.string());
-  const TempImage image(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithDirectoryLoop());
+  const TempImage image(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                            BuildFakeNtfsImageWithDirectoryLoop());
   const std::string root = image.path.string();
   const std::string docs = Below(root, "Docs");
   const std::string sub = Below(docs, "Sub");
@@ -198,7 +198,7 @@ TEST_CASE(
     "[io][sample][characterization]") {
   const Fs::path exe = GENERATE_COPY(from_range(SampleExes()));
   INFO(exe.string());
-  const TempImage image(NTFS_BROWSER_NAMESPACE::Tests::
+  const TempImage image(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
                             BuildFakeNtfsImageWithOrphanedDirectoryLoop());
   const std::string root = image.path.string();
   const std::string docs = Below(root, "Docs");
@@ -218,7 +218,7 @@ TEST_CASE("NtfsDir --recursive does not show a stale entry without --recover",
           "[io][sample][characterization]") {
   const Fs::path exe = GENERATE_COPY(from_range(SampleExes()));
   INFO(exe.string());
-  const TempImage image(NTFS_BROWSER_NAMESPACE::Tests::
+  const TempImage image(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
                             BuildFakeNtfsImageWithOrphanedDirectoryLoop());
   const std::string root = image.path.string();
   const std::string docs = Below(root, "Docs");

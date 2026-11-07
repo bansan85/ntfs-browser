@@ -20,12 +20,12 @@
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using Alloc::ClusterState;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Tests::FakeBadClusterOptions;
-using Tests::FakeDataRun;
+using TestFakeImage::FakeBadClusterOptions;
+using TestFakeImage::FakeDataRun;
 
 namespace {
 
@@ -46,7 +46,7 @@ std::vector<BYTE> ImageWith(std::span<const Alloc::Extent> bad,
                             std::span<const Alloc::Extent> bad_in_bitmap,
                             const FakeBadClusterOptions& options = {}) {
   std::vector<BYTE> image =
-      Support::WithBitmap(Tests::BuildFakeNtfsImageWithFreedFileTree(),
+      Support::WithBitmap(TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(),
                           Support::WithBadRuns(allocated_runs, bad_in_bitmap));
   return Support::WithBadClusters(std::move(image), bad, options);
 }

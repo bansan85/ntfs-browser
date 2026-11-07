@@ -16,13 +16,13 @@
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using Alloc::ClusterState;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Tests::FakeBitmapOptions;
-using Tests::FakeBitmapShape;
-using Tests::FakeDataRun;
+using TestFakeImage::FakeBitmapOptions;
+using TestFakeImage::FakeBitmapShape;
+using TestFakeImage::FakeDataRun;
 
 namespace {
 
@@ -32,8 +32,9 @@ const std::vector<FakeDataRun> allocated_runs{
     FakeDataRun{.lcn = 50, .clusters = 1}};
 
 std::vector<BYTE> ImageFor(FakeBitmapShape shape) {
-  return Support::WithBitmap(Tests::BuildFakeNtfsImageWithFreedFileTree(),
-                             allocated_runs, FakeBitmapOptions{.shape = shape});
+  return Support::WithBitmap(
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(), allocated_runs,
+      FakeBitmapOptions{.shape = shape});
 }
 
 // Opens the volume whose bitmap has the given shape.

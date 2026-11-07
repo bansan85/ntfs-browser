@@ -33,7 +33,7 @@
 
 #include "knob-effect-support.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 class IndexEntryView;
 
@@ -42,13 +42,15 @@ namespace Io {
 enum class RecordStanding : std::uint8_t;
 
 }  // namespace Io
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 namespace Account = NTFS_BROWSER_NAMESPACE::Tests::AccountSupport;
 using NTFS_BROWSER_NAMESPACE::IDiskReader;
@@ -83,7 +85,7 @@ class PatternReader final : public IDiskReader {
   }
 
  private:
-  Tests::MemoryDiskReader inner_;
+  TestDiskReaders::MemoryDiskReader inner_;
   std::shared_ptr<Patterns> seen_;
 };
 
@@ -139,8 +141,8 @@ TEMPLATE_TEST_CASE_SIG("NtfsVolume passes a read pattern to its reader",
   INFO("read ahead " << read_ahead);
   const auto seen = std::make_shared<Patterns>();
   const NtfsVolume<S> volume(
-      std::make_unique<PatternReader>(Tests::BuildFakeNtfsImageWithMftTree(),
-                                      seen),
+      std::make_unique<PatternReader>(
+          TestFakeImage::BuildFakeNtfsImageWithMftTree(), seen),
       VolumeOptions{.read_ahead_bytes = read_ahead ? 4096U : 0U});
   REQUIRE(volume.IsVolumeOK());
   seen->clear();
@@ -160,7 +162,7 @@ TEST_CASE("A scan reads its first pass in M1 and its second in M2",
   scan.threads = threads;
 
   const Patterns seen = ScanPatterns(
-      Tests::BuildFakeNtfsImageWithListMftScan(3000, 250),
+      TestFakeImage::BuildFakeNtfsImageWithListMftScan(3000, 250),
       VolumeOptions{.include_deleted = true, .recover_errors = true}, scan);
 
   REQUIRE_FALSE(seen.empty());
@@ -193,7 +195,7 @@ TEST_CASE("The batched walk probes in M2", "[tuning][read-pattern]") {
   const auto seen = std::make_shared<Patterns>();
   const NtfsVolume<Cache::Strategy::NoCache> volume(
       std::make_unique<PatternReader>(
-          Tests::BuildFakeNtfsImageWithIndexedMftScan(100), seen),
+          TestFakeImage::BuildFakeNtfsImageWithIndexedMftScan(100), seen),
       VolumeOptions{});
   REQUIRE(volume.IsVolumeOK());
   Io::FileRecord<Cache::Strategy::NoCache> root(volume);
@@ -213,7 +215,7 @@ TEST_CASE("The batched walk probes in M2", "[tuning][read-pattern]") {
 TEST_CASE("A tuned scan sets the patterns of an untuned one",
           "[tuning][read-pattern][tree]") {
   const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithListMftScan(3000, 250);
+      TestFakeImage::BuildFakeNtfsImageWithListMftScan(3000, 250);
   const VolumeOptions base{.include_deleted = true, .recover_errors = true};
 
   const Patterns plain = ScanPatterns(image, base);

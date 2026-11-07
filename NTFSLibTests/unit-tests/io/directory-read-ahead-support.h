@@ -15,13 +15,13 @@
 #include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 namespace Cache {
 
 enum class Strategy : std::uint8_t;
 
 }  // namespace Cache
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 // What the tests of the read ahead of a recursive listing share: the trees they
 // list, and a run of the listing of NtfsDir over a fake volume.
@@ -34,20 +34,21 @@ struct TreeFixture {
 };
 
 // Many sibling directories, each with files and one subdirectory.
-[[nodiscard]] std::vector<FakeTreeNode> WideTree(std::size_t directories);
+[[nodiscard]] std::vector<Test::FakeImage::FakeTreeNode>
+    WideTree(std::size_t directories);
 
 // Sibling directories of files files each, none of them a directory, then
 // ballast freed records that no index names: a directory, its files and its
 // ballast take files + ballast + 1 records one after the other.
-[[nodiscard]] std::vector<FakeTreeNode> SpacedTree(std::size_t directories,
-                                                   std::size_t files,
-                                                   std::size_t ballast = 0);
+[[nodiscard]] std::vector<Test::FakeImage::FakeTreeNode>
+    SpacedTree(std::size_t directories, std::size_t files,
+               std::size_t ballast = 0);
 
 // Groups of directories under the root, each group holding per_group small
 // directories with one file each: many small directories, with an index of the
 // root that fits the record.
-[[nodiscard]] std::vector<FakeTreeNode> GroupedTree(std::size_t groups,
-                                                    std::size_t per_group);
+[[nodiscard]] std::vector<Test::FakeImage::FakeTreeNode>
+    GroupedTree(std::size_t groups, std::size_t per_group);
 
 // Files in each directory of BigDirectoryTree(): enough for its index to sit in
 // $INDEX_ALLOCATION blocks, and few enough for the separators of the blocks to
@@ -59,27 +60,27 @@ inline constexpr std::size_t big_directory_files = 40;
 inline constexpr std::size_t big_directory_nodes = big_directory_files + 3;
 
 // Directories of big_directory_files files each.
-[[nodiscard]] std::vector<FakeTreeNode>
+[[nodiscard]] std::vector<Test::FakeImage::FakeTreeNode>
     BigDirectoryTree(std::size_t directories);
 
 // Sibling directories of files files each. After each file come ballast freed
 // records that no index names, so the probes of one directory lie ballast + 1
 // records apart.
-[[nodiscard]] std::vector<FakeTreeNode> ScatteredTree(std::size_t directories,
-                                                      std::size_t files,
-                                                      std::size_t ballast);
+[[nodiscard]] std::vector<Test::FakeImage::FakeTreeNode>
+    ScatteredTree(std::size_t directories, std::size_t files,
+                  std::size_t ballast);
 
 // A directory tree of the given depth: each directory holds fanout
 // subdirectories and one file, down to depth levels under the root. A listing
 // of it grows and shrinks its stack.
-[[nodiscard]] std::vector<FakeTreeNode> BranchingTree(std::size_t fanout,
-                                                      std::size_t depth);
+[[nodiscard]] std::vector<Test::FakeImage::FakeTreeNode>
+    BranchingTree(std::size_t fanout, std::size_t depth);
 
 // Sibling directories of files files each, whose records have a second name in
 // the same directory: a hard link for the even ones, a DOS alias for the odd
 // ones. An index names such a record twice, in one block or in two.
-[[nodiscard]] std::vector<FakeTreeNode> LinkedTree(std::size_t directories,
-                                                   std::size_t files);
+[[nodiscard]] std::vector<Test::FakeImage::FakeTreeNode>
+    LinkedTree(std::size_t directories, std::size_t files);
 
 // Every tree the listing of the read ahead is compared on: wide and deep ones,
 // big directories, case twins, freed directories that keep their entries, a
@@ -99,7 +100,7 @@ struct Run {
   // reads: those follow the reads, which the read ahead moves.
   std::string log;
   // The calls the listing made on the reader, after the volume was open.
-  std::vector<CountingDiskReader::Call> calls;
+  std::vector<Test::DiskReaders::CountingDiskReader::Call> calls;
   int exit_code{0};
   // The conditions the listing salvaged: RecoveredCount() over it.
   std::uint64_t recovered{0};
@@ -134,9 +135,9 @@ class VerifiedLaneZone {
 struct LaneRun {
   // The standing lane's calls, in order, the withdrawals made when the read
   // ahead was destroyed included.
-  std::vector<CountingDiskReader::Call> lane;
+  std::vector<Test::DiskReaders::CountingDiskReader::Call> lane;
   // Every other call the listing made on the reader.
-  std::vector<CountingDiskReader::Call> others;
+  std::vector<Test::DiskReaders::CountingDiskReader::Call> others;
   // Read just before the read ahead was destroyed.
   Io::DirectoryReadAheadStats stats;
 };
@@ -163,13 +164,13 @@ template <Cache::Strategy S>
 struct TimedRun {
   Run run;
   std::uint64_t elapsed_ns{0};
-  ThrottleStats disk;
+  Test::DiskReaders::ThrottleStats disk;
 };
 
 // The simulated disk of ListOnSimulatedDisk(): what it costs, and the kind of
 // device its reader says it is.
 struct SimulatedDevice {
-  DiskModel model;
+  Test::DiskReaders::DiskModel model;
   Tuning::MediaKind kind{Tuning::MediaKind::Unknown};
 };
 
@@ -180,7 +181,7 @@ template <Cache::Strategy S>
                         const SimulatedDevice& device);
 
 // A hard disk: a long seek, one lane, as NtfsBench simulates it.
-[[nodiscard]] DiskModel HardDiskModel();
+[[nodiscard]] Test::DiskReaders::DiskModel HardDiskModel();
 
 // The first line where left and right differ, with the lines before it, to
 // read in a failure message. Empty when they are equal.
@@ -198,8 +199,8 @@ struct MftSpan {
 
 // Sectors of 512 bytes the reads of calls touched, and how many times each.
 // image_bytes is the size of the image they were made on.
-[[nodiscard]] std::vector<std::uint32_t>
-    SectorReadCounts(const std::vector<CountingDiskReader::Call>& calls,
-                     std::size_t image_bytes);
+[[nodiscard]] std::vector<std::uint32_t> SectorReadCounts(
+    const std::vector<Test::DiskReaders::CountingDiskReader::Call>& calls,
+    std::size_t image_bytes);
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Tests::ReadAhead

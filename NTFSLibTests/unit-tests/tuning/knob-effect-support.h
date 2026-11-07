@@ -28,18 +28,18 @@
 #include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 namespace Tuning {
 
 enum class Pattern : std::uint8_t;
 
 }  // namespace Tuning
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Tests::KnobEffect {
 
-using Call = CountingDiskReader::Call;
-using Kind = CountingDiskReader::Kind;
+using Call = Test::DiskReaders::CountingDiskReader::Call;
+using Kind = Test::DiskReaders::CountingDiskReader::Kind;
 
 // One knob to set.
 struct Setting {
@@ -71,9 +71,9 @@ inline VolumeOptions Recovering() {
 inline ScanResult ScanOf(const std::vector<BYTE>& image,
                          const VolumeOptions& options, unsigned threads = 1) {
   static_cast<void>(TakeCapturedLog());
-  auto reader = std::make_unique<CountingDiskReader>(
-      std::make_unique<MemoryDiskReader>(image));
-  const CountingDiskReader* const counting = reader.get();
+  auto reader = std::make_unique<Test::DiskReaders::CountingDiskReader>(
+      std::make_unique<Test::DiskReaders::MemoryDiskReader>(image));
+  const Test::DiskReaders::CountingDiskReader* const counting = reader.get();
   const NtfsVolume<Cache::Strategy::NoCache> volume(std::move(reader), options);
   REQUIRE(volume.IsVolumeOK());
   return CaptureScan(volume, counting, threads);

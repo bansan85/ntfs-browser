@@ -18,7 +18,8 @@
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
 
@@ -26,29 +27,33 @@ TEMPLATE_TEST_CASE_SIG(
     "ParseFileRecord refuses record bytes that are not one record long",
     "[file-record]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  const NtfsVolume<S> volume(std::make_unique<Tests::MemoryDiskReader>(
-      Tests::BuildFakeNtfsImageWithMftTree()));
+  const NtfsVolume<S> volume(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(
+          TestFakeImage::BuildFakeNtfsImageWithMftTree()));
   REQUIRE(volume.IsVolumeOK());
   FileRecord<S> record(volume);
 
   SECTION("too short") {
-    const std::vector<BYTE> bytes(Tests::fake_file_record_size - 1, 0);
-    CHECK_FALSE(record.ParseFileRecord(Tests::mft_tree_docs_idx, bytes));
+    const std::vector<BYTE> bytes(TestFakeImage::fake_file_record_size - 1, 0);
+    CHECK_FALSE(
+        record.ParseFileRecord(TestFakeImage::mft_tree_docs_idx, bytes));
   }
   SECTION("too long") {
-    const std::vector<BYTE> bytes(Tests::fake_file_record_size + 1, 0);
-    CHECK_FALSE(record.ParseFileRecord(Tests::mft_tree_docs_idx, bytes));
+    const std::vector<BYTE> bytes(TestFakeImage::fake_file_record_size + 1, 0);
+    CHECK_FALSE(
+        record.ParseFileRecord(TestFakeImage::mft_tree_docs_idx, bytes));
   }
 }
 
 TEMPLATE_TEST_CASE_SIG("a record with no unnamed $DATA has no allocated size",
                        "[file-record]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const NtfsVolume<S> volume(std::make_unique<Tests::MemoryDiskReader>(
-      Tests::BuildFakeNtfsImageWithMftTree()));
+  const NtfsVolume<S> volume(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(
+          TestFakeImage::BuildFakeNtfsImageWithMftTree()));
   REQUIRE(volume.IsVolumeOK());
   FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(Tests::mft_tree_docs_idx));
+  REQUIRE(record.ParseFileRecord(TestFakeImage::mft_tree_docs_idx));
   REQUIRE(record.ParseAttrs());
 
   CHECK(record.FindStream({}) == nullptr);

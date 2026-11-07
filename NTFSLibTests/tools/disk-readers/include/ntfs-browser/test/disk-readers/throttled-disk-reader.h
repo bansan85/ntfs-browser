@@ -15,7 +15,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tuning/tuning.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders {
 
 // A clock that only moves when a model says so: nanoseconds from 0. It makes a
 // simulated disk deterministic and instant, with no sleep.
@@ -83,7 +83,9 @@ class ThrottledDiskReader final : public IDiskReader {
   ThrottledDiskReader(
       std::unique_ptr<IDiskReader> inner, const DiskModel& model,
       SimulatedClock& clock,
-      const std::array<Tuning::ReaderTuning, Tuning::pattern_count>& caps = {});
+      const std::array<NTFS_BROWSER_NAMESPACE::Tuning::ReaderTuning,
+                       NTFS_BROWSER_NAMESPACE::Tuning::pattern_count>& caps =
+          {});
 
   bool Open(std::wstring_view path) override;
   [[nodiscard]] bool ReadInto(LARGE_INTEGER& addr,
@@ -91,12 +93,14 @@ class ThrottledDiskReader final : public IDiskReader {
   [[nodiscard]] std::optional<ULONGLONG> Size() const override;
   // Passes the question on: the simulated disk is of the kind the wrapped
   // reader says.
-  [[nodiscard]] Tuning::MediaKind GetMediaKind() const override;
+  [[nodiscard]] NTFS_BROWSER_NAMESPACE::Tuning::MediaKind
+      GetMediaKind() const override;
   void Prefetch(ULONGLONG offset, ULONGLONG length) const override;
   void CancelPrefetch() const override;
   void PrefetchStanding(ULONGLONG offset, ULONGLONG length) const override;
   void CancelStanding(ULONGLONG offset, ULONGLONG length) const override;
-  void SetReadPattern(Tuning::Pattern pattern) const override;
+  void SetReadPattern(
+      NTFS_BROWSER_NAMESPACE::Tuning::Pattern pattern) const override;
 
   [[nodiscard]] const ThrottleStats& Stats() const noexcept { return stats_; }
 
@@ -171,9 +175,11 @@ class ThrottledDiskReader final : public IDiskReader {
   std::unique_ptr<IDiskReader> inner_;
   DiskModel model_;
   SimulatedClock* clock_;
-  std::array<Tuning::ReaderTuning, Tuning::pattern_count> caps_;
+  std::array<NTFS_BROWSER_NAMESPACE::Tuning::ReaderTuning,
+             NTFS_BROWSER_NAMESPACE::Tuning::pattern_count>
+      caps_;
 
-  mutable const Tuning::ReaderTuning* active_;
+  mutable const NTFS_BROWSER_NAMESPACE::Tuning::ReaderTuning* active_;
   mutable Queue first_;
   mutable Queue standing_;
   // When each lane is free, the time the device bandwidth is booked until, and
@@ -184,4 +190,4 @@ class ThrottledDiskReader final : public IDiskReader {
   mutable ThrottleStats stats_;
 };
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders

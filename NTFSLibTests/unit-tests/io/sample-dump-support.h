@@ -15,9 +15,10 @@ namespace NTFS_BROWSER_NAMESPACE::Tests {
 // The dump-tree image with its big file on the default run: 20 clusters at
 // LCN 40, past the 16 KiB a dump shows.
 inline std::vector<BYTE> DumpTreeImage() {
-  return BuildFakeNtfsImageWithDumpTree(
-      dump_big_file_size,
-      {{.lcn = dump_big_file_lcn, .clusters = dump_big_file_clusters}});
+  return Test::FakeImage::BuildFakeNtfsImageWithDumpTree(
+      Test::FakeImage::dump_big_file_size,
+      {{.lcn = Test::FakeImage::dump_big_file_lcn,
+        .clusters = Test::FakeImage::dump_big_file_clusters}});
 }
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Tests

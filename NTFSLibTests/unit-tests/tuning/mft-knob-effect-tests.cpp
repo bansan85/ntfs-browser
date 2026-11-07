@@ -37,6 +37,7 @@ namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using Tests::ScanResult;
@@ -54,13 +55,13 @@ constexpr ULONGLONG list_fragment_clusters = 250;
 constexpr std::uint64_t small_window = 4096;
 
 std::vector<BYTE> ListImage() {
-  return Tests::BuildFakeNtfsImageWithListMftScan(list_record_count,
-                                                  list_fragment_clusters);
+  return TestFakeImage::BuildFakeNtfsImageWithListMftScan(
+      list_record_count, list_fragment_clusters);
 }
 
 // Where the lists of the list fixture start: the $MFT lies below.
 ULONGLONG ListsOffset() {
-  return Tests::list_scan_lists_lcn * Tests::fake_cluster_size;
+  return TestFakeImage::list_scan_lists_lcn * TestFakeImage::fake_cluster_size;
 }
 
 // The hints and reads of the scan that touch $MFT, not the lists.
@@ -154,7 +155,8 @@ TEST_CASE("mft.max_announced_bytes bounds the bytes announced ahead",
 TEST_CASE("mft.max_gap_slots decides which free slots a window reads across",
           "[tuning][knob-effect][mft]") {
   const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithMftBitmap(Tests::FakeMftBitmap::Resident);
+      TestFakeImage::BuildFakeNtfsImageWithMftBitmap(
+          TestFakeImage::FakeMftBitmap::Resident);
   const VolumeOptions strict;
 
   const Pair scans = ScanBoth(image, strict, {{"mft.max_gap_slots", 0}});
@@ -216,7 +218,7 @@ TEST_CASE(
   constexpr ULONGLONG extensions = 6;
   constexpr ULONGLONG groups = 10;
   const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithAdjacentExtensions(
+      TestFakeImage::BuildFakeNtfsImageWithAdjacentExtensions(
           static_cast<ULONGLONG>(Mft::Idx::User) + (groups * (extensions + 1)),
           extensions);
   const VolumeOptions held_nothing =
@@ -285,11 +287,11 @@ TEST_CASE(
     "mft.max_pending_ranges sets how many data-state queries one batch "
     "resolves",
     "[tuning][knob-effect][mft]") {
-  const Tests::FakeManyDeleted built =
-      Tests::BuildFakeNtfsImageWithManyDeletedFiles(8, 4);
+  const TestFakeImage::FakeManyDeleted built =
+      TestFakeImage::BuildFakeNtfsImageWithManyDeletedFiles(8, 4);
   std::vector<BYTE> image = built.image;
-  const std::vector<BYTE> bits = Tests::AllocatedBitmapFor(image, {});
-  Tests::PutClusterBitmap(image, bits);
+  const std::vector<BYTE> bits = TestFakeImage::AllocatedBitmapFor(image, {});
+  TestFakeImage::PutClusterBitmap(image, bits);
 
   const auto flushes = [&image](const VolumeOptions& options) {
     Tests::BenchSessionGuard session;
@@ -312,12 +314,12 @@ TEST_CASE(
 
 TEST_CASE("mft.max_kept_bitmap_bytes sets the bitmap windows a scan keeps",
           "[tuning][knob-effect][mft]") {
-  const Tests::FakeManyDeleted built =
-      Tests::BuildFakeNtfsImageWithManyDeletedFiles(8, 4);
+  const TestFakeImage::FakeManyDeleted built =
+      TestFakeImage::BuildFakeNtfsImageWithManyDeletedFiles(8, 4);
   std::vector<BYTE> image = built.image;
-  const std::vector<BYTE> bits = Tests::AllocatedBitmapFor(image, {});
+  const std::vector<BYTE> bits = TestFakeImage::AllocatedBitmapFor(image, {});
   const ULONGLONG data_offset = image.size();
-  Tests::PutClusterBitmap(image, bits);
+  TestFakeImage::PutClusterBitmap(image, bits);
   // Four windows of 32 clusters, so a batch of one file reloads some.
   Alloc::SetBitmapWindowBytesForTests(4);
 

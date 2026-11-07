@@ -40,9 +40,8 @@ TEST_CASE(
     "FullCache walk under a tiny ceiling lists what every other walk "
     "lists",
     "[cache][walk]") {
-  const std::vector<BYTE> image =
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithManyIndexBlocks(
-          walk_index_blocks);
+  const std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+      BuildFakeNtfsImageWithManyIndexBlocks(walk_index_blocks);
   const std::vector<std::wstring> expected = ExpectedWalkNames();
 
   const auto tiny = OpenWalkVolume<Cache::Strategy::FullCache>(
@@ -72,9 +71,8 @@ TEST_CASE(
     "FullCache walk keeps data in use, even above the ceiling, and falls "
     "back under it once that data is released",
     "[cache][walk]") {
-  const std::vector<BYTE> image =
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithManyIndexBlocks(
-          walk_index_blocks);
+  const std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+      BuildFakeNtfsImageWithManyIndexBlocks(walk_index_blocks);
   const auto volume = OpenWalkVolume<Cache::Strategy::FullCache>(
       image, WalkOptions(walk_tiny_ceiling));
 

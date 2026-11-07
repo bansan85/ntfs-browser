@@ -44,14 +44,14 @@ TEST_CASE(
     "Update Sequence Array past the index block buffer",
     "[attr-index-alloc][regression]") {
   constexpr DWORD index_block_size =
-      NTFS_BROWSER_NAMESPACE::Tests::forged_index_block_size;
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::forged_index_block_size;
   constexpr DWORD sectors =
       index_block_size /
       NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader::update_sequence_stride;
 
   CHECK_FALSE(IndexBlockUsOffsetInBounds(
-      NTFS_BROWSER_NAMESPACE::Tests::forged_index_block_offset_of_us, sectors,
-      index_block_size));
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::forged_index_block_offset_of_us,
+      sectors, index_block_size));
 
   // Right after the header, with room for the whole array: accepted.
   constexpr WORD valid_offset = static_cast<WORD>(sizeof(IndexBlock));
@@ -78,15 +78,16 @@ TEMPLATE_TEST_CASE_SIG(
     "[attr-index-alloc][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<
-      NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithForgedIndexBlock());
+      NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+          BuildFakeNtfsImageWithForgedIndexBlock());
 
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(
-      NTFS_BROWSER_NAMESPACE::Tests::index_alloc_dir_idx));
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::index_alloc_dir_idx));
   REQUIRE(record.ParseAttrs());
 
   int callback_count = 0;
@@ -108,21 +109,23 @@ TEMPLATE_TEST_CASE_SIG(
   constexpr size_t us_block_size = 512;
   constexpr WORD torn_word = 0xDEAD;
 
-  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::
+  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
       BuildFakeNtfsImageWithOrphanedIndexBlocks();
 
   // The first cluster-aligned index block is VCN 0, the one $INDEX_ROOT
   // points at.
   size_t block_offset = 0;
   for (; block_offset + sizeof(DWORD) <= image.size();
-       block_offset += NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size) {
+       block_offset +=
+       NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size) {
     DWORD magic = 0;
     std::memcpy(&magic, &image.at(block_offset), sizeof(magic));
     if (magic == index_block_magic) {
       break;
     }
   }
-  REQUIRE(block_offset + NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size <=
+  REQUIRE(block_offset +
+              NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size <=
           image.size());
 
   // A torn write: the end of the block's first 512 bytes was never given
@@ -130,9 +133,9 @@ TEMPLATE_TEST_CASE_SIG(
   std::memcpy(&image.at(block_offset + us_block_size - sizeof(WORD)),
               &torn_word, sizeof(torn_word));
 
-  auto reader =
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-          std::move(image));
+  auto reader = std::make_unique<
+      NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+      std::move(image));
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 

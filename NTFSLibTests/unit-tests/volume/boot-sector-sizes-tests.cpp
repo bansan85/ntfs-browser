@@ -15,7 +15,7 @@
 #include "boot-sector-support.h"
 
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
-using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 
 namespace {

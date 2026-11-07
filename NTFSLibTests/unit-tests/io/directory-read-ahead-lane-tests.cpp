@@ -34,7 +34,7 @@
 
 #include "directory-read-ahead-support.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 namespace Attr {
 
 struct HeaderCommon;
@@ -48,18 +48,20 @@ template <Cache::Strategy S>
 class FileRecord;
 
 }  // namespace Io
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 namespace ReadAhead = NTFS_BROWSER_NAMESPACE::Tests::ReadAhead;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Tests::CountingDiskReader;
+using TestDiskReaders::CountingDiskReader;
 using Call = CountingDiskReader::Call;
 using Kind = CountingDiskReader::Kind;
 
@@ -87,7 +89,7 @@ constexpr std::uint64_t large_budget = std::uint64_t{16} << 20U;
 
 // The record number of directory number index of SpacedTree().
 ULONGLONG LaneDirectory(std::size_t index) {
-  return Tests::name_tree_first_record + (index * directory_stride);
+  return TestFakeImage::name_tree_first_record + (index * directory_stride);
 }
 
 // The first count planned directories, the next one first.
@@ -190,7 +192,7 @@ struct Rig {
 
   Rig(const std::vector<BYTE>& image, VolumeOptions options,
       Tuning::MediaKind kind = Tuning::MediaKind::Unknown) {
-    auto memory = std::make_unique<Tests::MemoryDiskReader>(image);
+    auto memory = std::make_unique<TestDiskReaders::MemoryDiskReader>(image);
     memory->SetMediaKind(kind);
     auto counting = std::make_unique<CountingDiskReader>(std::move(memory));
     reads = counting.get();
@@ -237,7 +239,7 @@ TEMPLATE_TEST_CASE_SIG(
     "standing lane",
     "[io][directory-read-ahead][standing-lane]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::SpacedTree(directories, files_per_directory));
   Rig<S> rig(image, WithRuns(64));
   Io::DirectoryReadAhead<S> ahead(*rig.volume);
@@ -272,7 +274,7 @@ TEMPLATE_TEST_CASE_SIG(
     "The read ahead announces the probe runs of the stack from the top down",
     "[io][directory-read-ahead][standing-lane]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::SpacedTree(directories, files_per_directory));
   Rig<S> rig(image, WithRuns(64));
   Io::DirectoryReadAhead<S> ahead(*rig.volume);
@@ -293,7 +295,7 @@ TEMPLATE_TEST_CASE_SIG(
     "The read ahead keeps at most walk.read_ahead_runs runs on the lane",
     "[io][directory-read-ahead][standing-lane]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::SpacedTree(directories, files_per_directory));
   Rig<S> rig(image, WithRuns(3));
   Io::DirectoryReadAhead<S> ahead(*rig.volume);
@@ -310,7 +312,7 @@ TEMPLATE_TEST_CASE_SIG(
     "The read ahead fills the lane again as the listing reads a run",
     "[io][directory-read-ahead][standing-lane]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::SpacedTree(directories, files_per_directory));
   Rig<S> rig(image, WithRuns(3));
   Io::DirectoryReadAhead<S> ahead(*rig.volume);
@@ -338,7 +340,7 @@ TEMPLATE_TEST_CASE_SIG(
     "The read ahead withdraws the runs of a directory that Release frees",
     "[io][directory-read-ahead][standing-lane]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::SpacedTree(directories, files_per_directory));
   Rig<S> rig(image, WithRuns(64));
   Io::DirectoryReadAhead<S> ahead(*rig.volume);
@@ -369,7 +371,7 @@ TEMPLATE_TEST_CASE_SIG(
     "The read ahead withdraws every run left on the lane when it is destroyed",
     "[io][directory-read-ahead][standing-lane]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::SpacedTree(directories, files_per_directory));
   Rig<S> rig(image, WithRuns(64));
   {
@@ -388,7 +390,7 @@ TEMPLATE_TEST_CASE_SIG(
     "The read ahead announces the runs of the directory a listing starts at",
     "[io][directory-read-ahead][standing-lane]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::SpacedTree(directories, files_per_directory));
   Rig<S> rig(image, WithRuns(64));
   Io::DirectoryReadAhead<S> ahead(*rig.volume);
@@ -433,7 +435,7 @@ TEMPLATE_TEST_CASE_SIG(
     "The read ahead calls the standing lane only when it is on",
     "[io][directory-read-ahead][standing-lane]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::SpacedTree(directories, files_per_directory));
 
   SECTION("with the lane on, a device of an unknown kind uses it") {
@@ -550,12 +552,13 @@ TEMPLATE_TEST_CASE_SIG(
   const std::vector<ReadAhead::TreeFixture> trees = [] {
     std::vector<ReadAhead::TreeFixture> kept;
     kept.push_back(
-        {"wide", Tests::BuildFakeNtfsImageWithNameTree(
+        {"wide", TestFakeImage::BuildFakeNtfsImageWithNameTree(
                      ReadAhead::SpacedTree(directories, files_per_directory))});
-    kept.push_back({"grouped", Tests::BuildFakeNtfsImageWithNameTree(
+    kept.push_back({"grouped", TestFakeImage::BuildFakeNtfsImageWithNameTree(
                                    ReadAhead::GroupedTree(4, 12))});
-    kept.push_back({"big directories", Tests::BuildFakeNtfsImageWithNameTree(
-                                           ReadAhead::BigDirectoryTree(6))});
+    kept.push_back(
+        {"big directories", TestFakeImage::BuildFakeNtfsImageWithNameTree(
+                                ReadAhead::BigDirectoryTree(6))});
     return kept;
   }();
   for (const ReadAhead::TreeFixture& tree : trees) {
@@ -600,7 +603,7 @@ TEMPLATE_TEST_CASE_SIG(
     "A run that leaves the first runs stays on the lane among the next ones",
     "[io][directory-read-ahead][standing-lane]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::SpacedTree(directories, files_per_directory));
 
   const ReadAhead::VerifiedLaneZone verified;
@@ -644,7 +647,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[io][directory-read-ahead][standing-lane][media-kind]",
     ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::SpacedTree(directories, files_per_directory));
 
   SECTION("a rotational statement turns the lane off on a solid state reader") {
@@ -682,12 +685,12 @@ TEMPLATE_TEST_CASE_SIG(
 TEMPLATE_TEST_CASE_SIG("NtfsVolume::GetMediaKind answers the option first",
                        "[volume][media-kind]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::SpacedTree(directories, files_per_directory));
 
   const auto kind_of = [&image](const VolumeOptions& options,
                                 Tuning::MediaKind reader_kind) {
-    auto memory = std::make_unique<Tests::MemoryDiskReader>(image);
+    auto memory = std::make_unique<TestDiskReaders::MemoryDiskReader>(image);
     memory->SetMediaKind(reader_kind);
     const NtfsVolume<S> volume(std::move(memory), options);
     REQUIRE(volume.IsVolumeOK());

@@ -10,7 +10,7 @@
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders {
 
 // Forwards every read to another IDiskReader and appends the bytes it served
 // to a trace file, in read order and without their address. A
@@ -34,7 +34,8 @@ class RecordingDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   [[nodiscard]] std::optional<ULONGLONG> Size() const override;
 
   // The kind of device of the wrapped reader. It reads nothing.
-  [[nodiscard]] Tuning::MediaKind GetMediaKind() const override;
+  [[nodiscard]] NTFS_BROWSER_NAMESPACE::Tuning::MediaKind
+      GetMediaKind() const override;
 
   // Pass the hints on to the wrapped reader. A hint reads nothing through this
   // reader, so the trace is the same.
@@ -42,11 +43,12 @@ class RecordingDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   void CancelPrefetch() const override;
   void PrefetchStanding(ULONGLONG offset, ULONGLONG length) const override;
   void CancelStanding(ULONGLONG offset, ULONGLONG length) const override;
-  void SetReadPattern(Tuning::Pattern pattern) const override;
+  void SetReadPattern(
+      NTFS_BROWSER_NAMESPACE::Tuning::Pattern pattern) const override;
 
  private:
   std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> inner_;
   mutable std::ofstream trace_;
 };
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders

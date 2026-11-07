@@ -18,7 +18,7 @@
 #include "data/ntfs-bpb.h"
 #include "fake-ntfs-image-internal.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage {
 
 namespace {
 
@@ -89,12 +89,12 @@ FakeRecord MakeNonResidentBitmapRecord(ULONGLONG real_size,
                                        std::vector<BYTE> raw_runs) {
   FakeRecord record = MakeInUseFileRecord();
   DWORD offset = attr_offset_value;
-  offset +=
-      WriteNonResidentAttr(record, offset, Attr::Type::Data,
-                           {.comp_unit_size = 0,
-                            .real_size = real_size,
-                            .runs = runs,
-                            .overrides = {.raw_runs = std::move(raw_runs)}});
+  offset += WriteNonResidentAttr(
+      record, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::Data,
+      {.comp_unit_size = 0,
+       .real_size = real_size,
+       .runs = runs,
+       .overrides = {.raw_runs = std::move(raw_runs)}});
   WriteEndOfAttributesMarker(record, offset);
   return record;
 }
@@ -216,8 +216,9 @@ void PutClusterBitmap(std::vector<BYTE>& image,
   }
 
   if (options.shape == FakeBitmapShape::Resident) {
-    PutMftRecord(image, static_cast<ULONGLONG>(Mft::Idx::Bitmap),
-                 MakeResidentBitmapRecord(bitmap_bytes));
+    PutMftRecord(
+        image, static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Bitmap),
+        MakeResidentBitmapRecord(bitmap_bytes));
     FitVolumeToImage(image);
     return;
   }
@@ -246,7 +247,7 @@ void PutClusterBitmap(std::vector<BYTE>& image,
   }
 
   PutMftRecord(
-      image, static_cast<ULONGLONG>(Mft::Idx::Bitmap),
+      image, static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Bitmap),
       MakeNonResidentBitmapRecord(options.forged_size.value_or(bits.size()),
                                   BitmapRuns(parts), std::move(raw_runs)));
 }
@@ -293,13 +294,15 @@ FakeManyDeleted BuildFakeNtfsImageWithManyDeletedFiles(size_t count,
   assert(records <= 0xFFFF);
   DWORD offset = attr_offset_value;
   offset += WriteNonResidentAttr(
-      mft, offset, Attr::Type::Data,
+      mft, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::Data,
       {.comp_unit_size = 0,
        .real_size = ULONGLONG{records} * fake_file_record_size,
        .runs = {{.lcn = mft_lcn, .clusters = static_cast<DWORD>(records)}},
        .overrides = {.raw_runs = mft_runs}});
   WriteEndOfAttributesMarker(mft, offset);
-  PutMftRecord(built.image, static_cast<ULONGLONG>(Mft::Idx::Mft), mft);
+  PutMftRecord(built.image,
+               static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Mft),
+               mft);
 
   // The files' data lives past the records, twice as many slots as files so
   // they scatter. 7919 is prime, so the stride visits every slot once.
@@ -323,4 +326,4 @@ FakeManyDeleted BuildFakeNtfsImageWithManyDeletedFiles(size_t count,
   return built;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage

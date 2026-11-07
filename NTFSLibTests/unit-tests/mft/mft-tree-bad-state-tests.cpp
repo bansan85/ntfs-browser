@@ -30,12 +30,13 @@ namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 namespace TreeSupport = NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport;
 using Alloc::DataState;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using Support::stale_size;
-using Tests::FakeDataRun;
+using TestFakeImage::FakeDataRun;
 using TreeSupport::CheckNoEntryIsAnnotated;
 using TreeSupport::RequiredEntry;
 using TreeSupport::ScannedVolume;
@@ -53,7 +54,8 @@ const std::vector<Alloc::Extent> one_bad{{.lcn = 41, .clusters = 1}};
 // cluster, and, when with_list is set, the bad list.
 std::vector<BYTE> Image(bool with_list = true) {
   std::vector<BYTE> image = Support::WithBitmap(
-      Tests::BuildFakeNtfsImageWithFreedNonResidentFile(stale_size, stale_runs),
+      TestFakeImage::BuildFakeNtfsImageWithFreedNonResidentFile(stale_size,
+                                                                stale_runs),
       Support::WithBadRuns({}, one_bad));
   return with_list ? Support::WithBadClusters(std::move(image), one_bad)
                    : image;
@@ -65,9 +67,10 @@ std::vector<BYTE> Image(bool with_list = true) {
 // whether the list was loaded. That message can.
 std::vector<BYTE> UnusableListImage() {
   return Support::WithBadClusters(
-      Support::WithBitmap(Tests::BuildFakeNtfsImageWithFreedNonResidentFile(
-                              stale_size, stale_runs),
-                          Support::WithBadRuns({}, one_bad)),
+      Support::WithBitmap(
+          TestFakeImage::BuildFakeNtfsImageWithFreedNonResidentFile(stale_size,
+                                                                    stale_runs),
+          Support::WithBadRuns({}, one_bad)),
       one_bad, {.omit_bad_stream = true});
 }
 
@@ -78,11 +81,10 @@ template <Cache::Strategy S>
 void CheckADeletedEntryOnABadClusterIsBad() {
   const ScannedVolume<S> scanned(Image());
 
-  CHECK(
-      RequiredEntry(scanned.tree, Tests::mft_tree_stale_child_idx).data_state ==
-      DataState::Bad);
-  CHECK(RequiredEntry(scanned.tree, Tests::mft_tree_report_idx).data_state ==
-        DataState::Intact);
+  CHECK(RequiredEntry(scanned.tree, TestFakeImage::mft_tree_stale_child_idx)
+            .data_state == DataState::Bad);
+  CHECK(RequiredEntry(scanned.tree, TestFakeImage::mft_tree_report_idx)
+            .data_state == DataState::Intact);
 }
 
 template <Cache::Strategy S>
@@ -146,9 +148,8 @@ void CheckAnAnnotatedScanLoadsTheBadListOnce() {
   const ScannedVolume<S> scanned(UnusableListImage());
 
   // The bitmap alone answers: the bad cluster is marked allocated in it.
-  CHECK(
-      RequiredEntry(scanned.tree, Tests::mft_tree_stale_child_idx).data_state ==
-      DataState::Reallocated);
+  CHECK(RequiredEntry(scanned.tree, TestFakeImage::mft_tree_stale_child_idx)
+            .data_state == DataState::Reallocated);
   CHECK(log.Count(unusable_message) == 1);
 }
 
@@ -157,16 +158,15 @@ void CheckAMissingBadListLeavesTheBitmapAlone() {
   // Record 8 is zero-filled: the bitmap alone marks the cluster allocated.
   const ScannedVolume<S> scanned(Image(false));
 
-  CHECK(
-      RequiredEntry(scanned.tree, Tests::mft_tree_stale_child_idx).data_state ==
-      DataState::Reallocated);
+  CHECK(RequiredEntry(scanned.tree, TestFakeImage::mft_tree_stale_child_idx)
+            .data_state == DataState::Reallocated);
   CHECK(scanned.tree.Stats().data_bad == 0);
 }
 
 template <Cache::Strategy S>
 void CheckSeveralFlushesGiveTheSameStates() {
-  const Tests::FakeManyDeleted built =
-      Tests::BuildFakeNtfsImageWithManyDeletedFiles(8, 2);
+  const TestFakeImage::FakeManyDeleted built =
+      TestFakeImage::BuildFakeNtfsImageWithManyDeletedFiles(8, 2);
   // Every other file's first cluster is bad and marked in the bitmap.
   std::vector<Alloc::Extent> bad;
   std::vector<FakeDataRun> marked;
@@ -185,7 +185,7 @@ void CheckSeveralFlushesGiveTheSameStates() {
     std::vector<std::optional<DataState>> states;
     for (size_t i = 0; i < built.lcns.size(); i++) {
       const Mft::MftTree::Entry* entry =
-          tree.Find(Tests::many_deleted_first_idx + i);
+          tree.Find(TestFakeImage::many_deleted_first_idx + i);
       REQUIRE(entry != nullptr);
       states.push_back(entry->data_state);
     }

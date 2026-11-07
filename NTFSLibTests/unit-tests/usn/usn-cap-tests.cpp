@@ -18,11 +18,11 @@
 #include <ntfs-browser/volume-options.h>
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Usn = NTFS_BROWSER_NAMESPACE::Usn;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Tests::FakeUsnRecord;
+using TestFakeImage::FakeUsnRecord;
 
 namespace {
 
@@ -134,7 +134,7 @@ TEST_CASE("the default limit holds a journal of 100 MiB whole",
   std::vector<BYTE> stream;
   stream.reserve(journal_bytes);
   for (size_t i = 0; i < count; ++i) {
-    const std::vector<BYTE> record = Tests::EncodeUsnRecord(
+    const std::vector<BYTE> record = TestFakeImage::EncodeUsnRecord(
         FakeUsnRecord{.name = L"a", .file_record = i}, stream.size());
     REQUIRE(record.size() == record_bytes);
     stream.insert(stream.end(), record.begin(), record.end());

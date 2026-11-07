@@ -19,18 +19,18 @@
 #include <ntfs-browser/test/support/walk-comparison.h>
 #include <ntfs-browser/volume-options.h>
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 class IDiskReader;
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 using NTFS_BROWSER_NAMESPACE::IDiskReader;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
 using NTFS_BROWSER_NAMESPACE::Tests::DfirNtfsDir;
-using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
 using NTFS_BROWSER_NAMESPACE::Tests::WalkResult;
 using NTFS_BROWSER_NAMESPACE::Tests::WalkVolume;
 

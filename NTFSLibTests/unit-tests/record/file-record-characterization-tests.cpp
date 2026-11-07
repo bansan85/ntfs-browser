@@ -53,20 +53,21 @@ using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
-using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
 using NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog;
 
 namespace {
 
 // Bytes in one file record, as the fake images lay them out.
 constexpr size_t record_bytes =
-    NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size;
+    NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_file_record_size;
 // $MFT slot the scratch records fill: free in every fake image, and below
 // Mft::Idx::User, so it is read straight from disk.
 constexpr ULONGLONG scratch_idx = 6;
 // Byte offset of scratch_idx: $MFT starts one cluster into the image.
 constexpr size_t scratch_offset =
-    static_cast<size_t>(NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size) +
+    static_cast<size_t>(
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size) +
     static_cast<size_t>(scratch_idx) * record_bytes;
 // Sequence number the scratch record carries. Any non-zero value works.
 constexpr WORD scratch_sequence = 1;
@@ -88,7 +89,7 @@ using RecordBytes = std::array<BYTE, record_bytes>;
 // Zeroed in-use record whose first attribute sits at offset_of_attr.
 RecordBytes MakeScratchRecord(WORD offset_of_attr) {
   RecordBytes record{};
-  NTFS_BROWSER_NAMESPACE::Tests::EditFileRecordHeader(
+  NTFS_BROWSER_NAMESPACE::Test::FakeImage::EditFileRecordHeader(
       record, [&](Data::FileRecordHeader& header) {
         header.magic = Data::FileRecordHeader::file_record_magic;
         header.offset_of_us = usa_offset;
@@ -146,7 +147,8 @@ void PutEndMarker(RecordBytes& record, DWORD offset) {
 
 // BuildFakeNtfsImage() with record in its scratch slot.
 std::vector<BYTE> ImageWithScratch(const RecordBytes& record) {
-  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
+  std::vector<BYTE> image =
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage();
   std::memcpy(&image.at(scratch_offset), record.data(), record.size());
   return image;
 }
@@ -284,7 +286,7 @@ std::array<BYTE, sizeof(Data::IndexRoot) + index_entry_size>
 
   Data::IndexRoot root{};
   root.attr_type = Attr::Type::FileName;
-  root.ib_size = NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size;
+  root.ib_size = NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size;
   root.clusters_per_ib = 1;
   // Counted from the entry_offset field, to the entry after the header.
   root.entry_offset = static_cast<DWORD>(
@@ -305,7 +307,8 @@ std::array<BYTE, sizeof(Data::IndexRoot) + index_entry_size>
 void SetStdInfoPermission(std::vector<BYTE>& image, ULONGLONG idx,
                           StdInfoPermission permission) {
   const size_t record_offset =
-      static_cast<size_t>(NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size) +
+      static_cast<size_t>(
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size) +
       static_cast<size_t>(idx) * record_bytes;
 
   Data::FileRecordHeader header{};
@@ -450,9 +453,9 @@ TEMPLATE_TEST_CASE_SIG(
   for (const bool non_resident_list : {false, true}) {
     auto reader = std::make_unique<MemoryDiskReader>(
         non_resident_list
-            ? NTFS_BROWSER_NAMESPACE::Tests::
+            ? NTFS_BROWSER_NAMESPACE::Test::FakeImage::
                   BuildFakeNtfsImageWithNonResidentMftAttributeList()
-            : NTFS_BROWSER_NAMESPACE::Tests::
+            : NTFS_BROWSER_NAMESPACE::Test::FakeImage::
                   BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList());
 
     const NtfsVolume<S> volume(std::move(reader));
@@ -461,7 +464,7 @@ TEMPLATE_TEST_CASE_SIG(
 
     FileRecord<S> record(volume);
     CHECK(record.ParseFileRecord(
-        NTFS_BROWSER_NAMESPACE::Tests::mft_data_split_target_idx));
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_data_split_target_idx));
   }
 }
 
@@ -504,14 +507,15 @@ TEMPLATE_TEST_CASE_SIG(
     "[file-record][index-block][characterization]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const std::vector<std::wstring> names =
-      RootNames<S>(NTFS_BROWSER_NAMESPACE::Tests::
+      RootNames<S>(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
                        BuildFakeNtfsImageWithOrphanedEntryNamedRecord(
-                           NTFS_BROWSER_NAMESPACE::Tests::FakeNamedRecordState::
-                               InUseSameSequence),
+                           NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                               FakeNamedRecordState::InUseSameSequence),
                    recover_only);
-  CheckNames(names,
-             {NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_reachable_name,
-              NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_orphan_name});
+  CheckNames(
+      names,
+      {NTFS_BROWSER_NAMESPACE::Test::FakeImage::orphaned_block_reachable_name,
+       NTFS_BROWSER_NAMESPACE::Test::FakeImage::orphaned_block_orphan_name});
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -520,16 +524,19 @@ TEMPLATE_TEST_CASE_SIG(
     "[file-record][index-block][characterization]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto freed_image = [] {
-    return NTFS_BROWSER_NAMESPACE::Tests::
+    return NTFS_BROWSER_NAMESPACE::Test::FakeImage::
         BuildFakeNtfsImageWithOrphanedEntryNamedRecord(
-            NTFS_BROWSER_NAMESPACE::Tests::FakeNamedRecordState::Deleted);
+            NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeNamedRecordState::
+                Deleted);
   };
 
-  CheckNames(RootNames<S>(freed_image(), recover_only),
-             {NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_reachable_name});
-  CheckNames(RootNames<S>(freed_image(), recover_keep_deleted),
-             {NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_reachable_name,
-              NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_orphan_name});
+  CheckNames(
+      RootNames<S>(freed_image(), recover_only),
+      {NTFS_BROWSER_NAMESPACE::Test::FakeImage::orphaned_block_reachable_name});
+  CheckNames(
+      RootNames<S>(freed_image(), recover_keep_deleted),
+      {NTFS_BROWSER_NAMESPACE::Test::FakeImage::orphaned_block_reachable_name,
+       NTFS_BROWSER_NAMESPACE::Test::FakeImage::orphaned_block_orphan_name});
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -538,12 +545,14 @@ TEMPLATE_TEST_CASE_SIG(
     "[file-record][index-block][characterization]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const std::vector<std::wstring> names = RootNames<S>(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithIndexAllocationShape(
-          NTFS_BROWSER_NAMESPACE::Tests::FakeIndexAllocShape{
-              .declared_block_count = 1}),
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+          BuildFakeNtfsImageWithIndexAllocationShape(
+              NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeIndexAllocShape{
+                  .declared_block_count = 1}),
       recover_keep_deleted);
-  CheckNames(names,
-             {NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_reachable_name});
+  CheckNames(
+      names,
+      {NTFS_BROWSER_NAMESPACE::Test::FakeImage::orphaned_block_reachable_name});
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -552,9 +561,10 @@ TEMPLATE_TEST_CASE_SIG(
     "[file-record][index-block][characterization]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const std::vector<std::wstring> names = RootNames<S>(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithIndexAllocationShape(
-          NTFS_BROWSER_NAMESPACE::Tests::FakeIndexAllocShape{.start_vcn = 1,
-                                                             .last_vcn = 0}),
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+          BuildFakeNtfsImageWithIndexAllocationShape(
+              NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeIndexAllocShape{
+                  .start_vcn = 1, .last_vcn = 0}),
       recover_keep_deleted);
   CheckNames(names, {});
 }
@@ -566,11 +576,12 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   constexpr ULONGLONG huge_block_count = 70000;
   auto reader = std::make_unique<MemoryDiskReader>(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithIndexAllocationShape(
-          NTFS_BROWSER_NAMESPACE::Tests::FakeIndexAllocShape{
-              .last_vcn = huge_block_count - 1,
-              .mapped_clusters = huge_block_count,
-              .declared_block_count = huge_block_count}));
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+          BuildFakeNtfsImageWithIndexAllocationShape(
+              NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeIndexAllocShape{
+                  .last_vcn = huge_block_count - 1,
+                  .mapped_clusters = huge_block_count,
+                  .declared_block_count = huge_block_count}));
 
   const NtfsVolume<S> volume(std::move(reader), recover_keep_deleted);
   REQUIRE(volume.IsVolumeOK());
@@ -589,9 +600,10 @@ TEMPLATE_TEST_CASE_SIG(
       },
       &names);
 
-  CheckNames(names,
-             {NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_reachable_name,
-              NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_orphan_name});
+  CheckNames(
+      names,
+      {NTFS_BROWSER_NAMESPACE::Test::FakeImage::orphaned_block_reachable_name,
+       NTFS_BROWSER_NAMESPACE::Test::FakeImage::orphaned_block_orphan_name});
   CHECK_THAT(TakeCapturedLog(),
              ContainsSubstring("orphan scan capped at 65536 of 70000"));
 }
@@ -619,10 +631,11 @@ TEMPLATE_TEST_CASE_SIG(
   }};
 
   const auto parse_with = [](StdInfoPermission permission) {
-    std::vector<BYTE> image =
-        NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree();
+    std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+        BuildFakeNtfsImageWithMftTree();
     SetStdInfoPermission(
-        image, NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx, permission);
+        image, NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_report_idx,
+        permission);
     return image;
   };
 
@@ -633,7 +646,7 @@ TEMPLATE_TEST_CASE_SIG(
 
     FileRecord<S> record(volume);
     REQUIRE(record.ParseFileRecord(
-        NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx));
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_report_idx));
     REQUIRE(record.ParseAttrs());
     for (const auto& [getter, bit] : flags) {
       CHECK(((record.*getter)() == (bit == set_bit)));
@@ -647,7 +660,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   FileRecord<S> clear_record(clear_volume);
   REQUIRE(clear_record.ParseFileRecord(
-      NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx));
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_report_idx));
   REQUIRE(clear_record.ParseAttrs());
   for (const auto& [getter, bit] : flags) {
     CHECK_FALSE((clear_record.*getter)());
@@ -661,7 +674,7 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   {
     auto reader = std::make_unique<MemoryDiskReader>(
-        NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage());
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage());
     const NtfsVolume<S> volume(std::move(reader));
     REQUIRE(volume.IsVolumeOK());
 
@@ -676,19 +689,20 @@ TEMPLATE_TEST_CASE_SIG(
   }
   {
     auto reader = std::make_unique<MemoryDiskReader>(
-        NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree());
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+            BuildFakeNtfsImageWithMftTree());
     const NtfsVolume<S> volume(std::move(reader));
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> file(volume);
     REQUIRE(file.ParseFileRecord(
-        NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx));
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_report_idx));
     CHECK_FALSE(file.IsDirectory());
     CHECK_FALSE(file.IsDeleted());
   }
   {
     auto reader = std::make_unique<MemoryDiskReader>(
-        NTFS_BROWSER_NAMESPACE::Tests::
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::
             BuildFakeNtfsImageWithDeletedVolumeRecord());
     const NtfsVolume<S> volume(std::move(reader));
     REQUIRE(volume.IsVolumeOK());

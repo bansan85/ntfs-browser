@@ -15,7 +15,7 @@
 
 #include "fake-ntfs-image-internal.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage {
 
 namespace {
 
@@ -44,7 +44,8 @@ void AppendHole(std::vector<FakeDataRun>& runs, ULONGLONG clusters) {
 }
 
 // Appends the real runs of one extent, in runs a length byte can hold.
-void AppendExtent(std::vector<FakeDataRun>& runs, const Alloc::Extent& extent) {
+void AppendExtent(std::vector<FakeDataRun>& runs,
+                  const NTFS_BROWSER_NAMESPACE::Alloc::Extent& extent) {
   ULONGLONG lcn = extent.lcn;
   ULONGLONG clusters = extent.clusters;
   while (clusters != 0) {
@@ -75,17 +76,19 @@ std::vector<BYTE> EncodeFirstRun(const std::vector<FakeDataRun>& runs) {
 
 }  // namespace
 
-std::vector<FakeDataRun> ExtentsAsRuns(std::span<const Alloc::Extent> extents) {
+std::vector<FakeDataRun> ExtentsAsRuns(
+    std::span<const NTFS_BROWSER_NAMESPACE::Alloc::Extent> extents) {
   std::vector<FakeDataRun> runs;
-  for (const Alloc::Extent& extent : extents) {
+  for (const NTFS_BROWSER_NAMESPACE::Alloc::Extent& extent : extents) {
     AppendExtent(runs, extent);
   }
   return runs;
 }
 
-void PutBadClusterList(std::vector<BYTE>& image,
-                       std::span<const Alloc::Extent> bad_extents,
-                       const FakeBadClusterOptions& options) {
+void PutBadClusterList(
+    std::vector<BYTE>& image,
+    std::span<const NTFS_BROWSER_NAMESPACE::Alloc::Extent> bad_extents,
+    const FakeBadClusterOptions& options) {
   const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
 
   FakeRecord record = MakeRecordHeader(
@@ -97,7 +100,7 @@ void PutBadClusterList(std::vector<BYTE>& image,
 
   // The unnamed stream of $BadClus is empty.
   offset += WriteNonResidentAttr(
-      record, offset, Attr::Type::Data,
+      record, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::Data,
       {.comp_unit_size = 0, .real_size = 0, .runs = {}, .overrides = {}});
 
   if (!options.omit_bad_stream) {
@@ -105,7 +108,7 @@ void PutBadClusterList(std::vector<BYTE>& image,
     // is preceded by the hole up to it. One out of order follows with no hole.
     std::vector<FakeDataRun> runs;
     ULONGLONG cursor = 0;
-    for (const Alloc::Extent& extent : bad_extents) {
+    for (const NTFS_BROWSER_NAMESPACE::Alloc::Extent& extent : bad_extents) {
       if (extent.clusters == 0) {
         continue;
       }
@@ -125,7 +128,7 @@ void PutBadClusterList(std::vector<BYTE>& image,
     }
 
     offset += WriteNonResidentAttr(
-        record, offset, Attr::Type::Data,
+        record, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::Data,
         {.comp_unit_size = 0,
          .real_size = options.forged_size.value_or(image.size()),
          .runs = runs,
@@ -135,8 +138,10 @@ void PutBadClusterList(std::vector<BYTE>& image,
   }
 
   WriteEndOfAttributesMarker(record, offset);
-  PutMftRecord(image, mft_addr, static_cast<ULONGLONG>(Mft::Idx::BadCluster),
-               record);
+  PutMftRecord(
+      image, mft_addr,
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::BadCluster),
+      record);
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage

@@ -29,7 +29,7 @@
 #include <ntfs-browser/test/fuzz/looping-disk-reader.h>
 #include <ntfs-browser/volume-options.h>
 
-namespace NtfsFuzz {
+namespace NTFS_BROWSER_NAMESPACE::Test::Fuzz {
 
 namespace {
 
@@ -39,10 +39,6 @@ using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
 using NTFS_BROWSER_NAMESPACE::Io::RecordStanding;
 using NTFS_BROWSER_NAMESPACE::Mft::MftTree;
-namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
-namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
-namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
-namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 
 // Starting value and multiplier of the 64-bit FNV-1a hash that the digests use.
 constexpr std::uint64_t digest_basis = 14'695'981'039'346'656'037ULL;
@@ -72,7 +68,7 @@ class Fnv {
     Mix(text.size());
   }
 
-  void MixTally(const Alloc::ClusterTally& tally) {
+  void MixTally(const NTFS_BROWSER_NAMESPACE::Alloc::ClusterTally& tally) {
     for (const ULONGLONG count : tally.counts) {
       Mix(count);
     }
@@ -147,25 +143,28 @@ std::uint64_t AccountDigest(const MftTree& tree) {
   constexpr ULONGLONG probed_cluster_size = 4096;
   Fnv digest;
   for (const MftTree::Entry& entry : tree.Entries()) {
-    const Alloc::ClusterAccount* const account =
+    const NTFS_BROWSER_NAMESPACE::Alloc::ClusterAccount* const account =
         tree.ClusterAccountOf(entry.record);
     if (account == nullptr) {
       continue;
     }
     digest.Mix(entry.record);
     digest.MixTally(account->tally);
-    for (const Alloc::StreamClusterMap& map : account->streams) {
+    for (const NTFS_BROWSER_NAMESPACE::Alloc::StreamClusterMap& map :
+         account->streams) {
       digest.Mix(map.name.size());
       digest.Mix(map.data_size);
       digest.Mix(map.initialized_size);
-      for (const Alloc::ClusterPiece& piece : map.pieces) {
+      for (const NTFS_BROWSER_NAMESPACE::Alloc::ClusterPiece& piece :
+           map.pieces) {
         digest.Mix(piece.first_vcn);
         digest.Mix(piece.clusters);
         digest.Mix(piece.lcn.value_or(0));
         digest.Mix(static_cast<std::uint64_t>(piece.condition));
       }
-      for (const Alloc::StreamByteRange& range :
-           Alloc::ToByteRanges(map, probed_cluster_size)) {
+      for (const NTFS_BROWSER_NAMESPACE::Alloc::StreamByteRange& range :
+           NTFS_BROWSER_NAMESPACE::Alloc::ToByteRanges(map,
+                                                       probed_cluster_size)) {
         digest.Mix(range.offset);
         digest.Mix(range.length);
         digest.Mix(range.damaged);
@@ -179,7 +178,7 @@ std::uint64_t AccountDigest(const MftTree& tree) {
 }
 
 // ScanDigestOver() on the input, read in a loop.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 std::optional<std::uint64_t>
     ScanDigest(std::span<const BYTE> data, const VolumeOptions& options,
                std::optional<size_t> failing_read, unsigned threads) {
@@ -199,7 +198,7 @@ constexpr std::uint64_t read_ahead_probe_bytes = std::uint64_t{1} << 20U;
 
 // The file references of the subdirectories of the directory listing holds,
 // leaving out the entries that name a record reused by another file.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 std::vector<ULONGLONG> ChildDirectories(FileRecord<S>& listing) {
   std::vector<ULONGLONG> children;
   listing.TraverseSubEntriesWithStanding(
@@ -231,7 +230,7 @@ std::vector<ULONGLONG>
 
 // Makes listing the next pending directory that was not listed and that
 // parses. False when none is left.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 bool EnterNextDirectory(
     FileRecord<S>& listing,
     NTFS_BROWSER_NAMESPACE::Io::DirectoryReadAhead<S>& ahead,
@@ -256,7 +255,7 @@ bool EnterNextDirectory(
 // Scans the volume over reader with threads threads, as ProbeMftTree() does,
 // and gives the digest of the tree. Nothing when the scan throws: only the fact
 // that it did is worth comparing.
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 std::optional<std::uint64_t>
     ScanDigestOver(std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
                    const VolumeOptions& options, unsigned threads) {
@@ -275,7 +274,7 @@ std::optional<std::uint64_t>
   }
 }
 
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 std::optional<std::uint64_t> AccountDigestOver(
     std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> reader,
     const VolumeOptions& options, unsigned threads) {
@@ -285,18 +284,20 @@ std::optional<std::uint64_t> AccountDigestOver(
       return std::nullopt;
     }
     const MftTree tree(
-        volume, {.progress = [](ULONGLONG done,
-                                ULONGLONG /*total*/) { return done == 0; },
-                 .threads = threads,
-                 .cluster_account = Alloc::ClusterAccountLevel::CountsAndMap,
-                 .verify_data = Alloc::DataCheckMode::Full});
+        volume,
+        {.progress = [](ULONGLONG done,
+                        ULONGLONG /*total*/) { return done == 0; },
+         .threads = threads,
+         .cluster_account =
+             NTFS_BROWSER_NAMESPACE::Alloc::ClusterAccountLevel::CountsAndMap,
+         .verify_data = NTFS_BROWSER_NAMESPACE::Alloc::DataCheckMode::Full});
     return AccountDigest(tree);
   } catch (...) {
     return std::nullopt;
   }
 }
 
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 void ProbeScanThreads(std::span<const BYTE> data, const VolumeOptions& options,
                       std::optional<size_t> failing_read) {
   const std::optional<std::uint64_t> one =
@@ -308,7 +309,7 @@ void ProbeScanThreads(std::span<const BYTE> data, const VolumeOptions& options,
   }
 }
 
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 void ProbeClusterAccount(std::span<const BYTE> data,
                          const VolumeOptions& options,
                          std::optional<size_t> failing_read) {
@@ -322,7 +323,7 @@ void ProbeClusterAccount(std::span<const BYTE> data,
   }
 }
 
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 void ProbeStandingWalk(std::span<const BYTE> data, const VolumeOptions& options,
                        std::optional<size_t> failing_read) {
   NtfsVolume<S> volume(std::make_unique<LoopingDiskReader>(data, failing_read),
@@ -331,8 +332,10 @@ void ProbeStandingWalk(std::span<const BYTE> data, const VolumeOptions& options,
     return;
   }
   FileRecord<S> root(volume);
-  root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
-  if (!root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)) ||
+  root.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                   NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+  if (!root.ParseFileRecord(
+          static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root)) ||
       !root.ParseAttrs()) {
     return;
   }
@@ -345,7 +348,7 @@ void ProbeStandingWalk(std::span<const BYTE> data, const VolumeOptions& options,
       &seen);
 }
 
-template <Cache::Strategy S>
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 void ProbeDirectoryReadAhead(std::span<const BYTE> data,
                              const VolumeOptions& options,
                              std::optional<size_t> failing_read) {
@@ -358,8 +361,10 @@ void ProbeDirectoryReadAhead(std::span<const BYTE> data,
     return;
   }
   FileRecord<S> listing(volume);
-  listing.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
-  if (!listing.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)) ||
+  listing.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                      NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+  if (!listing.ParseFileRecord(
+          static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root)) ||
       !listing.ParseAttrs()) {
     return;
   }
@@ -368,7 +373,8 @@ void ProbeDirectoryReadAhead(std::span<const BYTE> data,
   ahead.Begin();
 
   std::vector<ULONGLONG> pending;
-  std::unordered_set<ULONGLONG> listed{static_cast<ULONGLONG>(Mft::Idx::Root)};
+  std::unordered_set<ULONGLONG> listed{
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root)};
   for (size_t directories = 0; directories < read_ahead_probe_directories;
        directories++) {
     const std::vector<ULONGLONG> children = ChildDirectories(listing);
@@ -383,37 +389,45 @@ void ProbeDirectoryReadAhead(std::span<const BYTE> data,
   }
 }
 
-template std::optional<std::uint64_t> ScanDigestOver<Cache::Strategy::NoCache>(
-    std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader>, const VolumeOptions&,
-    unsigned);
 template std::optional<std::uint64_t>
-    ScanDigestOver<Cache::Strategy::FullCache>(
+    ScanDigestOver<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>(
         std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader>,
         const VolumeOptions&, unsigned);
 template std::optional<std::uint64_t>
-    AccountDigestOver<Cache::Strategy::NoCache>(
+    ScanDigestOver<NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>(
         std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader>,
         const VolumeOptions&, unsigned);
 template std::optional<std::uint64_t>
-    AccountDigestOver<Cache::Strategy::FullCache>(
+    AccountDigestOver<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>(
         std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader>,
         const VolumeOptions&, unsigned);
-template void ProbeScanThreads<Cache::Strategy::NoCache>(std::span<const BYTE>,
-                                                         const VolumeOptions&,
-                                                         std::optional<size_t>);
-template void ProbeScanThreads<Cache::Strategy::FullCache>(
-    std::span<const BYTE>, const VolumeOptions&, std::optional<size_t>);
-template void ProbeStandingWalk<Cache::Strategy::NoCache>(
-    std::span<const BYTE>, const VolumeOptions&, std::optional<size_t>);
-template void ProbeStandingWalk<Cache::Strategy::FullCache>(
-    std::span<const BYTE>, const VolumeOptions&, std::optional<size_t>);
-template void ProbeClusterAccount<Cache::Strategy::NoCache>(
-    std::span<const BYTE>, const VolumeOptions&, std::optional<size_t>);
-template void ProbeClusterAccount<Cache::Strategy::FullCache>(
-    std::span<const BYTE>, const VolumeOptions&, std::optional<size_t>);
-template void ProbeDirectoryReadAhead<Cache::Strategy::NoCache>(
-    std::span<const BYTE>, const VolumeOptions&, std::optional<size_t>);
-template void ProbeDirectoryReadAhead<Cache::Strategy::FullCache>(
-    std::span<const BYTE>, const VolumeOptions&, std::optional<size_t>);
+template std::optional<std::uint64_t>
+    AccountDigestOver<NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>(
+        std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader>,
+        const VolumeOptions&, unsigned);
+template void
+    ProbeScanThreads<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>(
+        std::span<const BYTE>, const VolumeOptions&, std::optional<size_t>);
+template void
+    ProbeScanThreads<NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>(
+        std::span<const BYTE>, const VolumeOptions&, std::optional<size_t>);
+template void
+    ProbeStandingWalk<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>(
+        std::span<const BYTE>, const VolumeOptions&, std::optional<size_t>);
+template void
+    ProbeStandingWalk<NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>(
+        std::span<const BYTE>, const VolumeOptions&, std::optional<size_t>);
+template void
+    ProbeClusterAccount<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>(
+        std::span<const BYTE>, const VolumeOptions&, std::optional<size_t>);
+template void
+    ProbeClusterAccount<NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>(
+        std::span<const BYTE>, const VolumeOptions&, std::optional<size_t>);
+template void
+    ProbeDirectoryReadAhead<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>(
+        std::span<const BYTE>, const VolumeOptions&, std::optional<size_t>);
+template void
+    ProbeDirectoryReadAhead<NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>(
+        std::span<const BYTE>, const VolumeOptions&, std::optional<size_t>);
 
-}  // namespace NtfsFuzz
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Fuzz

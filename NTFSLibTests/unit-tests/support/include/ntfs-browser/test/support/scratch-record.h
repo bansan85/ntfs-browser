@@ -52,17 +52,18 @@ class ScratchRecord {
  public:
   explicit ScratchRecord(const ScratchHeader& header = {})
       : cursor_(header.offset_of_attr) {
-    EditFileRecordHeader(bytes_, [&](Data::FileRecordHeader& raw) {
-      raw.magic = Data::FileRecordHeader::file_record_magic;
-      raw.offset_of_us = header.offset_of_us;
-      raw.size_of_us = header.size_of_us;
-      raw.offset_of_attr = header.offset_of_attr;
-      raw.flags = header.flags;
-      raw.seq_no = header.sequence;
-      raw.ref_to_base = header.ref_to_base;
-      raw.real_size = header.used_size;
-      raw.alloc_size = fake_file_record_size;
-    });
+    Test::FakeImage::EditFileRecordHeader(
+        bytes_, [&](Data::FileRecordHeader& raw) {
+          raw.magic = Data::FileRecordHeader::file_record_magic;
+          raw.offset_of_us = header.offset_of_us;
+          raw.size_of_us = header.size_of_us;
+          raw.offset_of_attr = header.offset_of_attr;
+          raw.flags = header.flags;
+          raw.seq_no = header.sequence;
+          raw.ref_to_base = header.ref_to_base;
+          raw.real_size = header.used_size;
+          raw.alloc_size = Test::FakeImage::fake_file_record_size;
+        });
   }
 
   // Appends a resident attribute of any type value, unnamed.
@@ -91,7 +92,7 @@ class ScratchRecord {
     header.header.total_size = Aligned(sizeof(header) + run_list.size());
     header.last_vcn = clusters == 0 ? 0 : clusters - 1;
     header.data_run_offset = static_cast<WORD>(sizeof(header));
-    header.alloc_size = clusters * fake_cluster_size;
+    header.alloc_size = clusters * Test::FakeImage::fake_cluster_size;
     header.real_size = real_size;
     header.ini_size = real_size;
     Put(cursor_, header);
@@ -129,7 +130,7 @@ class ScratchRecord {
   // The image of BuildFakeNtfsImage() with this record in $MFT slot idx. The
   // slot MUST be free in that image and below Mft::Idx::User.
   [[nodiscard]] std::vector<BYTE> ImageIn(ULONGLONG idx = scratch_slot) const {
-    std::vector<BYTE> image = BuildFakeNtfsImage();
+    std::vector<BYTE> image = Test::FakeImage::BuildFakeNtfsImage();
     Place(image, idx);
     return image;
   }
@@ -137,7 +138,8 @@ class ScratchRecord {
   // Copies this record over $MFT slot idx of an image whose $MFT starts at
   // LCN 1, as every fake image's does.
   void Place(std::vector<BYTE>& image, ULONGLONG idx) const {
-    std::memcpy(&image.at(fake_cluster_size + idx * fake_file_record_size),
+    std::memcpy(&image.at(Test::FakeImage::fake_cluster_size +
+                          idx * Test::FakeImage::fake_file_record_size),
                 bytes_.data(), bytes_.size());
   }
 
@@ -152,7 +154,8 @@ class ScratchRecord {
 
   // The array holds the record on 8-byte boundaries, as a buffer read from
   // disk is, so the library may bind structs onto the attributes.
-  struct alignas(8) Storage : std::array<BYTE, fake_file_record_size> {};
+  struct alignas(8) Storage
+      : std::array<BYTE, Test::FakeImage::fake_file_record_size> {};
 
   Storage bytes_{};
   std::size_t cursor_;

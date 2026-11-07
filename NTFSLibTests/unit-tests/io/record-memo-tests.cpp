@@ -24,6 +24,7 @@
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace ReadAhead = NTFS_BROWSER_NAMESPACE::Tests::ReadAhead;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
@@ -209,8 +210,8 @@ TEMPLATE_TEST_CASE_SIG(
         image.at(mft.first + (slot * record_size) + 1022) ^= 0x55;
       }
 
-      NtfsVolume<S> volume(std::make_unique<Tests::MemoryDiskReader>(image),
-                           options);
+      NtfsVolume<S> volume(
+          std::make_unique<TestDiskReaders::MemoryDiskReader>(image), options);
       REQUIRE(volume.IsVolumeOK());
       REQUIRE(volume.GetFileRecordSize() == record_size);
       Io::FileRecord<S> full(volume);

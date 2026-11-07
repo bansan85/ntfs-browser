@@ -28,7 +28,7 @@ enum class Type : DWORD;
 
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
 
 namespace {
 
@@ -49,7 +49,7 @@ constexpr DWORD end_of_attrs_marker = 0xFFFFFFFF;
 
 // Bytes of a file record: the fixture's record size.
 constexpr size_t record_bytes =
-    NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size;
+    NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_file_record_size;
 
 // Record number of the root directory.
 constexpr ULONGLONG root_idx = static_cast<ULONGLONG>(Mft::Idx::Root);

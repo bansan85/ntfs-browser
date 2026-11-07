@@ -19,7 +19,7 @@
 #include <ntfs-browser/test/disk-readers/throttled-disk-reader.h>
 #include <ntfs-browser/tuning/tuning.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders {
 
 namespace {
 
@@ -54,7 +54,8 @@ std::uint64_t Transfer(ULONGLONG bytes, std::uint64_t rate) {
 ThrottledDiskReader::ThrottledDiskReader(
     std::unique_ptr<IDiskReader> inner, const DiskModel& model,
     SimulatedClock& clock,
-    const std::array<Tuning::ReaderTuning, Tuning::pattern_count>& caps)
+    const std::array<NTFS_BROWSER_NAMESPACE::Tuning::ReaderTuning,
+                     NTFS_BROWSER_NAMESPACE::Tuning::pattern_count>& caps)
     : inner_(std::move(inner)),
       model_(model),
       clock_(&clock),
@@ -70,7 +71,8 @@ std::optional<ULONGLONG> ThrottledDiskReader::Size() const {
   return inner_->Size();
 }
 
-Tuning::MediaKind ThrottledDiskReader::GetMediaKind() const {
+NTFS_BROWSER_NAMESPACE::Tuning::MediaKind
+    ThrottledDiskReader::GetMediaKind() const {
   return inner_->GetMediaKind();
 }
 
@@ -243,7 +245,8 @@ void ThrottledDiskReader::CancelStanding(ULONGLONG offset,
   StartReads();
 }
 
-void ThrottledDiskReader::SetReadPattern(Tuning::Pattern pattern) const {
+void ThrottledDiskReader::SetReadPattern(
+    NTFS_BROWSER_NAMESPACE::Tuning::Pattern pattern) const {
   active_ = &caps_.at(static_cast<std::size_t>(pattern));
   StartReads();
   inner_->SetReadPattern(pattern);
@@ -324,4 +327,4 @@ bool ThrottledDiskReader::ReadInto(LARGE_INTEGER& addr,
   return inner_->ReadInto(addr, dest);
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders

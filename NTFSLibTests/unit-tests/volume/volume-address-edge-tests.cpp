@@ -20,6 +20,8 @@ using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 
 namespace {
 
@@ -37,7 +39,7 @@ constexpr ULONGLONG size_past_longlong =
 template <Cache::Strategy S, typename Script>
 std::unique_ptr<NtfsVolume<S>> OpenWithZeroedSector(Script script) {
   auto reader = std::make_unique<Tests::ScriptedDiskReader>(
-      Tests::BuildFakeNtfsImageWithBackupBootSector());
+      TestFakeImage::BuildFakeNtfsImageWithBackupBootSector());
   script(*reader);
   return std::make_unique<NtfsVolume<S>>(std::move(reader),
                                          VolumeOptions{.recover_errors = true});
@@ -48,10 +50,11 @@ std::unique_ptr<NtfsVolume<S>> OpenWithZeroedSector(Script script) {
 TEMPLATE_TEST_CASE_SIG("ReadMftSlots refuses a slot it cannot address",
                        "[ntfs-volume][mft-slots]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const NtfsVolume<S> volume(std::make_unique<Tests::MemoryDiskReader>(
-      Tests::BuildFakeNtfsImageWithMftTree()));
+  const NtfsVolume<S> volume(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(
+          TestFakeImage::BuildFakeNtfsImageWithMftTree()));
   REQUIRE(volume.IsVolumeOK());
-  std::vector<BYTE> out(Tests::fake_file_record_size);
+  std::vector<BYTE> out(TestFakeImage::fake_file_record_size);
 
   SECTION("a system record is served one by one") {
     CHECK_FALSE(volume.ReadMftSlots(0, out));
@@ -60,7 +63,7 @@ TEMPLATE_TEST_CASE_SIG("ReadMftSlots refuses a slot it cannot address",
     CHECK_FALSE(volume.ReadMftSlots(unaddressable_record, out));
   }
   SECTION("a user record is served") {
-    CHECK(volume.ReadMftSlots(Tests::mft_tree_docs_idx, out));
+    CHECK(volume.ReadMftSlots(TestFakeImage::mft_tree_docs_idx, out));
   }
 }
 
@@ -80,8 +83,8 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto volume = OpenWithZeroedSector<S>([](Tests::ScriptedDiskReader& r) {
     // Every candidate sector ends at the end of the image.
-    r.FaultRange(Tests::fake_backup_image_bytes - 512,
-                 Tests::fake_backup_image_bytes,
+    r.FaultRange(TestFakeImage::fake_backup_image_bytes - 512,
+                 TestFakeImage::fake_backup_image_bytes,
                  Tests::ScriptedDiskReader::Fault::Fail);
   });
 
@@ -93,7 +96,7 @@ TEMPLATE_TEST_CASE_SIG(
     "a volume opened by path reads ahead when the options ask for it",
     "[ntfs-volume][read-ahead]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const std::filesystem::path path = Tests::WriteFakeNtfsImage();
+  const std::filesystem::path path = TestFakeImage::WriteFakeNtfsImage();
 
   {
     const NtfsVolume<S> volume(path.wstring(),

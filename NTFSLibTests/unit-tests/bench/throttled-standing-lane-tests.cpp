@@ -19,7 +19,7 @@
 #include <ntfs-browser/test/disk-readers/throttled-disk-reader.h>
 #include <ntfs-browser/tuning/tuning.h>
 
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using Caps = std::array<Tuning::ReaderTuning, Tuning::pattern_count>;
 
@@ -37,8 +37,8 @@ constexpr std::size_t disk_bytes = std::size_t{16} << 20U;
 
 // A model with round numbers, and many lanes so that the reads of a test do
 // not wait for one another.
-Tests::DiskModel RoundModel() {
-  Tests::DiskModel model;
+TestDiskReaders::DiskModel RoundModel() {
+  TestDiskReaders::DiskModel model;
   model.seek_ns = 1000;
   model.per_read_ns = 500;
   model.single_bytes_per_second = 1'000'000'000;
@@ -48,10 +48,10 @@ Tests::DiskModel RoundModel() {
   return model;
 }
 
-std::unique_ptr<Tests::ThrottledDiskReader>
-    MakeReader(Tests::SimulatedClock& clock, const Caps& caps = {}) {
-  return std::make_unique<Tests::ThrottledDiskReader>(
-      std::make_unique<Tests::MemoryDiskReader>(
+std::unique_ptr<TestDiskReaders::ThrottledDiskReader>
+    MakeReader(TestDiskReaders::SimulatedClock& clock, const Caps& caps = {}) {
+  return std::make_unique<TestDiskReaders::ThrottledDiskReader>(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(
           std::vector<BYTE>(disk_bytes, BYTE{7})),
       RoundModel(), clock, caps);
 }
@@ -67,7 +67,7 @@ Caps CapsWith(const Set& set) {
 }
 
 // Reads length bytes at offset, which the test cannot go on without.
-void Read(const Tests::ThrottledDiskReader& reader, ULONGLONG offset,
+void Read(const TestDiskReaders::ThrottledDiskReader& reader, ULONGLONG offset,
           ULONGLONG length) {
   std::vector<BYTE> buffer(static_cast<std::size_t>(length));
   LARGE_INTEGER addr{};
@@ -78,14 +78,14 @@ void Read(const Tests::ThrottledDiskReader& reader, ULONGLONG offset,
 // What a scripted run left behind.
 struct Outcome {
   std::uint64_t now_ns;
-  Tests::ThrottleStats stats;
+  TestDiskReaders::ThrottleStats stats;
 };
 
 // Announces three ranges and reads them, through announce, which is
 // Prefetch() or PrefetchStanding().
 template <typename Announce>
 Outcome RunScript(const Announce& announce) {
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(clock);
   announce(*reader, 0, 64 * page);
   announce(*reader, mib, 16 * page);
@@ -102,11 +102,11 @@ Outcome RunScript(const Announce& announce) {
 
 TEST_CASE("The standing lane costs the time that the first queue costs",
           "[bench][throttled][standing]") {
-  const Outcome first =
-      RunScript([](const Tests::ThrottledDiskReader& reader, ULONGLONG offset,
-                   ULONGLONG length) { reader.Prefetch(offset, length); });
+  const Outcome first = RunScript(
+      [](const TestDiskReaders::ThrottledDiskReader& reader, ULONGLONG offset,
+         ULONGLONG length) { reader.Prefetch(offset, length); });
   const Outcome lane = RunScript(
-      [](const Tests::ThrottledDiskReader& reader, ULONGLONG offset,
+      [](const TestDiskReaders::ThrottledDiskReader& reader, ULONGLONG offset,
          ULONGLONG length) { reader.PrefetchStanding(offset, length); });
 
   CHECK(lane.now_ns == first.now_ns);
@@ -117,7 +117,7 @@ TEST_CASE("The standing lane costs the time that the first queue costs",
 
 TEST_CASE("The same standing announcements and reads give the same time",
           "[bench][throttled][standing]") {
-  const auto announce = [](const Tests::ThrottledDiskReader& reader,
+  const auto announce = [](const TestDiskReaders::ThrottledDiskReader& reader,
                            ULONGLONG offset, ULONGLONG length) {
     reader.PrefetchStanding(offset, length);
   };
@@ -132,9 +132,9 @@ TEST_CASE("The same standing announcements and reads give the same time",
 
 TEST_CASE("A range announced early on the lane costs less than no hint",
           "[bench][throttled][standing]") {
-  Tests::SimulatedClock hinted_clock;
+  TestDiskReaders::SimulatedClock hinted_clock;
   const auto hinted = MakeReader(hinted_clock);
-  Tests::SimulatedClock plain_clock;
+  TestDiskReaders::SimulatedClock plain_clock;
   const auto plain = MakeReader(plain_clock);
 
   hinted->PrefetchStanding(mib, mib);
@@ -154,9 +154,9 @@ TEST_CASE("A range announced early on the lane costs less than no hint",
 
 TEST_CASE("A lane that nobody reads leaves the time of the reads as it was",
           "[bench][throttled][standing]") {
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto idle = MakeReader(clock);
-  Tests::SimulatedClock lane_clock;
+  TestDiskReaders::SimulatedClock lane_clock;
   const auto lane = MakeReader(lane_clock);
   for (std::size_t index = 0; index < 3; index++) {
     lane->PrefetchStanding((index + 8) * mib, page);
@@ -178,7 +178,7 @@ TEST_CASE("A lane that nobody reads leaves the time of the reads as it was",
 
 TEST_CASE("CancelPrefetch leaves the standing lane alone",
           "[bench][throttled][standing]") {
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(clock);
   reader->PrefetchStanding(0, mib);
   reader->Prefetch(5 * mib, page);
@@ -195,7 +195,7 @@ TEST_CASE("CancelPrefetch leaves the standing lane alone",
 
 TEST_CASE("A read of either queue drops no range of the lane",
           "[bench][throttled][standing]") {
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(clock);
   reader->PrefetchStanding(0, page);
   reader->PrefetchStanding(mib, page);
@@ -216,7 +216,7 @@ TEST_CASE("A read of either queue drops no range of the lane",
 
 TEST_CASE("The first queue is tried before the lane",
           "[bench][throttled][standing]") {
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(clock);
   // The lane holds a wider range than the first queue, and the same bytes.
   reader->PrefetchStanding(0, 4 * page);
@@ -234,7 +234,7 @@ TEST_CASE("The first queue is tried before the lane",
 
 TEST_CASE("CancelStanding withdraws the ranges that overlap the interval",
           "[bench][throttled][standing]") {
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(clock);
   for (std::size_t index = 0; index < 4; index++) {
     reader->PrefetchStanding(index * mib, 2 * page);
@@ -284,7 +284,7 @@ TEST_CASE("CancelStanding withdraws the ranges that overlap the interval",
 
 TEST_CASE("A range of the first queue equal to a lane range is ignored",
           "[bench][throttled][standing]") {
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(clock);
   reader->PrefetchStanding(mib, 4 * page);
 
@@ -310,7 +310,7 @@ TEST_CASE("The lane leaves a share of the read slots to the first queue",
   const Caps caps = CapsWith([max_reads](Tuning::ReaderTuning& tuning) {
     tuning.max_reads = max_reads;
   });
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(clock, caps);
 
   for (std::size_t index = 0; index < 40; index++) {
@@ -329,7 +329,7 @@ TEST_CASE("The first queue starts before the lane in the freed reads",
           "[bench][throttled][standing]") {
   const Caps caps =
       CapsWith([](Tuning::ReaderTuning& tuning) { tuning.max_reads = 4; });
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(clock, caps);
   for (std::size_t index = 0; index < 6; index++) {
     reader->PrefetchStanding(index * 2 * page, page);
@@ -356,7 +356,7 @@ TEST_CASE("A finished read of the lane holds no read in flight",
           "[bench][throttled][standing]") {
   const Caps caps =
       CapsWith([](Tuning::ReaderTuning& tuning) { tuning.max_reads = 4; });
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(clock, caps);
   for (std::size_t index = 0; index < 8; index++) {
     reader->PrefetchStanding(index * 2 * page, page);
@@ -379,7 +379,7 @@ TEST_CASE("The first queue's slots go to the lane when it is withdrawn",
           "[bench][throttled][standing]") {
   const Caps caps =
       CapsWith([](Tuning::ReaderTuning& tuning) { tuning.max_reads = 4; });
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(clock, caps);
   for (std::size_t index = 0; index < 6; index++) {
     reader->PrefetchStanding(index * 2 * page, page);
@@ -402,7 +402,7 @@ TEST_CASE("The lane and the first queue share the bytes in flight",
           "[bench][throttled][standing]") {
   const Caps caps = CapsWith(
       [](Tuning::ReaderTuning& tuning) { tuning.max_bytes = 4 * page; });
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(clock, caps);
 
   // The first one always starts, then the ones that fit.
@@ -422,7 +422,7 @@ TEST_CASE("A lone range over the byte cap still starts on the lane",
           "[bench][throttled][standing]") {
   const Caps caps =
       CapsWith([](Tuning::ReaderTuning& tuning) { tuning.max_bytes = page; });
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(clock, caps);
 
   reader->PrefetchStanding(0, 8 * page);
@@ -436,7 +436,7 @@ TEST_CASE("The lane holds at most max_announced_ranges ranges",
           "[bench][throttled][standing]") {
   const Caps caps = CapsWith(
       [](Tuning::ReaderTuning& tuning) { tuning.max_announced_ranges = 3; });
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(clock, caps);
 
   for (std::size_t index = 0; index < 5; index++) {
@@ -456,7 +456,7 @@ TEST_CASE("A range of the lane over the range cap is not announced",
           "[bench][throttled][standing]") {
   const Caps caps = CapsWith(
       [](Tuning::ReaderTuning& tuning) { tuning.max_range_bytes = 8 * page; });
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(clock, caps);
 
   reader->PrefetchStanding(0, 64 * page);
@@ -472,7 +472,7 @@ TEST_CASE("A range of the lane that never started is not served",
           "[bench][throttled][standing]") {
   const Caps caps =
       CapsWith([](Tuning::ReaderTuning& tuning) { tuning.max_reads = 4; });
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(clock, caps);
   for (std::size_t index = 0; index < 4; index++) {
     reader->PrefetchStanding(index * mib, page);
@@ -494,7 +494,7 @@ TEST_CASE("The lane starts under the caps of the pattern in force",
   Caps caps;
   caps.at(static_cast<std::size_t>(Tuning::Pattern::ScatteredGrouped))
       .max_reads = 1;
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(clock, caps);
 
   reader->SetReadPattern(Tuning::Pattern::ScatteredGrouped);
@@ -514,9 +514,10 @@ TEST_CASE("The wrapped reader gives the bytes whatever the lane does",
   for (std::size_t index = 0; index < image.size(); index++) {
     image.at(index) = static_cast<BYTE>((index * 7) + (index >> 9U));
   }
-  Tests::SimulatedClock clock;
-  const Tests::ThrottledDiskReader reader(
-      std::make_unique<Tests::MemoryDiskReader>(image), RoundModel(), clock);
+  TestDiskReaders::SimulatedClock clock;
+  const TestDiskReaders::ThrottledDiskReader reader(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(image), RoundModel(),
+      clock);
   reader.PrefetchStanding(mib, 4 * page);
 
   std::vector<BYTE> served(2 * page);

@@ -22,11 +22,11 @@
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Usn = NTFS_BROWSER_NAMESPACE::Usn;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
 namespace AllocSupport = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
-using Tests::FakeUsnRecord;
+using TestFakeImage::FakeUsnRecord;
 
 namespace {
 
@@ -54,7 +54,7 @@ Journal Build(size_t count) {
                          .file_record = RecordNumberOf(i)};
     journal.starts.push_back(journal.bytes.size());
     const std::vector<BYTE> encoded =
-        Tests::EncodeUsnRecord(record, journal.bytes.size());
+        TestFakeImage::EncodeUsnRecord(record, journal.bytes.size());
     journal.bytes.insert(journal.bytes.end(), encoded.begin(), encoded.end());
   }
   return journal;
@@ -134,7 +134,7 @@ TEST_CASE("records of every version mix in one journal", "[usn][resync]") {
                          .major_version = version,
                          .file_record = ULONGLONG{20} + version};
     const std::vector<BYTE> encoded =
-        Tests::EncodeUsnRecord(record, bytes.size());
+        TestFakeImage::EncodeUsnRecord(record, bytes.size());
     bytes.insert(bytes.end(), encoded.begin(), encoded.end());
   }
 
@@ -152,16 +152,16 @@ TEST_CASE("records of every version mix in one journal", "[usn][resync]") {
 TEST_CASE("after damage a record is taken only when its USN is its offset",
           "[usn][resync]") {
   std::vector<BYTE> bytes =
-      Tests::EncodeUsnRecord(FakeUsnRecord{.name = L"first.txt"}, 0);
+      TestFakeImage::EncodeUsnRecord(FakeUsnRecord{.name = L"first.txt"}, 0);
   // Twenty-four bytes that are neither a record nor padding.
   bytes.insert(bytes.end(), 24, 0xAA);
   FakeUsnRecord wrong{.name = L"wrong.txt", .file_record = 2};
   wrong.usn = 12345;
   const std::vector<BYTE> wrong_bytes =
-      Tests::EncodeUsnRecord(wrong, bytes.size());
+      TestFakeImage::EncodeUsnRecord(wrong, bytes.size());
   bytes.insert(bytes.end(), wrong_bytes.begin(), wrong_bytes.end());
-  const std::vector<BYTE> last =
-      Tests::EncodeUsnRecord(FakeUsnRecord{.name = L"last.txt"}, bytes.size());
+  const std::vector<BYTE> last = TestFakeImage::EncodeUsnRecord(
+      FakeUsnRecord{.name = L"last.txt"}, bytes.size());
   bytes.insert(bytes.end(), last.begin(), last.end());
 
   const Support::ScanResult result = Support::ScanBytes(bytes);
@@ -205,7 +205,7 @@ namespace {
 template <Cache::Strategy S>
 void CheckDamageIsLoggedOncePerVolume() {
   const Journal journal = Build(6);
-  Tests::FakeUsnOptions options{.raw_stream = journal.bytes};
+  TestFakeImage::FakeUsnOptions options{.raw_stream = journal.bytes};
   for (const size_t index : {size_t{1}, size_t{3}, size_t{5}}) {
     options.patches.push_back(
         {.stream_offset = journal.starts.at(index) + major_version_offset,

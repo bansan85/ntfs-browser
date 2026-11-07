@@ -49,10 +49,10 @@ using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Cache::Strategy;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
 using NTFS_BROWSER_NAMESPACE::Mft::MftTree;
-using NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithDumpTree;
-using NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree;
-using NTFS_BROWSER_NAMESPACE::Tests::FakeDataRun;
-using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithDumpTree;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftTree;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeDataRun;
 using NTFS_BROWSER_NAMESPACE::Tests::Unwrap;
 using NtfsCompare::CompareAgainstReference;
 using NtfsCompare::CompareLibraryMethods;
@@ -86,11 +86,13 @@ template <Strategy S>
 std::unique_ptr<NtfsVolume<S>> OpenIndexedVolume(
     const VolumeOptions& options = comparison_volume_options) {
   const std::vector<FakeDataRun> big_runs{
-      {.lcn = NTFS_BROWSER_NAMESPACE::Tests::dump_big_file_lcn,
-       .clusters = NTFS_BROWSER_NAMESPACE::Tests::dump_big_file_clusters}};
+      {.lcn = NTFS_BROWSER_NAMESPACE::Test::FakeImage::dump_big_file_lcn,
+       .clusters =
+           NTFS_BROWSER_NAMESPACE::Test::FakeImage::dump_big_file_clusters}};
   return OpenVolume<S>(
       BuildFakeNtfsImageWithDumpTree(
-          NTFS_BROWSER_NAMESPACE::Tests::dump_big_file_size, big_runs),
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::dump_big_file_size,
+          big_runs),
       options);
 }
 
@@ -101,8 +103,8 @@ std::optional<IndexEntry> FindInDocs(NtfsVolume<S>& volume,
   FileRecord<S> docs(volume);
   docs.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
                    NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
-  REQUIRE(
-      docs.ParseFileRecord(NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx));
+  REQUIRE(docs.ParseFileRecord(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_docs_idx));
   REQUIRE(docs.ParseAttrs());
   return docs.FindSubEntry(name);
 }
@@ -122,11 +124,11 @@ TEMPLATE_TEST_CASE_SIG(
 
   CHECK(ResolveDirectoryRecord(*volume, L"") == root_record);
   CHECK(ResolveDirectoryRecord(*volume, L"Docs") ==
-        NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx);
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_docs_idx);
   CHECK(ResolveDirectoryRecord(*volume, L"Docs/") ==
-        NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx);
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_docs_idx);
   CHECK(ResolveDirectoryRecord(*volume, L"/Docs") ==
-        NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx);
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_docs_idx);
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -192,7 +194,7 @@ TEMPLATE_TEST_CASE_SIG(
   const auto volume = OpenIndexedVolume<S>();
 
   const Listing listing = WalkLibraryIndex(
-      *volume, NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx);
+      *volume, NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_docs_idx);
 
   CHECK(listing.size() == 1);
   CHECK(listing.contains(L"report.txt"));
@@ -218,11 +220,11 @@ TEMPLATE_TEST_CASE_SIG(
   const Entry& broken = listing.at(L"Docs/Broken");
   CHECK_FALSE(broken.is_directory);
   CHECK(Unwrap(broken.logical_size) ==
-        NTFS_BROWSER_NAMESPACE::Tests::dump_broken_real_size);
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::dump_broken_real_size);
   CHECK(Unwrap(broken.physical_size) ==
-        NTFS_BROWSER_NAMESPACE::Tests::dump_broken_alloc_size);
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::dump_broken_alloc_size);
   CHECK(Unwrap(broken.modification_time_utc) ==
-        NTFS_BROWSER_NAMESPACE::Tests::dump_broken_alter_time);
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::dump_broken_alter_time);
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -233,7 +235,7 @@ TEMPLATE_TEST_CASE_SIG(
   const auto volume = OpenIndexedVolume<S>({.recover_errors = true});
 
   const Listing listing = WalkLibraryIndex(
-      *volume, NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx);
+      *volume, NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_docs_idx);
 
   CHECK(listing.size() == 2);
   CHECK(listing.contains(L"Broken"));
@@ -271,7 +273,7 @@ TEMPLATE_TEST_CASE_SIG(
   const std::optional<IndexEntry> found = FindInDocs(*shown, L"old.tmp");
   REQUIRE(found.has_value());
   CHECK(found->GetFileReference() ==
-        NTFS_BROWSER_NAMESPACE::Tests::mft_tree_deleted_file_idx);
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_deleted_file_idx);
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -289,9 +291,9 @@ TEMPLATE_TEST_CASE_SIG(
   const std::optional<IndexEntry> found = FindInDocs(*recovering, L"Broken");
   REQUIRE(found.has_value());
   CHECK(found->GetFileReference() ==
-        NTFS_BROWSER_NAMESPACE::Tests::mft_tree_zeroed_idx);
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_zeroed_idx);
   CHECK(found->GetFileSize() ==
-        NTFS_BROWSER_NAMESPACE::Tests::dump_broken_real_size);
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::dump_broken_real_size);
 }
 
 TEMPLATE_TEST_CASE_SIG("WalkMftTree lists the live tree below the root",
@@ -310,7 +312,7 @@ TEMPLATE_TEST_CASE_SIG("WalkMftTree lists the live tree below the root",
   }
   REQUIRE(listing.contains(L"Docs/report.txt"));
   CHECK(Unwrap(listing.at(L"Docs/report.txt").logical_size) ==
-        NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_data_size);
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_report_data_size);
   CHECK(Unwrap(listing.at(L"Docs/report.txt").read_only));
 }
 
@@ -322,8 +324,8 @@ TEMPLATE_TEST_CASE_SIG(
   const auto volume = OpenVolume<S>(BuildFakeNtfsImageWithMftTree());
   const MftTree tree(*volume);
 
-  const Listing listing =
-      WalkMftTree(tree, NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx);
+  const Listing listing = WalkMftTree(
+      tree, NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_docs_idx);
 
   CHECK(listing.size() == 2);
   CHECK(listing.contains(L"report.txt"));
@@ -350,7 +352,7 @@ TEMPLATE_TEST_CASE_SIG(
   }
   REQUIRE(listing.contains(L"Docs/report.txt"));
   CHECK(Unwrap(listing.at(L"Docs/report.txt").logical_size) ==
-        NTFS_BROWSER_NAMESPACE::Tests::dump_report_content.size());
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::dump_report_content.size());
 }
 
 TEST_CASE(
@@ -436,7 +438,8 @@ TEST_CASE("A name with an unpaired surrogate is the same in every method",
   }
 
   const auto volume = OpenVolume<Strategy::NoCache>(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithReportName(name));
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithReportName(
+          name));
   const auto docs = ResolveDirectoryRecord(*volume, L"Docs");
   REQUIRE(docs.has_value());
   const Listing library = WalkLibraryIndex(*volume, *docs);
@@ -463,7 +466,8 @@ TEST_CASE("An accented name is the same in every method",
   REQUIRE(std::filesystem::exists(os_file));
 
   const auto volume = OpenVolume<Strategy::NoCache>(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithReportName(stored));
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithReportName(
+          stored));
   const auto docs = ResolveDirectoryRecord(*volume, L"Docs");
   REQUIRE(docs.has_value());
 

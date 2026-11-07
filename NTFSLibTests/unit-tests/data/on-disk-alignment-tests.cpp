@@ -47,12 +47,14 @@ using NTFS_BROWSER_NAMESPACE::Data::index_block_magic;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Data = NTFS_BROWSER_NAMESPACE::Data;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::Record::HeaderImpl;
 
 namespace {
 
 // Every image BuildFakeNtfsImage() makes puts $MFT in its second cluster.
-constexpr size_t mft_offset = Tests::fake_cluster_size;
+constexpr size_t mft_offset = TestFakeImage::fake_cluster_size;
 
 // The first attribute of every fake record starts right after the fixed
 // header.
@@ -63,7 +65,7 @@ constexpr size_t first_attr_offset = 48;
 constexpr DWORD odd_attr_size = sizeof(Data::HeaderResident) + 1;
 
 size_t RecordOffset(ULONGLONG idx) {
-  return mft_offset + (Tests::fake_file_record_size * idx);
+  return mft_offset + (TestFakeImage::fake_file_record_size * idx);
 }
 
 // Copies value into image at offset. A plain store through a typed pointer
@@ -85,7 +87,7 @@ void PutOddSizedAttr(std::vector<BYTE>& image, size_t offset, Attr::Type type) {
 
 template <Cache::Strategy S>
 void RunOddSizedAttributesAreParsedAligned() {
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImage();
+  std::vector<BYTE> image = TestFakeImage::BuildFakeNtfsImage();
   const size_t root_offset =
       RecordOffset(static_cast<ULONGLONG>(Mft::Idx::Root));
   size_t offset = root_offset + first_attr_offset;
@@ -96,7 +98,7 @@ void RunOddSizedAttributesAreParsedAligned() {
   Put(image, offset, static_cast<DWORD>(Attr::Type::All));
 
   const NtfsVolume<S> volume(
-      std::make_unique<Tests::MemoryDiskReader>(std::move(image)));
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(std::move(image)));
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
@@ -125,9 +127,11 @@ std::vector<BYTE> ImageWithShortenedRootEntry() {
   constexpr DWORD entries_size = shortened_entry_size + terminator_size;
   static_assert(shortened_entry_size % alignof(Data::IndexEntry) != 0);
 
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithIndexRootVariants();
+  std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithIndexRootVariants();
   const size_t attr_offset =
-      RecordOffset(Tests::index_root_variant_a_dir_idx) + first_attr_offset;
+      RecordOffset(TestFakeImage::index_root_variant_a_dir_idx) +
+      first_attr_offset;
   const size_t root_offset = attr_offset + sizeof(Data::HeaderResident);
   const size_t entry_offset = root_offset + sizeof(Data::IndexRoot);
 
@@ -166,7 +170,8 @@ std::vector<BYTE> ImageWithShortenedRootEntry() {
 // Number of entries TraverseSubEntries() reports for the root directory.
 size_t CountRootEntries(std::vector<BYTE> image, VolumeOptions options = {}) {
   const NtfsVolume<Cache::Strategy::NoCache> volume(
-      std::make_unique<Tests::MemoryDiskReader>(std::move(image)), options);
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(std::move(image)),
+      options);
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> record(
@@ -202,18 +207,18 @@ TEMPLATE_TEST_CASE_SIG(
 
   // The named record is not built: only recover_errors lists this entry.
   const NtfsVolume<S> volume(
-      std::make_unique<Tests::MemoryDiskReader>(std::move(image)),
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(std::move(image)),
       VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(Tests::index_root_variant_a_dir_idx));
+  REQUIRE(record.ParseFileRecord(TestFakeImage::index_root_variant_a_dir_idx));
   REQUIRE(record.ParseAttrs());
 
   const std::optional<IndexEntry> entry = record.FindSubEntry(L"AA");
   REQUIRE(entry.has_value());
   CHECK(Tests::Unwrap(entry).GetFileReference() ==
-        Tests::index_root_variant_a_mft_ref);
+        TestFakeImage::index_root_variant_a_mft_ref);
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -228,7 +233,7 @@ TEMPLATE_TEST_CASE_SIG(
   constexpr WORD second_block_word = 0xBBBB;
 
   std::vector<BYTE> storage(record_size, 0);
-  Tests::EditFileRecordHeader(storage, [](FileRecordHeader& header) {
+  TestFakeImage::EditFileRecordHeader(storage, [](FileRecordHeader& header) {
     header.magic = FileRecordHeader::file_record_magic;
     header.offset_of_us = odd_offset_of_us;
     header.size_of_us = 3;
@@ -252,9 +257,10 @@ TEST_CASE(
     "TraverseSubEntries reads an index block whose Update Sequence Array "
     "starts at an odd offset",
     "[attr-index-alloc][alignment][regression]") {
-  constexpr WORD odd_offset_of_us = Tests::fake_cluster_size - 7;
+  constexpr WORD odd_offset_of_us = TestFakeImage::fake_cluster_size - 7;
 
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithOrphanedIndexBlocks();
+  std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithOrphanedIndexBlocks();
   const VolumeOptions recover{.recover_errors = true};
   const size_t expected = CountRootEntries(image, recover);
   REQUIRE(expected > 0);
@@ -264,14 +270,14 @@ TEST_CASE(
   // value.
   size_t block_offset = 0;
   for (; block_offset + sizeof(DWORD) <= image.size();
-       block_offset += Tests::fake_cluster_size) {
+       block_offset += TestFakeImage::fake_cluster_size) {
     DWORD magic = 0;
     std::memcpy(&magic, &image.at(block_offset), sizeof(magic));
     if (magic == index_block_magic) {
       break;
     }
   }
-  REQUIRE(block_offset + Tests::fake_cluster_size <= image.size());
+  REQUIRE(block_offset + TestFakeImage::fake_cluster_size <= image.size());
   Put(image, block_offset + offsetof(Data::IndexBlock, offset_of_us),
       odd_offset_of_us);
 

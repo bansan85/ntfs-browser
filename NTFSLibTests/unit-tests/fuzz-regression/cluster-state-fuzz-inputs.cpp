@@ -22,13 +22,14 @@ namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AccountSupport;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using Support::Freed;
 using Support::Live;
 using Support::Stream;
-using Tests::FakeAccountFile;
-using Tests::FakeAccountStream;
-using Tests::FakeDataRun;
+using TestFakeImage::FakeAccountFile;
+using TestFakeImage::FakeAccountStream;
+using TestFakeImage::FakeDataRun;
 
 namespace {
 
@@ -38,7 +39,7 @@ struct Variant {
   std::vector<BYTE> image;
 };
 
-constexpr ULONGLONG cluster = Tests::fake_cluster_size;
+constexpr ULONGLONG cluster = TestFakeImage::fake_cluster_size;
 
 // The freed file the inputs judge: four clusters at 40.
 FakeAccountFile Subject(ULONGLONG lsn = 100) {
@@ -88,7 +89,7 @@ std::vector<BYTE> CompressedMap() {
               {44, 2},
               FakeDataRun{.lcn = std::nullopt, .clusters = 2}},
              8 * cluster);
-  stream.comp_unit_size = Tests::compression_unit_size_shift;
+  stream.comp_unit_size = TestFakeImage::compression_unit_size_shift;
   volume.Put(22, Freed(100, stream));
   volume.Put(17, Live(Stream({{41, 1}}, cluster)));
   volume.allocated = {FakeDataRun{.lcn = 41, .clusters = 1}};

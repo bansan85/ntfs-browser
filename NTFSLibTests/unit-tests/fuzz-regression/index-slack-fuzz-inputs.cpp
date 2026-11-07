@@ -22,9 +22,10 @@
 #include <ntfs-browser/test/fuzz/fuzz-core.h>
 #include <ntfs-browser/volume-options.h>
 
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Tests::FakeSlackName;
+using TestFakeImage::FakeSlackName;
 
 namespace {
 
@@ -35,23 +36,24 @@ struct Variant {
 };
 
 // Index block size of the fake volume: one cluster.
-constexpr DWORD block_size = Tests::fake_cluster_size;
+constexpr DWORD block_size = TestFakeImage::fake_cluster_size;
 
 // Bytes a block of one live entry keeps after its end entry.
 constexpr size_t slack_room = 800;
 
 FakeSlackName Old(std::wstring name) {
-  return FakeSlackName{.name = std::move(name),
-                       .parent_record = Tests::index_slack_directory_record,
-                       .parent_sequence = Tests::index_slack_directory_sequence,
-                       .with_entry_header = true};
+  return FakeSlackName{
+      .name = std::move(name),
+      .parent_record = TestFakeImage::index_slack_directory_record,
+      .parent_sequence = TestFakeImage::index_slack_directory_sequence,
+      .with_entry_header = true};
 }
 
 // A block with one live entry and the given slack.
 std::vector<BYTE> BlockWith(std::vector<BYTE> slack, ULONGLONG vcn = 0) {
   slack.resize(std::min(slack.size(), slack_room));
-  return Tests::BuildFakeIndexBlock(
-      Tests::FakeIndexBlock{
+  return TestFakeImage::BuildFakeIndexBlock(
+      TestFakeImage::FakeIndexBlock{
           .live = {Old(L"live.txt")}, .slack = std::move(slack), .vcn = vcn},
       block_size);
 }
@@ -59,7 +61,8 @@ std::vector<BYTE> BlockWith(std::vector<BYTE> slack, ULONGLONG vcn = 0) {
 // Candidates on top of each other: the same structure written at every even
 // offset, each copy cutting the one before it.
 std::vector<BYTE> DenseNames() {
-  const std::vector<BYTE> bytes = Tests::EncodeSlackName(Old(L"dense.txt"));
+  const std::vector<BYTE> bytes =
+      TestFakeImage::EncodeSlackName(Old(L"dense.txt"));
   std::vector<BYTE> slack(slack_room);
   for (size_t offset = 0; offset + bytes.size() <= slack.size(); offset += 2) {
     std::ranges::copy(bytes,
@@ -72,8 +75,8 @@ std::vector<BYTE> DenseNames() {
 // after a name that fits.
 std::vector<BYTE> NameRunsPastTheBlock() {
   const std::vector<BYTE> bytes =
-      Tests::EncodeSlackName(Old(std::wstring(255, L'n')));
-  std::vector<BYTE> slack = Tests::EncodeSlackName(Old(L"keeper.txt"));
+      TestFakeImage::EncodeSlackName(Old(std::wstring(255, L'n')));
+  std::vector<BYTE> slack = TestFakeImage::EncodeSlackName(Old(L"keeper.txt"));
   slack.resize(slack_room);
   const size_t start = slack.size() - 200;
   std::ranges::copy(std::span(bytes).first(200),
@@ -84,25 +87,25 @@ std::vector<BYTE> NameRunsPastTheBlock() {
 // Blocks that fail one check each, around a block that is sound.
 std::vector<BYTE> DamagedBlocksImage() {
   std::vector<BYTE> bad_magic =
-      BlockWith(Tests::EncodeSlackName(Old(L"a.txt")), 0);
+      BlockWith(TestFakeImage::EncodeSlackName(Old(L"a.txt")), 0);
   bad_magic.at(0) = 'X';
   std::vector<BYTE> zero_entry =
-      BlockWith(Tests::EncodeSlackName(Old(L"b.txt")), 1);
+      BlockWith(TestFakeImage::EncodeSlackName(Old(L"b.txt")), 1);
   // The first entry claims a size of 0.
   zero_entry.at(0x40 + 8) = 0;
   zero_entry.at(0x40 + 9) = 0;
   std::vector<BYTE> bad_usn =
-      BlockWith(Tests::EncodeSlackName(Old(L"c.txt")), 2);
+      BlockWith(TestFakeImage::EncodeSlackName(Old(L"c.txt")), 2);
   bad_usn.at(510) ^= 0xFF;
   const std::vector<std::vector<BYTE>> blocks{
       bad_magic, zero_entry, bad_usn,
-      BlockWith(Tests::EncodeSlackName(Old(L"survivor.txt")), 3)};
-  return Tests::BuildFakeNtfsImageWithIndexBlocks(blocks);
+      BlockWith(TestFakeImage::EncodeSlackName(Old(L"survivor.txt")), 3)};
+  return TestFakeImage::BuildFakeNtfsImageWithIndexBlocks(blocks);
 }
 
 std::vector<BYTE> ImageOfBlock(std::vector<BYTE> slack) {
   const std::vector<std::vector<BYTE>> blocks{BlockWith(std::move(slack))};
-  return Tests::BuildFakeNtfsImageWithIndexBlocks(blocks);
+  return TestFakeImage::BuildFakeNtfsImageWithIndexBlocks(blocks);
 }
 
 // The inputs, one per way a hostile slack can be wrong.
@@ -121,8 +124,8 @@ constexpr size_t boot_sector_stream_bytes = 512;
 }  // namespace
 
 // Writes the saved fuzz inputs of the index slack, as the journal inputs are
-// written: the byte stream that NtfsFuzz::ProbeOnce() reads from the image, in
-// read order and without addresses, with the bytes between the boot sector's
+// written: the byte stream that Test::Fuzz::ProbeOnce() reads from the image,
+// in read order and without addresses, with the bytes between the boot sector's
 // 4096-byte read and the reader's 512-byte step cut out. The volume is opened
 // recovering with deleted items shown, since only then does a scan carve the
 // slack. Set NTFS_BROWSER_FUZZ_INPUT_DIR to the folder to write them in (the
@@ -140,9 +143,11 @@ TEST_CASE("write the index slack fuzz inputs", "[.write-fuzz-inputs]") {
     const std::filesystem::path path =
         std::filesystem::path(dir) / variant.name;
     {
-      NtfsFuzz::ProbeOnce(
-          std::make_unique<Tests::RecordingDiskReader>(
-              std::make_unique<Tests::MemoryDiskReader>(variant.image), path),
+      NTFS_BROWSER_NAMESPACE::Test::Fuzz::ProbeOnce(
+          std::make_unique<TestDiskReaders::RecordingDiskReader>(
+              std::make_unique<TestDiskReaders::MemoryDiskReader>(
+                  variant.image),
+              path),
           recovering);
     }
     REQUIRE(std::filesystem::exists(path));

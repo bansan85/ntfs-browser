@@ -13,7 +13,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders {
 
 CountingDiskReader::CountingDiskReader(
     std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> inner)
@@ -41,7 +41,8 @@ std::optional<ULONGLONG> CountingDiskReader::Size() const {
   return inner_->Size();
 }
 
-Tuning::MediaKind CountingDiskReader::GetMediaKind() const {
+NTFS_BROWSER_NAMESPACE::Tuning::MediaKind
+    CountingDiskReader::GetMediaKind() const {
   return inner_->GetMediaKind();
 }
 
@@ -65,7 +66,8 @@ void CountingDiskReader::CancelStanding(ULONGLONG offset,
   inner_->CancelStanding(offset, length);
 }
 
-void CountingDiskReader::SetReadPattern(Tuning::Pattern pattern) const {
+void CountingDiskReader::SetReadPattern(
+    NTFS_BROWSER_NAMESPACE::Tuning::Pattern pattern) const {
   inner_->SetReadPattern(pattern);
 }
 
@@ -100,4 +102,4 @@ void CountingDiskReader::FailReadsIn(ULONGLONG first, ULONGLONG last) noexcept {
   fail_last_ = last;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders

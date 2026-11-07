@@ -40,10 +40,11 @@ inline void RedirectFileNames(std::vector<BYTE>& image, ULONGLONG idx,
 // Makes Docs and NewDir of the MFT tree fixture name each other as parent, so
 // neither reaches the root.
 inline void LoopDocsAndNewDir(std::vector<BYTE>& image) {
-  RedirectFileNames(image, mft_tree_docs_idx, root_idx,
-                    MakeRef(mft_tree_reused_dir_idx, new_dir_sequence));
-  RedirectFileNames(image, mft_tree_reused_dir_idx, root_idx,
-                    MakeRef(mft_tree_docs_idx, docs_sequence));
+  RedirectFileNames(
+      image, Test::FakeImage::mft_tree_docs_idx, root_idx,
+      MakeRef(Test::FakeImage::mft_tree_reused_dir_idx, new_dir_sequence));
+  RedirectFileNames(image, Test::FakeImage::mft_tree_reused_dir_idx, root_idx,
+                    MakeRef(Test::FakeImage::mft_tree_docs_idx, docs_sequence));
 }
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Tests::MftTreeParents

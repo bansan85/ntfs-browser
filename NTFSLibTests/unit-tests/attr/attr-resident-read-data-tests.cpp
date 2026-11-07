@@ -46,8 +46,9 @@ constexpr size_t buffer_size_value = 8;
 template <Cache::Strategy S>
 void CheckReadDataReturnsActualByteCount() {
   auto reader = std::make_unique<
-      NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithSmallResidentData());
+      NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+          BuildFakeNtfsImageWithSmallResidentData());
 
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
@@ -68,18 +69,20 @@ void CheckReadDataReturnsActualByteCount() {
 
   REQUIRE(result.has_value());
   CHECK(NTFS_BROWSER_NAMESPACE::Tests::Unwrap(result) ==
-        NTFS_BROWSER_NAMESPACE::Tests::small_resident_data_content.size());
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::small_resident_data_content
+            .size());
 
-  CHECK(
-      std::memcmp(
-          buffer.data(),
-          NTFS_BROWSER_NAMESPACE::Tests::small_resident_data_content.data(),
-          NTFS_BROWSER_NAMESPACE::Tests::small_resident_data_content.size()) ==
-      0);
+  CHECK(std::memcmp(
+            buffer.data(),
+            NTFS_BROWSER_NAMESPACE::Test::FakeImage::small_resident_data_content
+                .data(),
+            NTFS_BROWSER_NAMESPACE::Test::FakeImage::small_resident_data_content
+                .size()) == 0);
 
   // Bytes past the attribute's real size must remain untouched sentinels.
   for (size_t i =
-           NTFS_BROWSER_NAMESPACE::Tests::small_resident_data_content.size();
+           NTFS_BROWSER_NAMESPACE::Test::FakeImage::small_resident_data_content
+               .size();
        i < buffer.size(); i++) {
     // i < buffer.size() by the loop condition.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)

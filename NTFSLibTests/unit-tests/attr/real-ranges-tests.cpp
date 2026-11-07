@@ -31,16 +31,17 @@ class AttrNonResident;
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
-using Tests::FakeDataRun;
-using Tests::FakeFreedStream;
+using TestFakeImage::FakeDataRun;
+using TestFakeImage::FakeFreedStream;
 
 namespace {
 
-constexpr ULONGLONG cluster_bytes = Tests::fake_cluster_size;
+constexpr ULONGLONG cluster_bytes = TestFakeImage::fake_cluster_size;
 
 // Run list bytes: one run of 3 clusters at LCN 10, one of 2 at LCN 20, then a
 // header byte whose length field (15 bytes) no run can have.
@@ -71,12 +72,12 @@ template <Cache::Strategy S>
 std::optional<Alloc::StreamRanges> RangesOf(std::vector<BYTE> image,
                                             bool recover) {
   const NtfsVolume<S> volume(
-      std::make_unique<Tests::MemoryDiskReader>(std::move(image)),
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(std::move(image)),
       VolumeOptions{.include_deleted = true, .recover_errors = recover});
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(Tests::mft_tree_stale_child_idx));
+  REQUIRE(record.ParseFileRecord(TestFakeImage::mft_tree_stale_child_idx));
   [[maybe_unused]] const bool parsed = record.ParseAttrs();
 
   const auto* stream = record.FindStream({});
@@ -87,9 +88,10 @@ std::optional<Alloc::StreamRanges> RangesOf(std::vector<BYTE> image,
 }
 
 std::vector<BYTE> ImageWith(const FakeFreedStream& stream) {
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedFileTree();
-  Tests::PutFreedNonResidentRecord(image, Tests::mft_tree_stale_child_idx,
-                                   stream);
+  std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
+  TestFakeImage::PutFreedNonResidentRecord(
+      image, TestFakeImage::mft_tree_stale_child_idx, stream);
   return image;
 }
 
@@ -219,7 +221,7 @@ void CheckFarRealRunIsDamaged() {
 template <Cache::Strategy S>
 void CheckExtentReadRefusesAnOverflowingSize() {
   const NtfsVolume<S> volume(
-      std::make_unique<Tests::MemoryDiskReader>(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(
           ImageWith({.real_size = cluster_bytes,
                      .runs = {FakeDataRun{.lcn = 10, .clusters = 1}},
                      .raw_runs = overflowing_run,
@@ -227,7 +229,7 @@ void CheckExtentReadRefusesAnOverflowingSize() {
       VolumeOptions{.include_deleted = true});
   REQUIRE(volume.IsVolumeOK());
   FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(Tests::mft_tree_stale_child_idx));
+  REQUIRE(record.ParseFileRecord(TestFakeImage::mft_tree_stale_child_idx));
   REQUIRE(record.ParseAttrs());
   const auto* stream = record.FindStream({});
   REQUIRE(stream != nullptr);
@@ -241,15 +243,16 @@ void CheckExtentReadRefusesAnOverflowingSize() {
 
 template <Cache::Strategy S>
 void CheckEmptyResidentHasNoRange() {
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedFileTree();
+  std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
   // $UsnJrnl without a $J stream keeps an empty, unnamed resident $DATA.
-  Tests::PutUsnJournal(image, {.omit_j_stream = true});
+  TestFakeImage::PutUsnJournal(image, {.omit_j_stream = true});
   const NtfsVolume<S> volume(
-      std::make_unique<Tests::MemoryDiskReader>(std::move(image)),
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(std::move(image)),
       VolumeOptions{.include_deleted = true});
   REQUIRE(volume.IsVolumeOK());
   FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(Tests::usn_journal_idx));
+  REQUIRE(record.ParseFileRecord(TestFakeImage::usn_journal_idx));
   REQUIRE(record.ParseAttrs());
 
   const auto* stream = record.FindStream({});
@@ -261,12 +264,13 @@ void CheckEmptyResidentHasNoRange() {
 
 template <Cache::Strategy S>
 void CheckResidentIsOneRange() {
-  const NtfsVolume<S> volume(std::make_unique<Tests::MemoryDiskReader>(
-                                 Tests::BuildFakeNtfsImageWithFreedFileTree()),
-                             VolumeOptions{.include_deleted = true});
+  const NtfsVolume<S> volume(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(
+          TestFakeImage::BuildFakeNtfsImageWithFreedFileTree()),
+      VolumeOptions{.include_deleted = true});
   REQUIRE(volume.IsVolumeOK());
   FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(Tests::mft_tree_deleted_file_idx));
+  REQUIRE(record.ParseFileRecord(TestFakeImage::mft_tree_deleted_file_idx));
   REQUIRE(record.ParseAttrs());
 
   const auto* stream = record.FindStream({});

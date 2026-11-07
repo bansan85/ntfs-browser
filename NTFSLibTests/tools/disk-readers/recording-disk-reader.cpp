@@ -16,7 +16,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/disk-readers/recording-disk-reader.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders {
 
 RecordingDiskReader::RecordingDiskReader(
     std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> inner,
@@ -52,7 +52,8 @@ std::optional<ULONGLONG> RecordingDiskReader::Size() const {
   return inner_->Size();
 }
 
-Tuning::MediaKind RecordingDiskReader::GetMediaKind() const {
+NTFS_BROWSER_NAMESPACE::Tuning::MediaKind
+    RecordingDiskReader::GetMediaKind() const {
   return inner_->GetMediaKind();
 }
 
@@ -72,8 +73,9 @@ void RecordingDiskReader::CancelStanding(ULONGLONG offset,
   inner_->CancelStanding(offset, length);
 }
 
-void RecordingDiskReader::SetReadPattern(Tuning::Pattern pattern) const {
+void RecordingDiskReader::SetReadPattern(
+    NTFS_BROWSER_NAMESPACE::Tuning::Pattern pattern) const {
   inner_->SetReadPattern(pattern);
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders

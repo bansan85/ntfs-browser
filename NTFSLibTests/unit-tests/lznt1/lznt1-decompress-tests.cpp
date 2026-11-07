@@ -31,23 +31,24 @@ TEST_CASE("LZNT1 decompresses the [MS-XCA] section 3.3 worked example",
                         sentinel_byte);
 
   const size_t produced = NTFS_BROWSER_NAMESPACE::Lznt1::Decompress(
-      NTFS_BROWSER_NAMESPACE::Tests::xca_lznt1_example_compressed, out);
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::xca_lznt1_example_compressed,
+      out);
 
-  REQUIRE(produced ==
-          NTFS_BROWSER_NAMESPACE::Tests::xca_lznt1_example_decompressed_size);
-  CHECK(
-      std::memcmp(
-          out.data(),
-          NTFS_BROWSER_NAMESPACE::Tests::xca_lznt1_example_decompressed.data(),
-          produced) == 0);
+  REQUIRE(produced == NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                          xca_lznt1_example_decompressed_size);
+  CHECK(std::memcmp(out.data(),
+                    NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                        xca_lznt1_example_decompressed.data(),
+                    produced) == 0);
 }
 
 TEST_CASE("LZNT1 passes an uncompressed chunk through unchanged",
           "[lznt1][compression]") {
   const std::vector<BYTE> payload =
-      NTFS_BROWSER_NAMESPACE::Tests::CompressionFixturePattern(1234);
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::CompressionFixturePattern(1234);
   const std::vector<BYTE> chunk =
-      NTFS_BROWSER_NAMESPACE::Tests::MakeUncompressedLznt1Chunk(payload);
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::MakeUncompressedLznt1Chunk(
+          payload);
   REQUIRE(chunk.size() == payload.size() + 2);
 
   std::vector<BYTE> out(NTFS_BROWSER_NAMESPACE::Lznt1::chunk_size,
@@ -61,15 +62,17 @@ TEST_CASE("LZNT1 passes an uncompressed chunk through unchanged",
 TEST_CASE("LZNT1 concatenates chunks and stops at End_of_buffer",
           "[lznt1][compression]") {
   const std::vector<BYTE> first =
-      NTFS_BROWSER_NAMESPACE::Tests::CompressionFixturePattern(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::CompressionFixturePattern(
           oversized_chunk_size);
   const std::vector<BYTE> second =
-      NTFS_BROWSER_NAMESPACE::Tests::CompressionFixturePattern(50);
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::CompressionFixturePattern(50);
 
   std::vector<BYTE> src =
-      NTFS_BROWSER_NAMESPACE::Tests::MakeUncompressedLznt1Chunk(first);
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::MakeUncompressedLznt1Chunk(
+          first);
   const std::vector<BYTE> second_chunk =
-      NTFS_BROWSER_NAMESPACE::Tests::MakeUncompressedLznt1Chunk(second);
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::MakeUncompressedLznt1Chunk(
+          second);
   src.insert(src.end(), second_chunk.begin(), second_chunk.end());
   // End_of_buffer, followed by bytes that must never be looked at.
   src.insert(src.end(), {0x00, 0x00, never_read_byte, never_read_byte,
@@ -134,8 +137,8 @@ TEST_CASE("LZNT1 rejects malformed input instead of reading out of bounds",
     // Well-formed 100-byte chunk into a 10-byte dest: a real unit never
     // exceeds its own size, so this is malformed.
     const std::vector<BYTE> src =
-        NTFS_BROWSER_NAMESPACE::Tests::MakeUncompressedLznt1Chunk(
-            NTFS_BROWSER_NAMESPACE::Tests::CompressionFixturePattern(
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::MakeUncompressedLznt1Chunk(
+            NTFS_BROWSER_NAMESPACE::Test::FakeImage::CompressionFixturePattern(
                 oversized_chunk_size));
     std::vector<BYTE> tiny(tiny_dest_size, sentinel_byte);
     CHECK_THROWS_AS(NTFS_BROWSER_NAMESPACE::Lznt1::Decompress(src, tiny),

@@ -11,21 +11,22 @@
 #include "data/ntfs-bpb.h"
 #include "volume/volume-geometry.h"
 
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Volume = NTFS_BROWSER_NAMESPACE::Volume;
 
 namespace {
 
 // Sectors in a fake cluster, as the fake image's BPB declares them.
-constexpr ULONGLONG sectors_per_cluster = Tests::fake_sectors_per_cluster;
+constexpr ULONGLONG sectors_per_cluster =
+    TestFakeImage::fake_sectors_per_cluster;
 
 // Parses the fake image's boot sector with total_sectors set to the value.
 Volume::BootSectorParse ParseWithTotalSectors(ULONGLONG total_sectors,
                                               bool recover) {
-  std::vector<BYTE> boot_sector = Tests::BuildFakeNtfsImage();
+  std::vector<BYTE> boot_sector = TestFakeImage::BuildFakeNtfsImage();
   reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::NtfsBpb*>(boot_sector.data())
       ->total_sectors = total_sectors;
-  boot_sector.resize(Tests::fake_bytes_per_sector);
+  boot_sector.resize(TestFakeImage::fake_bytes_per_sector);
   return Volume::ParseBootSector(boot_sector, recover);
 }
 

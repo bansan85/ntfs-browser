@@ -15,15 +15,15 @@
 
 #include "data/header-non-resident.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 namespace Data {
 
 struct FileRecordHeader;
 
 }  // namespace Data
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders {
 
 // Presents a standalone $MFT file, with no disk image around it, as the $MFT
 // of a volume. Byte 0 is a boot sector the reader builds. Every cluster of
@@ -96,7 +96,7 @@ class StandaloneMftDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
 
   // $MFT's unnamed $DATA header in record 0, and where it sits in the record.
   struct DataAttr {
-    Data::HeaderNonResident header;
+    NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident header;
     // Offset of the attribute in the record.
     size_t pos;
     // Offset of the first byte past the attribute.
@@ -108,7 +108,7 @@ class StandaloneMftDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
 
   // Reads record 0 and its header from the open file. record keeps its update
   // sequence.
-  bool ReadRecordZero(Data::FileRecordHeader& header,
+  bool ReadRecordZero(NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader& header,
                       std::vector<BYTE>& record);
 
   // Decodes record 0's $DATA runs into runs_. False when they are unusable.
@@ -122,9 +122,9 @@ class StandaloneMftDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
                                       const DataAttr& data);
   void RepairDeclaredExtent(std::vector<BYTE>& record, DataAttr& data,
                             ULONGLONG total_clusters);
-  std::optional<ULONGLONG>
-      DeriveClusterSize(const Data::HeaderNonResident& data,
-                        ULONGLONG total_clusters);
+  std::optional<ULONGLONG> DeriveClusterSize(
+      const NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident& data,
+      ULONGLONG total_clusters);
   bool BuildRuns(const std::vector<RawRun>& raw_runs, ULONGLONG cluster);
 
   // Builds boot_ from the geometry found.
@@ -150,4 +150,4 @@ class StandaloneMftDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   mutable std::ifstream file_;
 };
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders

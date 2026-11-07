@@ -27,7 +27,7 @@
 #include "io/file-reader.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using NTFS_BROWSER_NAMESPACE::Io::FileReader;
 
@@ -58,8 +58,8 @@ struct CountedReader {
   CountedReader(ULONGLONG blocks, ULONGLONG tail, std::uint64_t ceiling,
                 const Tuning::Settings& tuning = {})
       : bytes(Pattern(static_cast<size_t>((blocks * block) + tail))) {
-    auto counting = std::make_unique<Tests::CountingDiskReader>(
-        std::make_unique<Tests::MemoryDiskReader>(bytes));
+    auto counting = std::make_unique<TestDiskReaders::CountingDiskReader>(
+        std::make_unique<TestDiskReaders::MemoryDiskReader>(bytes));
     calls = counting.get();
     reader = std::make_unique<FileReader<Cache::Strategy::FullCache>>(
         std::move(counting), ceiling, tuning);
@@ -81,8 +81,9 @@ struct CountedReader {
   // The (offset, length) of every read so far, in order.
   [[nodiscard]] std::vector<std::pair<ULONGLONG, ULONGLONG>> Reads() const {
     std::vector<std::pair<ULONGLONG, ULONGLONG>> reads;
-    for (const Tests::CountingDiskReader::Call& call : calls->Calls()) {
-      if (call.kind == Tests::CountingDiskReader::Kind::Read) {
+    for (const TestDiskReaders::CountingDiskReader::Call& call :
+         calls->Calls()) {
+      if (call.kind == TestDiskReaders::CountingDiskReader::Kind::Read) {
         reads.emplace_back(call.offset, call.length);
       }
     }
@@ -90,7 +91,7 @@ struct CountedReader {
   }
 
   std::vector<BYTE> bytes;
-  Tests::CountingDiskReader* calls{nullptr};
+  TestDiskReaders::CountingDiskReader* calls{nullptr};
   std::unique_ptr<FileReader<Cache::Strategy::FullCache>> reader;
 };
 
@@ -253,9 +254,9 @@ TEST_CASE("the CPU cost of a large read through the block cache",
     std::vector<double> times;
     size_t reads = 0;
     for (int round = 0; round < rounds; round++) {
-      auto counting = std::make_unique<Tests::CountingDiskReader>(
-          std::make_unique<Tests::MemoryDiskReader>(image));
-      Tests::CountingDiskReader* const calls = counting.get();
+      auto counting = std::make_unique<TestDiskReaders::CountingDiskReader>(
+          std::make_unique<TestDiskReaders::MemoryDiskReader>(image));
+      TestDiskReaders::CountingDiskReader* const calls = counting.get();
       const FileReader<Cache::Strategy::FullCache> reader(
           std::move(counting), Cache::default_max_cache_bytes, tuning);
       LARGE_INTEGER addr{.QuadPart = 0};

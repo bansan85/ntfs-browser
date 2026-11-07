@@ -29,9 +29,9 @@
 #include "io/file-reader.h"
 
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
-using Kind = Tests::CountingDiskReader::Kind;
+using Kind = TestDiskReaders::CountingDiskReader::Kind;
 
 namespace {
 
@@ -57,34 +57,34 @@ std::pair<ULONGLONG, ULONGLONG> Widened(ULONGLONG offset, ULONGLONG length) {
 
 // A CountingDiskReader over a zeroed buffer, and a pointer to it.
 struct Counted {
-  std::unique_ptr<Tests::CountingDiskReader> reader;
-  Tests::CountingDiskReader* counting;
+  std::unique_ptr<TestDiskReaders::CountingDiskReader> reader;
+  TestDiskReaders::CountingDiskReader* counting;
 };
 
 Counted MakeCounted() {
-  auto reader = std::make_unique<Tests::CountingDiskReader>(
-      std::make_unique<Tests::MemoryDiskReader>(
+  auto reader = std::make_unique<TestDiskReaders::CountingDiskReader>(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(
           std::vector<BYTE>(buffer_bytes)));
-  Tests::CountingDiskReader* const counting = reader.get();
+  TestDiskReaders::CountingDiskReader* const counting = reader.get();
   return {std::move(reader), counting};
 }
 
 // Whether call is the prefetch hint [offset, offset + length).
-bool IsHint(const Tests::CountingDiskReader::Call& call, ULONGLONG offset,
-            ULONGLONG length) {
+bool IsHint(const TestDiskReaders::CountingDiskReader::Call& call,
+            ULONGLONG offset, ULONGLONG length) {
   return call.kind == Kind::Prefetch && call.offset == offset &&
          call.length == length;
 }
 
 // Whether call is the standing hint [offset, offset + length).
-bool IsStandingHint(const Tests::CountingDiskReader::Call& call,
+bool IsStandingHint(const TestDiskReaders::CountingDiskReader::Call& call,
                     ULONGLONG offset, ULONGLONG length) {
   return call.kind == Kind::PrefetchStanding && call.offset == offset &&
          call.length == length;
 }
 
 // Whether call withdraws the standing interval [offset, offset + length).
-bool IsStandingCancel(const Tests::CountingDiskReader::Call& call,
+bool IsStandingCancel(const TestDiskReaders::CountingDiskReader::Call& call,
                       ULONGLONG offset, ULONGLONG length) {
   return call.kind == Kind::CancelStanding && call.offset == offset &&
          call.length == length;
@@ -119,7 +119,7 @@ struct TempPath final {
 TEST_CASE("a reader that overrides nothing ignores prefetch hints",
           "[disk-reader][prefetch]") {
   const std::vector<BYTE> content{1, 2, 3, 4};
-  const Tests::MemoryDiskReader reader(content);
+  const TestDiskReaders::MemoryDiskReader reader(content);
   reader.Prefetch(0, content.size());
   reader.CancelPrefetch();
 
@@ -133,9 +133,9 @@ TEST_CASE("RecordingDiskReader passes prefetch hints on and records nothing",
           "[disk-reader][prefetch]") {
   const TempPath trace;
   Counted counted = MakeCounted();
-  Tests::CountingDiskReader* const counting = counted.counting;
-  const Tests::RecordingDiskReader reader(std::move(counted.reader),
-                                          trace.path);
+  TestDiskReaders::CountingDiskReader* const counting = counted.counting;
+  const TestDiskReaders::RecordingDiskReader reader(std::move(counted.reader),
+                                                    trace.path);
 
   reader.Prefetch(inner_hint_offset, inner_hint_length);
   reader.CancelPrefetch();
@@ -150,7 +150,7 @@ TEST_CASE("RecordingDiskReader passes prefetch hints on and records nothing",
 TEST_CASE("ReadAheadDiskReader passes prefetch hints on to the wrapped reader",
           "[disk-reader][prefetch][read-ahead]") {
   Counted counted = MakeCounted();
-  Tests::CountingDiskReader* const counting = counted.counting;
+  TestDiskReaders::CountingDiskReader* const counting = counted.counting;
   const Io::ReadAheadDiskReader reader(std::move(counted.reader));
 
   reader.Prefetch(inner_hint_offset, inner_hint_length);
@@ -172,7 +172,7 @@ TEST_CASE("ReadAheadDiskReader without a wrapped reader ignores prefetch hints",
 TEST_CASE("FileReader<NoCache> passes a prefetch hint on as it is",
           "[disk-reader][prefetch][file-reader]") {
   Counted counted = MakeCounted();
-  Tests::CountingDiskReader* const counting = counted.counting;
+  TestDiskReaders::CountingDiskReader* const counting = counted.counting;
   const Io::FileReader<Cache::Strategy::NoCache> reader(
       std::move(counted.reader));
 
@@ -189,7 +189,7 @@ TEST_CASE("FileReader<NoCache> passes a prefetch hint on as it is",
 TEST_CASE("FileReader<FullCache> widens a prefetch hint to its cache blocks",
           "[disk-reader][prefetch][file-reader]") {
   Counted counted = MakeCounted();
-  Tests::CountingDiskReader* const counting = counted.counting;
+  TestDiskReaders::CountingDiskReader* const counting = counted.counting;
   const Io::FileReader<Cache::Strategy::FullCache> reader(
       std::move(counted.reader));
 
@@ -220,7 +220,7 @@ TEMPLATE_TEST_CASE_SIG("A FileReader with no reader ignores prefetch hints",
 TEST_CASE("a reader that overrides nothing ignores standing hints",
           "[disk-reader][prefetch][standing]") {
   const std::vector<BYTE> content{1, 2, 3, 4};
-  const Tests::MemoryDiskReader reader(content);
+  const TestDiskReaders::MemoryDiskReader reader(content);
   reader.PrefetchStanding(0, content.size());
   reader.CancelStanding(0, content.size());
   reader.CancelStanding(0, max_offset);
@@ -234,7 +234,7 @@ TEST_CASE("a reader that overrides nothing ignores standing hints",
 TEST_CASE("CountingDiskReader records the standing hints and passes them on",
           "[disk-reader][prefetch][standing]") {
   Counted counted = MakeCounted();
-  Tests::CountingDiskReader* const counting = counted.counting;
+  TestDiskReaders::CountingDiskReader* const counting = counted.counting;
 
   counting->PrefetchStanding(inner_hint_offset, inner_hint_length);
   counting->Prefetch(inner_hint_offset, inner_hint_length);
@@ -254,9 +254,9 @@ TEST_CASE("RecordingDiskReader passes standing hints on and records nothing",
           "[disk-reader][prefetch][standing]") {
   const TempPath trace;
   Counted counted = MakeCounted();
-  Tests::CountingDiskReader* const counting = counted.counting;
-  const Tests::RecordingDiskReader reader(std::move(counted.reader),
-                                          trace.path);
+  TestDiskReaders::CountingDiskReader* const counting = counted.counting;
+  const TestDiskReaders::RecordingDiskReader reader(std::move(counted.reader),
+                                                    trace.path);
 
   reader.PrefetchStanding(inner_hint_offset, inner_hint_length);
   reader.CancelStanding(inner_hint_offset, inner_hint_length);
@@ -271,7 +271,7 @@ TEST_CASE("RecordingDiskReader passes standing hints on and records nothing",
 TEST_CASE("ReadAheadDiskReader passes standing hints on to the wrapped reader",
           "[disk-reader][prefetch][standing][read-ahead]") {
   Counted counted = MakeCounted();
-  Tests::CountingDiskReader* const counting = counted.counting;
+  TestDiskReaders::CountingDiskReader* const counting = counted.counting;
   const Io::ReadAheadDiskReader reader(std::move(counted.reader));
 
   reader.PrefetchStanding(inner_hint_offset, inner_hint_length);
@@ -293,7 +293,7 @@ TEST_CASE("ReadAheadDiskReader without a wrapped reader ignores standing hints",
 TEST_CASE("FileReader<NoCache> passes a standing hint on as it is",
           "[disk-reader][prefetch][standing][file-reader]") {
   Counted counted = MakeCounted();
-  Tests::CountingDiskReader* const counting = counted.counting;
+  TestDiskReaders::CountingDiskReader* const counting = counted.counting;
   const Io::FileReader<Cache::Strategy::NoCache> reader(
       std::move(counted.reader));
 
@@ -313,7 +313,7 @@ TEST_CASE("FileReader<NoCache> passes a standing hint on as it is",
 TEST_CASE("FileReader<FullCache> widens a standing hint to its cache blocks",
           "[disk-reader][prefetch][standing][file-reader]") {
   Counted counted = MakeCounted();
-  Tests::CountingDiskReader* const counting = counted.counting;
+  TestDiskReaders::CountingDiskReader* const counting = counted.counting;
   const Io::FileReader<Cache::Strategy::FullCache> reader(
       std::move(counted.reader));
 
@@ -337,7 +337,7 @@ TEST_CASE("FileReader<FullCache> widens a standing hint to its cache blocks",
 TEST_CASE("FileReader<FullCache> withdraws up to the largest offset",
           "[disk-reader][prefetch][standing][file-reader]") {
   Counted counted = MakeCounted();
-  Tests::CountingDiskReader* const counting = counted.counting;
+  TestDiskReaders::CountingDiskReader* const counting = counted.counting;
   const Io::FileReader<Cache::Strategy::FullCache> reader(
       std::move(counted.reader));
 
@@ -368,12 +368,12 @@ TEMPLATE_TEST_CASE_SIG("A FileReader with no reader ignores standing hints",
 
 TEST_CASE("FileReader<FullCache> serves a run of missing blocks from the lane",
           "[disk-reader][prefetch][standing][file-reader]") {
-  Tests::SimulatedClock clock;
-  auto throttled = std::make_unique<Tests::ThrottledDiskReader>(
-      std::make_unique<Tests::MemoryDiskReader>(
+  TestDiskReaders::SimulatedClock clock;
+  auto throttled = std::make_unique<TestDiskReaders::ThrottledDiskReader>(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(
           std::vector<BYTE>(buffer_bytes)),
-      Tests::DiskModel{}, clock);
-  const Tests::ThrottledDiskReader* const disk = throttled.get();
+      TestDiskReaders::DiskModel{}, clock);
+  const TestDiskReaders::ThrottledDiskReader* const disk = throttled.get();
   const Io::FileReader<Cache::Strategy::FullCache> reader(std::move(throttled));
 
   // The range starts and ends inside a block: the hint widens to three blocks,
@@ -395,7 +395,7 @@ TEST_CASE("FileReader<FullCache> serves a run of missing blocks from the lane",
 TEST_CASE("FileReader<FullCache> leaves the cached blocks out of the lane",
           "[disk-reader][prefetch][standing][file-reader]") {
   Counted counted = MakeCounted();
-  Tests::CountingDiskReader* const counting = counted.counting;
+  TestDiskReaders::CountingDiskReader* const counting = counted.counting;
   const Io::FileReader<Cache::Strategy::FullCache> reader(
       std::move(counted.reader));
   // The middle block of three is in the cache.
@@ -427,9 +427,9 @@ TEMPLATE_TEST_CASE_SIG(
     for (size_t index = 0; index < image.size(); index++) {
       image.at(index) = static_cast<BYTE>((index * 11) + (index >> 8U));
     }
-    auto counting = std::make_unique<Tests::CountingDiskReader>(
-        std::make_unique<Tests::MemoryDiskReader>(image));
-    Tests::CountingDiskReader* const counted = counting.get();
+    auto counting = std::make_unique<TestDiskReaders::CountingDiskReader>(
+        std::make_unique<TestDiskReaders::MemoryDiskReader>(image));
+    TestDiskReaders::CountingDiskReader* const counted = counting.get();
     const Io::FileReader<S> reader(std::move(counting));
 
     std::vector<BYTE> bytes;
@@ -447,7 +447,8 @@ TEMPLATE_TEST_CASE_SIG(
     }
 
     std::vector<std::pair<ULONGLONG, ULONGLONG>> reads;
-    for (const Tests::CountingDiskReader::Call& call : counted->Calls()) {
+    for (const TestDiskReaders::CountingDiskReader::Call& call :
+         counted->Calls()) {
       if (call.kind == Kind::Read) {
         reads.emplace_back(call.offset, call.length);
       }

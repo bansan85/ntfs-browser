@@ -27,9 +27,10 @@ using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage;
-using NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithDeletedVolumeRecord;
-using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+    BuildFakeNtfsImageWithDeletedVolumeRecord;
 
 namespace {
 

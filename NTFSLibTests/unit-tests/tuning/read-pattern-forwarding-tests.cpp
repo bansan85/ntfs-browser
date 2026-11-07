@@ -26,10 +26,10 @@
 #include <ntfs-browser/tuning/tuning.h>
 
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using NTFS_BROWSER_NAMESPACE::IDiskReader;
-using Kind = Tests::CountingDiskReader::Kind;
+using Kind = TestDiskReaders::CountingDiskReader::Kind;
 
 namespace {
 
@@ -68,7 +68,7 @@ class ProbeDiskReader final : public IDiskReader {
   }
 
  private:
-  Tests::MemoryDiskReader inner_;
+  TestDiskReaders::MemoryDiskReader inner_;
   Seen* seen_;
 };
 
@@ -113,7 +113,7 @@ struct TempFile final {
 TEST_CASE("CountingDiskReader passes a read pattern on and does not record it",
           "[tuning][invariance][disk-reader]") {
   Seen seen;
-  Tests::CountingDiskReader counting(
+  TestDiskReaders::CountingDiskReader counting(
       std::make_unique<ProbeDiskReader>(std::vector<BYTE>(image_size), seen));
 
   std::array<BYTE, 16> dest{};
@@ -126,7 +126,8 @@ TEST_CASE("CountingDiskReader passes a read pattern on and does not record it",
   counting.CancelPrefetch();
 
   CHECK(seen.patterns == AllPatterns());
-  const std::vector<Tests::CountingDiskReader::Call>& calls = counting.Calls();
+  const std::vector<TestDiskReaders::CountingDiskReader::Call>& calls =
+      counting.Calls();
   REQUIRE(calls.size() == 3);
   CHECK(calls.at(0).kind == Kind::Read);
   CHECK(calls.at(1).kind == Kind::Prefetch);
@@ -146,7 +147,7 @@ TEST_CASE("RecordingDiskReader passes a read pattern on and traces nothing",
   const auto trace_of = [&](bool with_patterns, Seen& seen) {
     const TempFile trace;
     {
-      Tests::RecordingDiskReader recording(
+      TestDiskReaders::RecordingDiskReader recording(
           std::make_unique<ProbeDiskReader>(image, seen), trace.path);
       std::array<BYTE, 64> dest{};
       LARGE_INTEGER addr{.QuadPart = 100};
@@ -185,24 +186,25 @@ TEST_CASE("The decorators pass the media kind of the reader they wrap",
                                                Tuning::MediaKind::Rotational};
   for (const Tuning::MediaKind kind : kinds) {
     const auto make = [&]() {
-      auto memory =
-          std::make_unique<Tests::MemoryDiskReader>(std::vector<BYTE>(16));
+      auto memory = std::make_unique<TestDiskReaders::MemoryDiskReader>(
+          std::vector<BYTE>(16));
       memory->SetMediaKind(kind);
       return memory;
     };
 
-    const Tests::CountingDiskReader counting(make());
+    const TestDiskReaders::CountingDiskReader counting(make());
     CHECK(counting.GetMediaKind() == kind);
     // Asking reads nothing.
     CHECK(counting.Calls().empty());
 
     TempFile trace;
-    const Tests::RecordingDiskReader recording(make(), trace.path);
+    const TestDiskReaders::RecordingDiskReader recording(make(), trace.path);
     CHECK(recording.GetMediaKind() == kind);
 
     const Io::ReadAheadDiskReader read_ahead(make());
     CHECK(read_ahead.GetMediaKind() == kind);
   }
-  CHECK(Tests::MemoryDiskReader(std::vector<BYTE>(16)).GetMediaKind() ==
-        Tuning::MediaKind::Unknown);
+  CHECK(
+      TestDiskReaders::MemoryDiskReader(std::vector<BYTE>(16)).GetMediaKind() ==
+      Tuning::MediaKind::Unknown);
 }

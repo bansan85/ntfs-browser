@@ -10,7 +10,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/disk-readers/sequential-disk-reader.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders {
 
 SequentialDiskReader::SequentialDiskReader(Producer producer)
     : producer_(std::move(producer)) {}
@@ -56,4 +56,4 @@ SequentialDiskReader::Producer
   };
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders

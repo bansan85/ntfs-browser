@@ -20,12 +20,12 @@
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using Support::MakeRecord;
-using Tests::FakeUsnOptions;
-using Tests::FakeUsnRecord;
+using TestFakeImage::FakeUsnOptions;
+using TestFakeImage::FakeUsnRecord;
 
 namespace {
 
@@ -42,10 +42,10 @@ constexpr DWORD attribute_directory = 0x10;
 
 // Record numbers of the fixture: report.txt is live, old.tmp is freed, and no
 // record names the ghost.
-constexpr ULONGLONG report_record = Tests::mft_tree_report_idx;
+constexpr ULONGLONG report_record = TestFakeImage::mft_tree_report_idx;
 constexpr WORD report_sequence = 3;
-constexpr ULONGLONG deleted_record = Tests::mft_tree_deleted_file_idx;
-constexpr ULONGLONG link_record = Tests::mft_tree_hard_link_idx;
+constexpr ULONGLONG deleted_record = TestFakeImage::mft_tree_deleted_file_idx;
+constexpr ULONGLONG link_record = TestFakeImage::mft_tree_hard_link_idx;
 constexpr ULONGLONG ghost_record = 40;
 
 // Times the records of a fixture carry, increasing.
@@ -323,7 +323,7 @@ FakeUsnOptions JournalOnlyPathsJournal() {
                   .sequence = 1,
                   .reason = reason_file_create,
                   .time = time_a,
-                  .parent = Tests::mft_tree_deleted_dir_idx,
+                  .parent = TestFakeImage::mft_tree_deleted_dir_idx,
                   .parent_sequence = 3});
   FakeUsnRecord folder = MakeRecord({.name = L"folder",
                                      .record = 45,
@@ -386,10 +386,10 @@ void CheckJournalOnlyFilesStayOutOfTheEntries() {
 
   CHECK(with_journal.Find(ghost_record) == nullptr);
   CHECK_FALSE(with_journal.IsReachable(ghost_record));
-  CHECK(with_journal.Children(Tests::mft_tree_docs_idx).size() ==
-        with_journal.Children(Tests::mft_tree_docs_idx).size());
+  CHECK(with_journal.Children(TestFakeImage::mft_tree_docs_idx).size() ==
+        with_journal.Children(TestFakeImage::mft_tree_docs_idx).size());
   for (const ULONGLONG child :
-       with_journal.Children(Tests::mft_tree_docs_idx)) {
+       with_journal.Children(TestFakeImage::mft_tree_docs_idx)) {
     CHECK(child != ghost_record);
   }
   for (const Mft::MftTree::Entry& entry : with_journal.Entries()) {
@@ -401,7 +401,7 @@ template <Cache::Strategy S>
 void CheckStrictModeIsTheScanWithoutAJournal() {
   const VolumeOptions strict{.include_deleted = true};
   const auto plain = Support::OpenVolume<S>(
-      Tests::BuildFakeNtfsImageWithFreedFileTree(), strict);
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(), strict);
   const Mft::MftTree without(*plain.volume);
   const Mft::MftTree with = ScanWith<S>(MixedJournal(), strict);
 
@@ -410,7 +410,7 @@ void CheckStrictModeIsTheScanWithoutAJournal() {
   std::vector<const Mft::MftTree::Entry*> kept;
   for (const Mft::MftTree::Entry& entry : with.Entries()) {
     if (entry.record != static_cast<ULONGLONG>(Mft::Idx::Extend) &&
-        entry.record != Tests::usn_journal_idx) {
+        entry.record != TestFakeImage::usn_journal_idx) {
       kept.push_back(&entry);
     }
   }
@@ -491,12 +491,12 @@ void CheckJournalOrderBreaksATimeTie() {
 template <Cache::Strategy S>
 void CheckADamagedRecordDoesNotStopTheScan() {
   const std::vector<BYTE> first =
-      Tests::EncodeUsnRecord(MakeRecord({.name = L"report.txt",
-                                         .record = report_record,
-                                         .sequence = report_sequence,
-                                         .reason = reason_file_create,
-                                         .time = time_a}),
-                             0);
+      TestFakeImage::EncodeUsnRecord(MakeRecord({.name = L"report.txt",
+                                                 .record = report_record,
+                                                 .sequence = report_sequence,
+                                                 .reason = reason_file_create,
+                                                 .time = time_a}),
+                                     0);
   // The second record's length is forged: the scan skips it and finds the
   // third.
   FakeUsnOptions options = MixedJournal();
@@ -637,8 +637,8 @@ void CheckPathsWithoutAnAncestorOutput() {
 
   // A name the record does not have, with and without an output.
   std::optional<ULONGLONG> lost{7};
-  CHECK(tree.GetPath(Tests::mft_tree_docs_idx, 1000, nullptr).empty());
-  CHECK(tree.GetPath(Tests::mft_tree_docs_idx, 1000, &lost).empty());
+  CHECK(tree.GetPath(TestFakeImage::mft_tree_docs_idx, 1000, nullptr).empty());
+  CHECK(tree.GetPath(TestFakeImage::mft_tree_docs_idx, 1000, &lost).empty());
   CHECK_FALSE(lost);
   CHECK(tree.GetPath(ghost_record, 0, nullptr).empty());
 

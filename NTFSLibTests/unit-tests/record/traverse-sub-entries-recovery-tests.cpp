@@ -38,7 +38,9 @@ using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 
 namespace {
 
@@ -67,7 +69,8 @@ template <Cache::Strategy S>
 std::vector<std::wstring> RootNames(
     std::vector<BYTE> image, VolumeOptions options = recover_keep_deleted,
     Attr::Mask mask = Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation) {
-  auto reader = std::make_unique<Tests::MemoryDiskReader>(std::move(image));
+  auto reader =
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(std::move(image));
 
   const NtfsVolume<S> volume(std::move(reader), options);
   REQUIRE(volume.IsVolumeOK());
@@ -86,9 +89,9 @@ void CheckReachableThenOrphan(const std::vector<std::wstring>& names) {
   REQUIRE(names.size() == 2);
   // The REQUIRE above checks the size of names.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(names[0] == Tests::orphaned_block_reachable_name);
+  CHECK(names[0] == TestFakeImage::orphaned_block_reachable_name);
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(names[1] == Tests::orphaned_block_orphan_name);
+  CHECK(names[1] == TestFakeImage::orphaned_block_orphan_name);
 }
 
 // By default, TraverseSubEntries() only follows the B+ tree's own pointers,
@@ -97,7 +100,7 @@ template <Cache::Strategy S>
 void RunOrphanedBlocksNeedRecoveryFlag() {
   // The reachable entry names an unbuilt record, which strict mode hides.
   // The orphan block is not scanned at all without recover_errors.
-  CHECK(RootNames<S>(Tests::BuildFakeNtfsImageWithOrphanedIndexBlocks(),
+  CHECK(RootNames<S>(TestFakeImage::BuildFakeNtfsImageWithOrphanedIndexBlocks(),
                      VolumeOptions{})
             .empty());
 }
@@ -110,7 +113,7 @@ void RunOrphanedBlocksNeedRecoveryFlag() {
 template <Cache::Strategy S>
 void RunOrphanedBlocksFoundWithRecoveryFlag() {
   CheckReachableThenOrphan(
-      RootNames<S>(Tests::BuildFakeNtfsImageWithOrphanedIndexBlocks()));
+      RootNames<S>(TestFakeImage::BuildFakeNtfsImageWithOrphanedIndexBlocks()));
 }
 
 // With include_deleted off (the default) and recover_errors on, the orphan
@@ -120,7 +123,7 @@ void RunOrphanedBlocksFoundWithRecoveryFlag() {
 template <Cache::Strategy S>
 void RunOrphanedBlocksReportedWithoutIncludeDeleted() {
   CheckReachableThenOrphan(
-      RootNames<S>(Tests::BuildFakeNtfsImageWithOrphanedIndexBlocks(),
+      RootNames<S>(TestFakeImage::BuildFakeNtfsImageWithOrphanedIndexBlocks(),
                    VolumeOptions{.recover_errors = true}));
 }
 
@@ -133,22 +136,23 @@ void RunOrphanedBlocksReportedWithoutIncludeDeleted() {
 template <Cache::Strategy S>
 void RunOrphanedBlocksDroppedOnSequenceMismatch() {
   const std::vector<std::wstring> strict_names = RootNames<S>(
-      Tests::BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch(),
+      TestFakeImage::BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch(),
       VolumeOptions{.recover_errors = true});
   REQUIRE(strict_names.size() == 1);
   // The REQUIRE above checks the size of strict_names.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(strict_names[0] == Tests::orphaned_block_reachable_name);
+  CHECK(strict_names[0] == TestFakeImage::orphaned_block_reachable_name);
 
   CheckReachableThenOrphan(RootNames<S>(
-      Tests::BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch()));
+      TestFakeImage::
+          BuildFakeNtfsImageWithOrphanedIndexBlockSequenceMismatch()));
 }
 
 // With no $INDEX_ROOT at all, the normal walk has nowhere to start, so
 // without the recovery flag TraverseSubEntries() reports nothing.
 template <Cache::Strategy S>
 void RunMissingIndexRootNeedsRecoveryFlag() {
-  CHECK(RootNames<S>(Tests::BuildFakeNtfsImageWithOrphanedIndexBlocks(),
+  CHECK(RootNames<S>(TestFakeImage::BuildFakeNtfsImageWithOrphanedIndexBlocks(),
                      VolumeOptions{}, Attr::Mask::IndexAllocation)
             .empty());
 }
@@ -158,7 +162,7 @@ void RunMissingIndexRootNeedsRecoveryFlag() {
 template <Cache::Strategy S>
 void RunMissingIndexRootRecoveredWithFlag() {
   CheckReachableThenOrphan(
-      RootNames<S>(Tests::BuildFakeNtfsImageWithOrphanedIndexBlocks(),
+      RootNames<S>(TestFakeImage::BuildFakeNtfsImageWithOrphanedIndexBlocks(),
                    recover_keep_deleted, Attr::Mask::IndexAllocation));
 }
 
@@ -166,9 +170,9 @@ void RunMissingIndexRootRecoveredWithFlag() {
 // It still does not parse, so Orphan is reported under recover_errors alone.
 template <Cache::Strategy S>
 void RunOrphanedEntryZeroRecordReported() {
-  CheckReachableThenOrphan(
-      RootNames<S>(Tests::BuildFakeNtfsImageWithOrphanedEntryZeroRecord(),
-                   VolumeOptions{.recover_errors = true}));
+  CheckReachableThenOrphan(RootNames<S>(
+      TestFakeImage::BuildFakeNtfsImageWithOrphanedEntryZeroRecord(),
+      VolumeOptions{.recover_errors = true}));
 }
 
 // The scan's block count is what the mapped clusters hold, in blocks: with
@@ -176,13 +180,13 @@ void RunOrphanedEntryZeroRecordReported() {
 template <Cache::Strategy S>
 void RunSubClusterBlocksAllScanned() {
   const std::vector<std::wstring> names = RootNames<S>(
-      Tests::BuildFakeNtfsImageWithSubClusterOrphanedIndexBlocks());
+      TestFakeImage::BuildFakeNtfsImageWithSubClusterOrphanedIndexBlocks());
 
-  REQUIRE(names.size() == Tests::sub_cluster_block_names.size());
+  REQUIRE(names.size() == TestFakeImage::sub_cluster_block_names.size());
   for (size_t i = 0; i < names.size(); i++) {
     // The REQUIRE above checks the size of names.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(names[i] == Tests::sub_cluster_block_names[i]);
+    CHECK(names[i] == TestFakeImage::sub_cluster_block_names[i]);
   }
 }
 
@@ -191,13 +195,13 @@ void RunSubClusterBlocksAllScanned() {
 template <Cache::Strategy S>
 void RunSplitAllocationAllScanned() {
   const std::vector<std::wstring> names =
-      RootNames<S>(Tests::BuildFakeNtfsImageWithSplitIndexAllocation());
+      RootNames<S>(TestFakeImage::BuildFakeNtfsImageWithSplitIndexAllocation());
 
-  REQUIRE(names.size() == Tests::split_block_names.size());
+  REQUIRE(names.size() == TestFakeImage::split_block_names.size());
   for (size_t i = 0; i < names.size(); i++) {
     // The REQUIRE above checks the size of names.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    CHECK(names[i] == Tests::split_block_names[i]);
+    CHECK(names[i] == TestFakeImage::split_block_names[i]);
   }
 }
 
@@ -205,23 +209,23 @@ void RunSplitAllocationAllScanned() {
 // generation "link" describes, is reported next to the fixture's two other
 // orphan-scan entries.
 template <Cache::Strategy S>
-bool ParentLinkEntryReported(Tests::FakeParentLink link) {
+bool ParentLinkEntryReported(TestFakeImage::FakeParentLink link) {
   const std::vector<std::wstring> names = RootNames<S>(
-      Tests::BuildFakeNtfsImageWithOrphanedIndexBlockParentLink(link));
+      TestFakeImage::BuildFakeNtfsImageWithOrphanedIndexBlockParentLink(link));
 
   REQUIRE(names.size() >= 2);
   // The REQUIRE above checks the size of names.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(names[0] == Tests::orphaned_block_reachable_name);
+  CHECK(names[0] == TestFakeImage::orphaned_block_reachable_name);
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(names[1] == Tests::orphaned_block_orphan_name);
+  CHECK(names[1] == TestFakeImage::orphaned_block_orphan_name);
   if (names.size() == 2) {
     return false;
   }
   REQUIRE(names.size() == 3);
   // The REQUIRE above checks the size of names.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(names[2] == Tests::orphaned_block_generation_name);
+  CHECK(names[2] == TestFakeImage::orphaned_block_generation_name);
   return true;
 }
 

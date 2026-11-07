@@ -14,11 +14,13 @@
 #endif
 
 // Keeps any exception from escaping main().
-int NTFS_FUZZ_MAIN(int argc, NtfsFuzz::ArgChar* argv[]) {
+int NTFS_FUZZ_MAIN(int argc,
+                   NTFS_BROWSER_NAMESPACE::Test::Fuzz::ArgChar* argv[]) {
   try {
-    const std::vector<std::basic_string<NtfsFuzz::ArgChar>> args(argv,
-                                                                 argv + argc);
-    return NtfsFuzz::RunCommandLine(args, std::cerr);
+    const std::vector<
+        std::basic_string<NTFS_BROWSER_NAMESPACE::Test::Fuzz::ArgChar>>
+        args(argv, argv + argc);
+    return NTFS_BROWSER_NAMESPACE::Test::Fuzz::RunCommandLine(args, std::cerr);
   } catch (...) {
     std::cerr << "Unhandled exception\n";
     return 1;

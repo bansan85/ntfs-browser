@@ -15,7 +15,7 @@
 #include "fake-ntfs-image-internal.h"
 #include "lznt1/decompress.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage {
 
 std::vector<BYTE> MakeUncompressedLznt1Chunk(std::span<const BYTE> payload) {
   // [MS-XCA] section 2.5.3: input streams are compressed in units of 4096
@@ -354,4 +354,4 @@ std::vector<BYTE>
   return BuildCompressionImage(record, runs, cluster_bytes);
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage

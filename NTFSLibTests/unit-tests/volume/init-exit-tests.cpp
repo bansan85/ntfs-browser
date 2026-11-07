@@ -26,7 +26,7 @@ using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
 
 namespace {
 
@@ -52,7 +52,7 @@ constexpr ULONGLONG overclaimed_mft_bytes = 1024ULL * 1024ULL;
 // Record slots the overclaimed size stands for at the fake record size.
 constexpr ULONGLONG overclaimed_mft_records =
     overclaimed_mft_bytes /
-    NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size;
+    NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_file_record_size;
 
 // Record number of $Volume.
 constexpr ULONGLONG volume_idx = static_cast<ULONGLONG>(Mft::Idx::Volume);
@@ -66,7 +66,8 @@ TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume reports no version when $Volume's attributes fail to walk",
     "[init]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
+  std::vector<BYTE> image =
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage();
   // The first attribute claims the whole record, so the walk overruns it.
   Store<DWORD>(image,
                RecordOffset(volume_idx) +
@@ -88,7 +89,7 @@ TEMPLATE_TEST_CASE_SIG("NtfsVolume logs the NTFS version it reads from $Volume",
   SECTION("version 3.x is accepted and logged") {
     (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
     const NtfsVolume<S> volume(std::make_unique<MemoryDiskReader>(
-        NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage()));
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage()));
     const std::string captured =
         NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
 
@@ -99,7 +100,7 @@ TEMPLATE_TEST_CASE_SIG("NtfsVolume logs the NTFS version it reads from $Volume",
 
   SECTION("version 2.x is logged and rejected") {
     std::vector<BYTE> image =
-        NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage();
     const size_t attr =
         FirstAttr(image, volume_idx, Attr::Type::VolumeInformation);
     Store<BYTE>(image, ResidentBody(image, attr) + volume_info_major_field,
@@ -122,7 +123,7 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::FullCache) {
   (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
   const NtfsVolume<S> volume(std::make_unique<MemoryDiskReader>(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage()));
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage()));
   const std::string captured = NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
 
   CHECK(volume.IsVolumeOK());
@@ -133,7 +134,8 @@ TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume warns when $MFT claims more records than it maps", "[init]",
     ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
+  std::vector<BYTE> image =
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage();
   Store<ULONGLONG>(
       image, FirstAttr(image, mft_idx, Attr::Type::Data) + attr_real_size_field,
       overclaimed_mft_bytes);
@@ -152,7 +154,8 @@ TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume rejects a $MFT DATA attribute that does not start at VCN 0",
     "[init]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
+  std::vector<BYTE> image =
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage();
   Store<ULONGLONG>(
       image,
       FirstAttr(image, mft_idx, Attr::Type::Data) + attr_lowest_vcn_field, 1);

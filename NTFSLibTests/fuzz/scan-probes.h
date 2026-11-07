@@ -17,7 +17,7 @@
 // readers of their own. They read in another order than the main probes, so
 // FuzzOnce() runs them last, in the order it names them: a recorded input
 // replays in step only while that order holds.
-namespace NtfsFuzz {
+namespace NTFS_BROWSER_NAMESPACE::Test::Fuzz {
 
 // Scans the volume over reader with threads threads, as the probe of
 // ProbeScanThreads() does, and gives the digest of the tree. Nothing when the
@@ -71,4 +71,4 @@ void ProbeDirectoryReadAhead(
     const NTFS_BROWSER_NAMESPACE::VolumeOptions& options,
     std::optional<size_t> failing_read);
 
-}  // namespace NtfsFuzz
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Fuzz

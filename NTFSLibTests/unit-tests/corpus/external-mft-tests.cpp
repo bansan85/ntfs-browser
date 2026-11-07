@@ -51,6 +51,7 @@ namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::StandaloneMftDiskReader;
 using NTFS_BROWSER_NAMESPACE::Tests::CivilTime;
 using NTFS_BROWSER_NAMESPACE::Tests::CompareWithListing;
 using NTFS_BROWSER_NAMESPACE::Tests::DfirMuseumDir;
@@ -64,7 +65,6 @@ using NTFS_BROWSER_NAMESPACE::Tests::ParseFlsListing;
 using NTFS_BROWSER_NAMESPACE::Tests::RecoveringOptions;
 using NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusFile;
 using NTFS_BROWSER_NAMESPACE::Tests::ScanStandaloneMft;
-using NTFS_BROWSER_NAMESPACE::Tests::StandaloneMftDiskReader;
 using NTFS_BROWSER_NAMESPACE::Tests::StandaloneMftScan;
 using NTFS_BROWSER_NAMESPACE::Tests::StrictOptions;
 using NTFS_BROWSER_NAMESPACE::Tests::TempFile;
@@ -814,9 +814,8 @@ TEST_CASE("The fragmented $MFT of ntfs_frag_mft.bin reads in five runs",
   const std::filesystem::path image =
       RequireCorpusFile(Dfir("ntfs_frag_mft.bin"));
   // The volume starts at byte 65536 of the image.
-  auto reader =
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::PartitionDiskReader>(
-          65536);
+  auto reader = std::make_unique<
+      NTFS_BROWSER_NAMESPACE::Test::DiskReaders::PartitionDiskReader>(65536);
   REQUIRE(reader->Open(image.wstring()));
   const NtfsVolume<Cache::Strategy::NoCache> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());

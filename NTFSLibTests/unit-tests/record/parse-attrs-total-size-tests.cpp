@@ -36,17 +36,17 @@ TEMPLATE_TEST_CASE_SIG(
     "than its header",
     "[file-record][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  auto reader =
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::
-              BuildFakeNtfsImageWithUndersizedAttribute());
+  auto reader = std::make_unique<
+      NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+          BuildFakeNtfsImageWithUndersizedAttribute());
 
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
   REQUIRE(record.ParseFileRecord(
-      NTFS_BROWSER_NAMESPACE::Tests::undersized_attr_record_idx));
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::undersized_attr_record_idx));
 
   CHECK_FALSE(record.ParseAttrs());
   CHECK(record.GetAttr(Attr::Type::ReparsePoint).empty());
@@ -57,10 +57,10 @@ TEMPLATE_TEST_CASE_SIG(
     "record size",
     "[file-record][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  auto reader =
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::
-              BuildFakeNtfsImageWithAttrOffsetOutOfBounds());
+  auto reader = std::make_unique<
+      NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+          BuildFakeNtfsImageWithAttrOffsetOutOfBounds());
 
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());

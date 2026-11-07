@@ -46,11 +46,11 @@ struct TempImage final {
   TempImage() : TempImage(L"report.txt") {}
 
   explicit TempImage(std::wstring_view report_name)
-      : TempImage(BuildFakeNtfsImageWithReportName(report_name,
-                                                   dump_broken_alter_time)) {}
+      : TempImage(Test::FakeImage::BuildFakeNtfsImageWithReportName(
+            report_name, Test::FakeImage::dump_broken_alter_time)) {}
 
   explicit TempImage(const std::vector<BYTE>& image)
-      : path(WriteFakeNtfsImage(image)) {}
+      : path(Test::FakeImage::WriteFakeNtfsImage(image)) {}
 
   ~TempImage() {
     std::error_code ignored;
@@ -93,7 +93,8 @@ inline std::string RootListing() {
 // --deleted column, or empty.
 inline std::string DocsListing(std::string_view name,
                                std::string_view marker = {}) {
-  return ListingLine(name, false, dump_broken_alter_time, marker) +
+  return ListingLine(name, false, Test::FakeImage::dump_broken_alter_time,
+                     marker) +
          "Files: 1, Directories: 0\n";
 }
 

@@ -20,23 +20,24 @@
 #include "data/ntfs-bpb.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
-namespace Tests {
+namespace Test::DiskReaders {
 
 class MemoryDiskReader;
 
-}  // namespace Tests
+}  // namespace Test::DiskReaders
 }  // namespace NTFS_BROWSER_NAMESPACE
 
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
-using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
 
 namespace {
 
 // BuildFakeNtfsImage() with edit applied to its boot sector BPB.
 template <typename Edit>
 std::vector<BYTE> ImageWithBpb(Edit edit) {
-  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
+  std::vector<BYTE> image =
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage();
   edit(*reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::NtfsBpb*>(image.data()));
   return image;
 }
@@ -112,9 +113,9 @@ void CheckGeometry(const NtfsVolume<S>& volume,
 }
 
 std::vector<GeometryCase> GeometryCases() {
-  using NTFS_BROWSER_NAMESPACE::Tests::fake_bytes_per_sector;
-  using NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size;
-  using NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size;
+  using NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_bytes_per_sector;
+  using NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size;
+  using NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_file_record_size;
   return {
       {.name = "a bad NTFS signature leaves every value zero",
        .edit = [](auto& bpb) { bpb.signature[0] = 'X'; },
@@ -208,7 +209,8 @@ TEMPLATE_TEST_CASE_SIG(
   SECTION("a refused boot sector read leaves every value zero") {
     const auto refused = std::make_shared<size_t>(0);
     const NtfsVolume<S> volume(std::make_unique<RefusingDiskReader>(
-        NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage(), 0, 1, refused));
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage(), 0, 1,
+        refused));
 
     CHECK_FALSE(volume.IsVolumeOK());
     CheckGeometry(volume, {.sector_size = 0,

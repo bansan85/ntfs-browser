@@ -30,16 +30,17 @@
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Record = NTFS_BROWSER_NAMESPACE::Record;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Tests::FakeIndexBlock;
-using Tests::FakeSlackName;
+using TestFakeImage::FakeIndexBlock;
+using TestFakeImage::FakeSlackName;
 
 namespace {
 
 // Index block size of the fixtures: one cluster of the fake volume.
-constexpr DWORD block_size = Tests::fake_cluster_size;
+constexpr DWORD block_size = TestFakeImage::fake_cluster_size;
 
 // Where the entries of a block stop and its fixed layout starts, see
 // BuildFakeIndexBlock(): the end entry of an empty block sits at 0x40.
@@ -56,10 +57,10 @@ void ForEachStrategy(Check check) {
 
 // A name as the used part of a block holds it.
 FakeSlackName Live(std::wstring name) {
-  return FakeSlackName{.name = std::move(name),
-                       .parent_record = Tests::index_slack_directory_record,
-                       .parent_sequence =
-                           Tests::index_slack_directory_sequence};
+  return FakeSlackName{
+      .name = std::move(name),
+      .parent_record = TestFakeImage::index_slack_directory_record,
+      .parent_sequence = TestFakeImage::index_slack_directory_sequence};
 }
 
 // A stale name of the directory, with its index entry header.
@@ -73,7 +74,7 @@ FakeSlackName Old(std::wstring name) {
 std::vector<BYTE> Stale(const std::vector<FakeSlackName>& names) {
   std::vector<BYTE> bytes;
   for (const FakeSlackName& name : names) {
-    const std::vector<BYTE> one = Tests::EncodeSlackName(name);
+    const std::vector<BYTE> one = TestFakeImage::EncodeSlackName(name);
     bytes.insert(bytes.end(), one.begin(), one.end());
   }
   return bytes;
@@ -87,7 +88,7 @@ std::vector<BYTE> Block(const std::vector<std::wstring>& live,
   for (const std::wstring& name : live) {
     block.live.push_back(Live(name));
   }
-  return Tests::BuildFakeIndexBlock(block, block_size);
+  return TestFakeImage::BuildFakeIndexBlock(block, block_size);
 }
 
 // What a directory record gives for its index slack, for one image.
@@ -95,10 +96,12 @@ template <Cache::Strategy S>
 std::vector<Record::CarvedName> Carve(std::vector<BYTE> image,
                                       const VolumeOptions& options) {
   NtfsVolume<S> volume(
-      std::make_unique<Tests::MemoryDiskReader>(std::move(image)), options);
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(std::move(image)),
+      options);
   REQUIRE(volume.IsVolumeOK());
   Io::FileRecord<S> directory(volume);
-  REQUIRE(directory.ParseFileRecord(Tests::index_slack_directory_record));
+  REQUIRE(
+      directory.ParseFileRecord(TestFakeImage::index_slack_directory_record));
   REQUIRE(directory.ParseAttrs());
   return directory.CarveIndexSlackNames();
 }
@@ -107,7 +110,7 @@ std::vector<Record::CarvedName>
     CarveBlocks(const std::vector<std::vector<BYTE>>& blocks,
                 const VolumeOptions& options = both_flags) {
   return Carve<Cache::Strategy::NoCache>(
-      Tests::BuildFakeNtfsImageWithIndexBlocks(blocks), options);
+      TestFakeImage::BuildFakeNtfsImageWithIndexBlocks(blocks), options);
 }
 
 std::vector<std::wstring> Names(const std::vector<Record::CarvedName>& carved) {
@@ -129,15 +132,16 @@ TEST_CASE(
               {Old(L"older.txt"), Old(L"oldest.txt")})};
 
     const auto carved = Carve<decltype(strategy)::value>(
-        Tests::BuildFakeNtfsImageWithIndexBlocks(blocks), both_flags);
+        TestFakeImage::BuildFakeNtfsImageWithIndexBlocks(blocks), both_flags);
 
     REQUIRE(carved.size() == 2);
     CHECK(carved.at(0).name == L"older.txt");
     CHECK(carved.at(1).name == L"oldest.txt");
     for (const Record::CarvedName& name : carved) {
       CHECK(name.parent_known);
-      CHECK(name.parent_record == Tests::index_slack_directory_record);
-      CHECK(name.parent_sequence == Tests::index_slack_directory_sequence);
+      CHECK(name.parent_record == TestFakeImage::index_slack_directory_record);
+      CHECK(name.parent_sequence ==
+            TestFakeImage::index_slack_directory_sequence);
       CHECK(name.times_known);
       CHECK_FALSE(name.partial);
       CHECK(name.source == Record::CarveSource::IndexSlack);
@@ -149,10 +153,11 @@ TEST_CASE("Index slack of a structure without its entry header",
           "[index-slack]") {
   // Where the end entry overwrote the header, the name starts the slack.
   FakeSlackName bare = Live(L"bare.txt");
-  const std::vector<std::vector<BYTE>> blocks{Tests::BuildFakeIndexBlock(
-      FakeIndexBlock{.live = {Live(L"live.txt")},
-                     .slack = Tests::EncodeSlackName(bare)},
-      block_size)};
+  const std::vector<std::vector<BYTE>> blocks{
+      TestFakeImage::BuildFakeIndexBlock(
+          FakeIndexBlock{.live = {Live(L"live.txt")},
+                         .slack = TestFakeImage::EncodeSlackName(bare)},
+          block_size)};
 
   CHECK(Names(CarveBlocks(blocks)) == std::vector<std::wstring>{L"bare.txt"});
 }
@@ -200,7 +205,8 @@ TEST_CASE("Index slack drops a name filed under another directory",
   FakeSlackName elsewhere = Old(L"elsewhere.txt");
   elsewhere.parent_record = 999;
   FakeSlackName older_generation = Old(L"generation.txt");
-  older_generation.parent_sequence = Tests::index_slack_directory_sequence + 1;
+  older_generation.parent_sequence =
+      TestFakeImage::index_slack_directory_sequence + 1;
   FakeSlackName unchecked = Old(L"unchecked.txt");
   unchecked.parent_sequence = 0;
   const std::vector<std::vector<BYTE>> blocks{Block(
@@ -212,14 +218,18 @@ TEST_CASE("Index slack drops a name filed under another directory",
 
 TEST_CASE("Index slack drops a name whose parent reference was overwritten",
           "[index-slack]") {
-  std::vector<BYTE> lost = Tests::EncodeSlackName(Old(L"lost-parent.txt"));
+  std::vector<BYTE> lost =
+      TestFakeImage::EncodeSlackName(Old(L"lost-parent.txt"));
   // The parent reference is the first 8 bytes after the entry header.
   std::fill_n(lost.begin() + 16, 8, BYTE{0});
   std::vector<BYTE> slack = lost;
-  const std::vector<BYTE> kept = Tests::EncodeSlackName(Old(L"kept.txt"));
+  const std::vector<BYTE> kept =
+      TestFakeImage::EncodeSlackName(Old(L"kept.txt"));
   slack.insert(slack.end(), kept.begin(), kept.end());
-  const std::vector<std::vector<BYTE>> blocks{Tests::BuildFakeIndexBlock(
-      FakeIndexBlock{.live = {Live(L"a.txt")}, .slack = slack}, block_size)};
+  const std::vector<std::vector<BYTE>> blocks{
+      TestFakeImage::BuildFakeIndexBlock(
+          FakeIndexBlock{.live = {Live(L"a.txt")}, .slack = slack},
+          block_size)};
 
   CHECK(Names(CarveBlocks(blocks)) == std::vector<std::wstring>{L"kept.txt"});
 }
@@ -269,11 +279,11 @@ TEST_CASE(
   // creation time.
   FakeIndexBlock block;
   const std::vector<BYTE> name =
-      Tests::EncodeSlackName(Old(L"straddles-the-sector.txt"));
+      TestFakeImage::EncodeSlackName(Old(L"straddles-the-sector.txt"));
   block.slack.assign(500 - 16 - empty_used_end, 0);
   block.slack.insert(block.slack.end(), name.begin(), name.end());
   const std::vector<std::vector<BYTE>> blocks{
-      Tests::BuildFakeIndexBlock(block, block_size)};
+      TestFakeImage::BuildFakeIndexBlock(block, block_size)};
 
   CHECK(Names(CarveBlocks(blocks)) ==
         std::vector<std::wstring>{L"straddles-the-sector.txt"});
@@ -285,12 +295,13 @@ TEST_CASE("Index slack of a block with no room for any candidate",
   const FakeIndexBlock four{.live = {Live(L"a.txt")}, .slack = {1, 2, 3, 4}};
   // The slack runs to the last byte of the block.
   FakeIndexBlock full{.live = {Live(L"a.txt")}};
-  const size_t used = 0x40 + Tests::EncodeSlackName(Old(L"a.txt")).size() + 16;
+  const size_t used =
+      0x40 + TestFakeImage::EncodeSlackName(Old(L"a.txt")).size() + 16;
   full.slack.assign(block_size - used, 0x20);
   const std::vector<std::vector<BYTE>> blocks{
-      Tests::BuildFakeIndexBlock(none, block_size),
-      Tests::BuildFakeIndexBlock(four, block_size),
-      Tests::BuildFakeIndexBlock(full, block_size)};
+      TestFakeImage::BuildFakeIndexBlock(none, block_size),
+      TestFakeImage::BuildFakeIndexBlock(four, block_size),
+      TestFakeImage::BuildFakeIndexBlock(full, block_size)};
 
   CHECK(CarveBlocks(blocks).empty());
 }
@@ -298,10 +309,11 @@ TEST_CASE("Index slack of a block with no room for any candidate",
 TEST_CASE("Index slack ignores a name cut by the end of the block",
           "[index-slack]") {
   const std::vector<BYTE> whole =
-      Tests::EncodeSlackName(Old(L"cut-by-the-end.txt"));
+      TestFakeImage::EncodeSlackName(Old(L"cut-by-the-end.txt"));
   FakeIndexBlock block{.live = {Live(L"a.txt")}};
   block.slack = Stale({Old(L"complete.txt")});
-  const size_t used = 0x40 + Tests::EncodeSlackName(Old(L"a.txt")).size() + 16;
+  const size_t used =
+      0x40 + TestFakeImage::EncodeSlackName(Old(L"a.txt")).size() + 16;
   // The entry header, the $FILE_NAME up to its name and 5 of the characters
   // survive, then the block ends.
   constexpr size_t kept = 16 + 0x42 + 10;
@@ -309,7 +321,7 @@ TEST_CASE("Index slack ignores a name cut by the end of the block",
                      block_size - used - block.slack.size() - kept, 0);
   block.slack.insert(block.slack.end(), whole.begin(), whole.begin() + kept);
   const std::vector<std::vector<BYTE>> blocks{
-      Tests::BuildFakeIndexBlock(block, block_size)};
+      TestFakeImage::BuildFakeIndexBlock(block, block_size)};
 
   CHECK(Names(CarveBlocks(blocks)) ==
         std::vector<std::wstring>{L"complete.txt"});
@@ -325,14 +337,14 @@ TEST_CASE("Index slack ends on any content", "[index-slack]") {
       std::vector<BYTE>(500, 0x01), std::vector<BYTE>(500, 0x20)};
   ULONGLONG vcn = 0;
   for (const std::vector<BYTE>& fill : fills) {
-    blocks.push_back(Tests::BuildFakeIndexBlock(
+    blocks.push_back(TestFakeImage::BuildFakeIndexBlock(
         FakeIndexBlock{.live = {Live(L"a.txt")}, .slack = fill, .vcn = vcn++},
         block_size));
   }
   std::vector<BYTE> noise(500);
   for (int round = 0; round < 8; ++round) {
     std::ranges::generate(noise, [&] { return static_cast<BYTE>(random()); });
-    blocks.push_back(Tests::BuildFakeIndexBlock(
+    blocks.push_back(TestFakeImage::BuildFakeIndexBlock(
         FakeIndexBlock{.live = {Live(L"a.txt")}, .slack = noise, .vcn = vcn++},
         block_size));
   }
@@ -346,7 +358,7 @@ TEST_CASE("Index slack stays empty without recover_errors and include_deleted",
     const std::vector<std::vector<BYTE>> blocks{
         Block({L"a.txt"}, {Old(L"older.txt")})};
     const std::vector<BYTE> image =
-        Tests::BuildFakeNtfsImageWithIndexBlocks(blocks);
+        TestFakeImage::BuildFakeNtfsImageWithIndexBlocks(blocks);
 
     CHECK(Carve<decltype(strategy)::value>(image, VolumeOptions{}).empty());
     CHECK(Carve<decltype(strategy)::value>(
@@ -366,14 +378,15 @@ TEST_CASE("Index slack reads nothing from the volume when it is off",
   for (const VolumeOptions& options :
        {VolumeOptions{}, VolumeOptions{.include_deleted = true},
         VolumeOptions{.recover_errors = true}}) {
-    auto counter = std::make_unique<Tests::CountingDiskReader>(
-        std::make_unique<Tests::MemoryDiskReader>(
-            Tests::BuildFakeNtfsImageWithIndexBlocks(blocks)));
-    Tests::CountingDiskReader* reads = counter.get();
+    auto counter = std::make_unique<TestDiskReaders::CountingDiskReader>(
+        std::make_unique<TestDiskReaders::MemoryDiskReader>(
+            TestFakeImage::BuildFakeNtfsImageWithIndexBlocks(blocks)));
+    TestDiskReaders::CountingDiskReader* reads = counter.get();
     NtfsVolume<Cache::Strategy::NoCache> volume(std::move(counter), options);
     REQUIRE(volume.IsVolumeOK());
     Io::FileRecord<Cache::Strategy::NoCache> directory(volume);
-    REQUIRE(directory.ParseFileRecord(Tests::index_slack_directory_record));
+    REQUIRE(
+        directory.ParseFileRecord(TestFakeImage::index_slack_directory_record));
     REQUIRE(directory.ParseAttrs());
     reads->Reset();
 
@@ -388,12 +401,13 @@ TEST_CASE("Index slack changes no live listing", "[index-slack]") {
       Block({L"a.txt"}, {Old(L"older.txt")})};
   const auto listing = [&](bool carve) {
     NtfsVolume<Cache::Strategy::NoCache> volume(
-        std::make_unique<Tests::MemoryDiskReader>(
-            Tests::BuildFakeNtfsImageWithIndexBlocks(blocks)),
+        std::make_unique<TestDiskReaders::MemoryDiskReader>(
+            TestFakeImage::BuildFakeNtfsImageWithIndexBlocks(blocks)),
         both_flags);
     REQUIRE(volume.IsVolumeOK());
     Io::FileRecord<Cache::Strategy::NoCache> directory(volume);
-    REQUIRE(directory.ParseFileRecord(Tests::index_slack_directory_record));
+    REQUIRE(
+        directory.ParseFileRecord(TestFakeImage::index_slack_directory_record));
     REQUIRE(directory.ParseAttrs());
     if (carve) {
       CHECK(directory.CarveIndexSlackNames().size() == 1);
@@ -415,7 +429,8 @@ TEST_CASE("Index slack of a directory without index allocation",
           "[index-slack]") {
   ForEachStrategy([](auto strategy) {
     CHECK(Carve<decltype(strategy)::value>(
-              Tests::BuildFakeNtfsImageWithRootIndexRootEntry(), both_flags)
+              TestFakeImage::BuildFakeNtfsImageWithRootIndexRootEntry(),
+              both_flags)
               .empty());
   });
 }
@@ -425,7 +440,7 @@ TEST_CASE("Index slack of both cache strategies agrees", "[index-slack]") {
       Block({L"a.txt"}, {Old(L"one.txt"), Old(L"two.txt")}, 0),
       Block({L"b.txt"}, {Old(L"three.txt")}, 1)};
   const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithIndexBlocks(blocks);
+      TestFakeImage::BuildFakeNtfsImageWithIndexBlocks(blocks);
 
   const auto no_cache = Carve<Cache::Strategy::NoCache>(image, both_flags);
   const auto full_cache = Carve<Cache::Strategy::FullCache>(image, both_flags);
@@ -439,7 +454,8 @@ TEST_CASE("Index slack of both cache strategies agrees", "[index-slack]") {
 
 TEST_CASE("CarveFileNamesFrom starts at the slack and no earlier",
           "[index-slack]") {
-  const std::vector<BYTE> name = Tests::EncodeSlackName(Live(L"inside.txt"));
+  const std::vector<BYTE> name =
+      TestFakeImage::EncodeSlackName(Live(L"inside.txt"));
   std::vector<BYTE> bytes(64, 0);
   bytes.insert(bytes.end(), name.begin(), name.end());
   bytes.insert(bytes.end(), 64, 0);
@@ -492,7 +508,7 @@ TEST_CASE("A block with a damaged entry that recovery let pass gives no slack",
 
     const std::vector<std::vector<BYTE>> blocks{damaged};
     const auto carved = Carve<decltype(strategy)::value>(
-        Tests::BuildFakeNtfsImageWithIndexBlocks(blocks), both_flags);
+        TestFakeImage::BuildFakeNtfsImageWithIndexBlocks(blocks), both_flags);
 
     CHECK(carved.empty());
   });
@@ -502,7 +518,7 @@ TEST_CASE("Index slack of a root that names entries of its own",
           "[index-slack]") {
   ForEachStrategy([](auto strategy) {
     const auto carved = Carve<decltype(strategy)::value>(
-        Tests::BuildFakeNtfsImageWithGapCollationSubNode(), both_flags);
+        TestFakeImage::BuildFakeNtfsImageWithGapCollationSubNode(), both_flags);
 
     // The root entry is live, and the block it points to holds no stale name.
     CHECK(carved.empty());
@@ -523,13 +539,14 @@ TEST_CASE("Index slack of an index that holds no file names is empty",
 
   const std::vector<std::vector<BYTE>> blocks{
       Block({L"live.txt"}, {Old(L"older.txt")})};
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithIndexBlocks(blocks);
+  std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithIndexBlocks(blocks);
   const ULONGLONG mft_addr =
       NtfsVolume<Cache::Strategy::NoCache>(
-          std::make_unique<Tests::MemoryDiskReader>(image))
+          std::make_unique<TestDiskReaders::MemoryDiskReader>(image))
           .GetMFTAddr();
-  size_t attr = mft_addr + (Tests::index_slack_directory_record *
-                            Tests::fake_file_record_size);
+  size_t attr = mft_addr + (TestFakeImage::index_slack_directory_record *
+                            TestFakeImage::fake_file_record_size);
   attr += image.at(attr + first_attr_field);
   DWORD type = 0;
   std::memcpy(&type, &image.at(attr), sizeof(type));

@@ -23,9 +23,10 @@ TEMPLATE_TEST_CASE_SIG(
     "encodes an mft_addr_ too large for a LONGLONG",
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  auto reader =
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithHugeMftLcn());
+  auto reader = std::make_unique<
+      NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+          BuildFakeNtfsImageWithHugeMftLcn());
 
   std::optional<NtfsVolume<S>> volume;
   REQUIRE_NOTHROW(volume.emplace(std::move(reader)));
@@ -40,8 +41,10 @@ TEMPLATE_TEST_CASE_SIG(
     "[file-record][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const NtfsVolume<S> volume(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithHugeMftLcn()));
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+              BuildFakeNtfsImageWithHugeMftLcn()));
   REQUIRE_FALSE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);

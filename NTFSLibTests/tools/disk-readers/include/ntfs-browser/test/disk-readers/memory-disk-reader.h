@@ -10,7 +10,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tuning/tuning.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders {
 
 // A fake IDiskReader backed entirely by an in-memory buffer.
 class MemoryDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
@@ -29,12 +29,14 @@ class MemoryDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
 
   // The kind of device that the reader says it is, Unknown until
   // SetMediaKind(): a test of a device-dependent choice plays the device.
-  [[nodiscard]] Tuning::MediaKind GetMediaKind() const override;
-  void SetMediaKind(Tuning::MediaKind kind) noexcept;
+  [[nodiscard]] NTFS_BROWSER_NAMESPACE::Tuning::MediaKind
+      GetMediaKind() const override;
+  void SetMediaKind(NTFS_BROWSER_NAMESPACE::Tuning::MediaKind kind) noexcept;
 
  private:
   std::vector<BYTE> data_;
-  Tuning::MediaKind kind_{Tuning::MediaKind::Unknown};
+  NTFS_BROWSER_NAMESPACE::Tuning::MediaKind kind_{
+      NTFS_BROWSER_NAMESPACE::Tuning::MediaKind::Unknown};
 };
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders

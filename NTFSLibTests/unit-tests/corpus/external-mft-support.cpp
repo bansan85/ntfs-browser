@@ -144,7 +144,8 @@ const std::string& ProcessTag() {
 template <Cache::Strategy S>
 StandaloneMftScan ScanWith(const std::filesystem::path& file,
                            const VolumeOptions& options, bool repair_extent) {
-  auto standalone = std::make_unique<StandaloneMftDiskReader>();
+  auto standalone =
+      std::make_unique<Test::DiskReaders::StandaloneMftDiskReader>();
   standalone->SetRepairDeclaredExtent(repair_extent);
   const bool opened = standalone->Open(file.wstring());
   INFO("StandaloneMftDiskReader::Open: " << standalone->Failure());
@@ -152,8 +153,9 @@ StandaloneMftScan ScanWith(const std::filesystem::path& file,
   const DWORD record_size = standalone->FileRecordSize();
   const DWORD cluster_size = standalone->ClusterSize();
 
-  auto counting = std::make_unique<CountingDiskReader>(std::move(standalone));
-  const CountingDiskReader* reads = counting.get();
+  auto counting = std::make_unique<Test::DiskReaders::CountingDiskReader>(
+      std::move(standalone));
+  const Test::DiskReaders::CountingDiskReader* reads = counting.get();
   static_cast<void>(TakeCapturedLog());
   const NtfsVolume<S> volume(std::move(counting), options);
   INFO("log of the volume open: " << TakeCapturedLog());
@@ -166,8 +168,9 @@ StandaloneMftScan ScanWith(const std::filesystem::path& file,
                          .cluster_size = cluster_size};
   // The scan logs a line per record: do not keep them.
   static_cast<void>(TakeCapturedLog());
-  for (const CountingDiskReader::Call& call : reads->Calls()) {
-    if (call.kind == CountingDiskReader::Kind::Read) {
+  for (const Test::DiskReaders::CountingDiskReader::Call& call :
+       reads->Calls()) {
+    if (call.kind == Test::DiskReaders::CountingDiskReader::Kind::Read) {
       scan.largest_read =
           std::max<std::uint64_t>(scan.largest_read, call.length);
     }
@@ -206,7 +209,8 @@ StandaloneMftScan ScanStandaloneMft(const std::filesystem::path& file,
 std::unique_ptr<NtfsVolume<Cache::Strategy::NoCache>>
     OpenStandaloneMftVolume(const std::filesystem::path& file,
                             const VolumeOptions& options, bool repair_extent) {
-  auto standalone = std::make_unique<StandaloneMftDiskReader>();
+  auto standalone =
+      std::make_unique<Test::DiskReaders::StandaloneMftDiskReader>();
   standalone->SetRepairDeclaredExtent(repair_extent);
   const bool opened = standalone->Open(file.wstring());
   INFO("StandaloneMftDiskReader::Open: " << standalone->Failure());

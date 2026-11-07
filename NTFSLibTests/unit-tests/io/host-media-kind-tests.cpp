@@ -37,6 +37,7 @@ namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using NTFS_BROWSER_NAMESPACE::IDiskReader;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
@@ -88,7 +89,7 @@ std::uint64_t RunsPlannedOn(const ImageFile& file,
   ahead.Begin();
   std::vector<ULONGLONG> upcoming;
   for (std::size_t index = 0; index < planned; index++) {
-    upcoming.push_back(Tests::name_tree_first_record +
+    upcoming.push_back(TestFakeImage::name_tree_first_record +
                        (index * planned_every * (files_per_directory + 1)));
   }
   ahead.Plan(upcoming);
@@ -107,7 +108,7 @@ VolumeOptions OptionsWithLane() {
 
 TEST_CASE("A Win32DiskReader over an image file takes the kind of its host",
           "[io][media-kind][win32]") {
-  const ImageFile file(Tests::BuildFakeNtfsImage());
+  const ImageFile file(TestFakeImage::BuildFakeNtfsImage());
   const MediaKind kind = GENERATE(MediaKind::Unknown, MediaKind::SolidState,
                                   MediaKind::Rotational);
   const Tests::HostMediaAnswer answer(kind);
@@ -123,7 +124,7 @@ TEST_CASE("A Win32DiskReader over an image file takes the kind of its host",
 
 TEST_CASE("The reader of a replay asks no host volume",
           "[io][media-kind][win32]") {
-  const ImageFile file(Tests::BuildFakeNtfsImage());
+  const ImageFile file(TestFakeImage::BuildFakeNtfsImage());
   const Tests::HostMediaAnswer answer(MediaKind::Rotational);
 
   const std::unique_ptr<IDiskReader> reader =
@@ -150,7 +151,7 @@ TEST_CASE("A path that does not open asks no host volume",
 
 TEST_CASE("Without a test answer, the query of the tests says Unknown",
           "[io][media-kind][win32]") {
-  const ImageFile file(Tests::BuildFakeNtfsImage());
+  const ImageFile file(TestFakeImage::BuildFakeNtfsImage());
 
   CHECK(Io::QueryHostMediaKind(file.Path().wstring()) == MediaKind::Unknown);
 }
@@ -158,7 +159,7 @@ TEST_CASE("Without a test answer, the query of the tests says Unknown",
 TEMPLATE_TEST_CASE_SIG("A volume on an image file reports the kind of its host",
                        "[io][media-kind][win32]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const ImageFile file(Tests::BuildFakeNtfsImage());
+  const ImageFile file(TestFakeImage::BuildFakeNtfsImage());
   const MediaKind kind = GENERATE(MediaKind::Unknown, MediaKind::SolidState,
                                   MediaKind::Rotational);
   const Tests::HostMediaAnswer answer(kind);
@@ -173,7 +174,7 @@ TEMPLATE_TEST_CASE_SIG(
     "VolumeOptions::media_kind wins over the host and spares the query",
     "[io][media-kind][win32]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const ImageFile file(Tests::BuildFakeNtfsImage());
+  const ImageFile file(TestFakeImage::BuildFakeNtfsImage());
   const Tests::HostMediaAnswer answer(MediaKind::Rotational);
   VolumeOptions options;
   options.media_kind = MediaKind::SolidState;
@@ -189,7 +190,7 @@ TEMPLATE_TEST_CASE_SIG(
     "An image file on a hard disk plans without the standing lane",
     "[io][media-kind][win32][standing-lane]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const ImageFile file(Tests::BuildFakeNtfsImageWithNameTree(
+  const ImageFile file(TestFakeImage::BuildFakeNtfsImageWithNameTree(
       Tests::ReadAhead::SpacedTree(directories, files_per_directory)));
 
   SECTION("a solid state host plans the lane") {

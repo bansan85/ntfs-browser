@@ -40,6 +40,8 @@ using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 
 namespace {
 
@@ -91,7 +93,7 @@ class SpyDiskReader final : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   }
 
  private:
-  Tests::MemoryDiskReader inner_;
+  TestDiskReaders::MemoryDiskReader inner_;
   std::optional<ULONGLONG> size_;
   std::shared_ptr<Record> record_;
 };
@@ -141,16 +143,18 @@ Opened<S> Open(std::vector<BYTE> image, bool recover) {
 
 // A volume whose boot sector at offset 0 is damaged, with a sound copy.
 std::vector<BYTE>
-    Image(Tests::BootSectorDamage sector0 = Tests::BootSectorDamage::Zeroed,
-          WORD sector_size = Tests::fake_bytes_per_sector) {
-  return Tests::BuildFakeNtfsImageWithBackupBootSector(
+    Image(TestFakeImage::BootSectorDamage sector0 =
+              TestFakeImage::BootSectorDamage::Zeroed,
+          WORD sector_size = TestFakeImage::fake_bytes_per_sector) {
+  return TestFakeImage::BuildFakeNtfsImageWithBackupBootSector(
       {.sector_size = sector_size, .sector0 = sector0});
 }
 
 // Every way a boot sector can be broken.
-constexpr std::array<Tests::BootSectorDamage, 3> damages{
-    Tests::BootSectorDamage::Zeroed, Tests::BootSectorDamage::Signature,
-    Tests::BootSectorDamage::SectorSize};
+constexpr std::array<TestFakeImage::BootSectorDamage, 3> damages{
+    TestFakeImage::BootSectorDamage::Zeroed,
+    TestFakeImage::BootSectorDamage::Signature,
+    TestFakeImage::BootSectorDamage::SectorSize};
 
 }  // namespace
 
@@ -174,7 +178,7 @@ TEMPLATE_TEST_CASE_SIG("a sound boot sector never looks for the backup",
   for (const bool recover : {false, true}) {
     INFO("recover_errors = " << recover);
     const Opened<S> opened =
-        Open<S>(Image(Tests::BootSectorDamage::None), recover);
+        Open<S>(Image(TestFakeImage::BootSectorDamage::None), recover);
 
     CHECK(opened.volume->IsVolumeOK());
     CHECK(opened.BackupReads() == 0);
@@ -192,9 +196,11 @@ TEMPLATE_TEST_CASE_SIG("a recovering volume uses the backup boot sector",
 
     CHECK(opened.volume->IsVolumeOK());
     CHECK(opened.BackupReads() >= 1);
-    CHECK(opened.volume->GetSectorSize() == Tests::fake_bytes_per_sector);
-    CHECK(opened.volume->GetClusterSize() == Tests::fake_cluster_size);
-    CHECK(opened.volume->GetFileRecordSize() == Tests::fake_file_record_size);
+    CHECK(opened.volume->GetSectorSize() ==
+          TestFakeImage::fake_bytes_per_sector);
+    CHECK(opened.volume->GetClusterSize() == TestFakeImage::fake_cluster_size);
+    CHECK(opened.volume->GetFileRecordSize() ==
+          TestFakeImage::fake_file_record_size);
     CHECK_THAT(opened.log,
                ContainsSubstring(std::format("{} at 0x{:X}", backup_message,
                                              opened.image_bytes - 512)));
@@ -204,7 +210,8 @@ TEMPLATE_TEST_CASE_SIG("a recovering volume uses the backup boot sector",
 TEMPLATE_TEST_CASE_SIG("the backup boot sector gives the same volume",
                        "[ntfs-volume][backup-boot]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const Opened<S> healthy = Open<S>(Image(Tests::BootSectorDamage::None), true);
+  const Opened<S> healthy =
+      Open<S>(Image(TestFakeImage::BootSectorDamage::None), true);
   const Opened<S> recovered = Open<S>(Image(), true);
   REQUIRE(healthy.volume->IsVolumeOK());
   REQUIRE(recovered.volume->IsVolumeOK());
@@ -223,15 +230,15 @@ TEMPLATE_TEST_CASE_SIG("the backup boot sector may use any sector size",
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   for (const WORD sector_size : sector_sizes) {
     INFO("sector size = " << sector_size);
-    const Opened<S> opened =
-        Open<S>(Image(Tests::BootSectorDamage::Zeroed, sector_size), true);
+    const Opened<S> opened = Open<S>(
+        Image(TestFakeImage::BootSectorDamage::Zeroed, sector_size), true);
 
     // Past 1024 bytes a record is a cluster, which the 1024-byte fake records
     // do not fill: the boot sector is adopted, but the volume does not open.
     CHECK(opened.volume->IsVolumeOK() == (sector_size <= 1024));
     CHECK(opened.volume->GetSectorSize() == sector_size);
     CHECK(opened.volume->GetFileRecordSize() ==
-          std::max<DWORD>(Tests::fake_file_record_size, sector_size));
+          std::max<DWORD>(TestFakeImage::fake_file_record_size, sector_size));
     const size_t read_bytes = std::max<size_t>(sector_size, boot_sector_bytes);
     CHECK_THAT(opened.log,
                ContainsSubstring(std::format("{} at 0x{:X}", backup_message,
@@ -244,11 +251,11 @@ TEMPLATE_TEST_CASE_SIG(
     "[ntfs-volume][backup-boot]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   for (const size_t image_bytes :
-       {small_image_bytes,
-        Tests::fake_backup_image_bytes + extra_sectors * boot_sector_bytes}) {
+       {small_image_bytes, TestFakeImage::fake_backup_image_bytes +
+                               extra_sectors * boot_sector_bytes}) {
     INFO("image bytes = " << image_bytes);
     const Opened<S> opened =
-        Open<S>(Tests::BuildFakeNtfsImageWithBackupBootSector(
+        Open<S>(TestFakeImage::BuildFakeNtfsImageWithBackupBootSector(
                     {.image_bytes = image_bytes}),
                 true);
 
@@ -275,10 +282,11 @@ TEMPLATE_TEST_CASE_SIG("a damaged backup boot sector rejects the volume",
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   for (const auto damage : damages) {
     INFO("damage = " << static_cast<int>(damage));
-    const Opened<S> opened = Open<S>(
-        Tests::BuildFakeNtfsImageWithBackupBootSector(
-            {.sector0 = Tests::BootSectorDamage::Zeroed, .backup = damage}),
-        true);
+    const Opened<S> opened =
+        Open<S>(TestFakeImage::BuildFakeNtfsImageWithBackupBootSector(
+                    {.sector0 = TestFakeImage::BootSectorDamage::Zeroed,
+                     .backup = damage}),
+                true);
 
     CHECK_FALSE(opened.volume->IsVolumeOK());
     CHECK_THAT(opened.log, ContainsSubstring(no_candidate_message));
@@ -291,9 +299,10 @@ TEMPLATE_TEST_CASE_SIG("a rejected volume keeps the geometry of sector 0",
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   // Sector 0 declares a size that is no power of two, which is decoded before
   // the parse rejects it. The backup is lost as well.
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithBackupBootSector(
-      {.sector0 = Tests::BootSectorDamage::SectorSize,
-       .backup = Tests::BootSectorDamage::Zeroed});
+  std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithBackupBootSector(
+          {.sector0 = TestFakeImage::BootSectorDamage::SectorSize,
+           .backup = TestFakeImage::BootSectorDamage::Zeroed});
   const Opened<S> strict = Open<S>(image, false);
   const Opened<S> recovering = Open<S>(std::move(image), true);
 
@@ -347,9 +356,10 @@ TEMPLATE_TEST_CASE_SIG("a size that fits only a smaller sector skips the rest",
                        "[ntfs-volume][backup-boot]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   // A multiple of 512 but not of 1024: only the 512 candidate applies.
-  const size_t image_bytes = Tests::fake_backup_image_bytes + boot_sector_bytes;
+  const size_t image_bytes =
+      TestFakeImage::fake_backup_image_bytes + boot_sector_bytes;
   const Opened<S> opened =
-      Open<S>(Tests::BuildFakeNtfsImageWithBackupBootSector(
+      Open<S>(TestFakeImage::BuildFakeNtfsImageWithBackupBootSector(
                   {.image_bytes = image_bytes}),
               true);
 
@@ -376,7 +386,7 @@ TEMPLATE_TEST_CASE_SIG("a candidate must declare the sector size it is read at",
         Case{"a 256-byte sector copy where a 512 one is read", 256, 512}}) {
     INFO(mismatch.name);
     const Opened<S> opened =
-        Open<S>(Tests::BuildFakeNtfsImageWithBackupBootSector(
+        Open<S>(TestFakeImage::BuildFakeNtfsImageWithBackupBootSector(
                     {.sector_size = mismatch.declared,
                      .placed_for = mismatch.placed_for}),
                 true);

@@ -27,11 +27,12 @@ namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using Support::ReadStale;
 using Support::stale_size;
-using Tests::FakeDataRun;
+using TestFakeImage::FakeDataRun;
 
 namespace {
 
@@ -45,10 +46,12 @@ const VolumeOptions recovering{.recover_errors = true};
 // A live stale file over four clusters, and a bitmap that marks allocated_runs.
 std::vector<BYTE> LiveImage(std::span<const FakeDataRun> allocated_runs,
                             bool in_use = true) {
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedNonResidentFile(
-      stale_size, {FakeDataRun{.lcn = 40, .clusters = 4}});
+  std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithFreedNonResidentFile(
+          stale_size, {FakeDataRun{.lcn = 40, .clusters = 4}});
   Support::FillStaleClusters(image, 13);
-  Tests::SetRecordInUse(image, Tests::mft_tree_stale_child_idx, in_use);
+  TestFakeImage::SetRecordInUse(image, TestFakeImage::mft_tree_stale_child_idx,
+                                in_use);
   return Support::WithBitmap(std::move(image), allocated_runs);
 }
 
@@ -134,7 +137,7 @@ void CheckTheVolumesOwnMetadataIsNotChecked() {
 
   const auto mft = Support::ParsedRecord(*opened.volume,
                                          static_cast<ULONGLONG>(Mft::Idx::Mft));
-  std::vector<BYTE> mft_bytes(Tests::fake_cluster_size);
+  std::vector<BYTE> mft_bytes(TestFakeImage::fake_cluster_size);
   CHECK(mft->FindStream({})->ReadData(0, mft_bytes));
 
   const auto bitmap = Support::ParsedRecord(
@@ -148,10 +151,12 @@ void CheckTheVolumesOwnMetadataIsNotChecked() {
 // A live stale file in two fragments of two clusters, at LCN 40 and 50.
 std::vector<BYTE> FragmentedLiveImage(std::span<const FakeDataRun> allocated,
                                       std::span<const Alloc::Extent> bad) {
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedNonResidentFile(
-      stale_size, {FakeDataRun{.lcn = 40, .clusters = 2},
-                   FakeDataRun{.lcn = 50, .clusters = 2}});
-  Tests::SetRecordInUse(image, Tests::mft_tree_stale_child_idx, true);
+  std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithFreedNonResidentFile(
+          stale_size, {FakeDataRun{.lcn = 40, .clusters = 2},
+                       FakeDataRun{.lcn = 50, .clusters = 2}});
+  TestFakeImage::SetRecordInUse(image, TestFakeImage::mft_tree_stale_child_idx,
+                                true);
   image = Support::WithBitmap(std::move(image), allocated);
   if (!bad.empty()) {
     image = Support::WithBadClusters(std::move(image), bad);

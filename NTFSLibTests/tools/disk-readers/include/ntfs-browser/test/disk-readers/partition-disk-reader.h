@@ -10,7 +10,7 @@
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders {
 
 // A real IDiskReader over a whole-disk image file (MBR plus one NTFS
 // partition), offsetting every read by partitionOffset. NtfsVolume's own
@@ -39,4 +39,4 @@ class PartitionDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   mutable std::ifstream file_;
 };
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders

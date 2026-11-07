@@ -17,16 +17,16 @@
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/mft/mft-tree-state-support.h>
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 struct VolumeOptions;
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace AllocSupport = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AccountSupport;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace TreeSupport = NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport;
 using Alloc::ClusterCondition;
 using Alloc::ClusterPiece;
@@ -34,15 +34,15 @@ using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using Support::Freed;
 using Support::Live;
 using Support::Stream;
-using Tests::FakeAccountFile;
-using Tests::FakeAccountStream;
-using Tests::FakeDataRun;
+using TestFakeImage::FakeAccountFile;
+using TestFakeImage::FakeAccountStream;
+using TestFakeImage::FakeDataRun;
 
 namespace {
 
 constexpr ULONGLONG subject = 22;
 constexpr ULONGLONG live_owner = 17;
-constexpr ULONGLONG cluster = Tests::fake_cluster_size;
+constexpr ULONGLONG cluster = TestFakeImage::fake_cluster_size;
 
 template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 TreeSupport::ScannedVolume<S>
@@ -175,7 +175,7 @@ TEST_CASE("a damaged compression unit marks all of its clusters",
                 {44, 2},
                 FakeDataRun{.lcn = std::nullopt, .clusters = 2}},
                8 * cluster);
-    stream.comp_unit_size = Tests::compression_unit_size_shift;
+    stream.comp_unit_size = TestFakeImage::compression_unit_size_shift;
     volume.Put(subject, Freed(100, stream));
     // A live file rewrote the second real cluster of the first unit.
     volume.Put(live_owner, Live(Stream({{41, 1}}, cluster)));

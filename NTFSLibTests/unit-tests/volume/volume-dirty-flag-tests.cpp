@@ -19,7 +19,7 @@
 #include <ntfs-browser/volume-options.h>
 
 using Catch::Matchers::ContainsSubstring;
-using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 
 namespace {
@@ -44,8 +44,8 @@ Opened Open(WORD flags, NTFS_BROWSER_NAMESPACE::VolumeOptions options) {
   (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
   const NTFS_BROWSER_NAMESPACE::NtfsVolume<S> volume(
       std::make_unique<MemoryDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithVolumeFlags(
-              flags)),
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+              BuildFakeNtfsImageWithVolumeFlags(flags)),
       options);
   return {.ok = volume.IsVolumeOK(),
           .log = NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog()};

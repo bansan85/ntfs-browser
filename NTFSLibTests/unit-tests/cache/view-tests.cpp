@@ -23,7 +23,7 @@
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 using FullReader =
     NTFS_BROWSER_NAMESPACE::Io::FileReader<Cache::Strategy::FullCache>;
-using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
 
 namespace {
 

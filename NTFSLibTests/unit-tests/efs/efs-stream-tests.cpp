@@ -67,6 +67,9 @@ using NTFS_BROWSER_NAMESPACE::Tests::Algorithm;
 using NTFS_BROWSER_NAMESPACE::Tests::TestEfsEntry;
 using NTFS_BROWSER_NAMESPACE::Tests::TestKeyProvider;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 
 namespace {
 
@@ -181,7 +184,7 @@ TEMPLATE_TEST_CASE_SIG(
       Tests::EfsEncrypt(Algorithm::Aes256, key, tail, tail_start);
   cipher.insert(cipher.end(), cipher_tail.begin(), cipher_tail.end());
 
-  Tests::FakeEncryptedFile file;
+  TestFakeImage::FakeEncryptedFile file;
   file.efs_stream = Tests::MakeEfsStream(std::span(&user, 1));
   file.streams.push_back({.runs = {{first_stream_lcn, 2},
                                    {{}, 2},
@@ -193,8 +196,8 @@ TEMPLATE_TEST_CASE_SIG(
   expected.resize(tail_start, 0);
   expected.insert(expected.end(), tail.begin(), tail.end());
 
-  const Opened<S> opened =
-      OpenVolume<S>(Tests::BuildFakeNtfsImageWithEncryptedFile(file), provider);
+  const Opened<S> opened = OpenVolume<S>(
+      TestFakeImage::BuildFakeNtfsImageWithEncryptedFile(file), provider);
   const auto read = ReadAt<S>(OnlyData<S>(*opened.record), 0, expected.size());
   REQUIRE(read.has_value());
   CHECK(Tests::Unwrap(read) == expected);
@@ -213,7 +216,7 @@ TEMPLATE_TEST_CASE_SIG(
   const std::vector<BYTE> secret = Tests::PlaintextPattern(700);
   const std::vector<BYTE> plain(300, 0x5A);
 
-  Tests::FakeEncryptedFile file;
+  TestFakeImage::FakeEncryptedFile file;
   file.efs_stream = Tests::MakeEfsStream(std::span(&user, 1));
   file.streams.push_back(
       {.runs = {{first_stream_lcn, 2}},
@@ -230,8 +233,8 @@ TEMPLATE_TEST_CASE_SIG(
                           .real_size = plain.size(),
                           .flagged_encrypted = false});
 
-  Opened<S> opened =
-      OpenVolume<S>(Tests::BuildFakeNtfsImageWithEncryptedFile(file), provider);
+  Opened<S> opened = OpenVolume<S>(
+      TestFakeImage::BuildFakeNtfsImageWithEncryptedFile(file), provider);
 
   const AttrBase<S>* named_stream = opened.record->FindStream(L"secret");
   REQUIRE(named_stream != nullptr);
@@ -293,15 +296,16 @@ TEMPLATE_TEST_CASE_SIG(
   }
 
   SECTION("the record has no $EFS stream at all") {
-    Tests::FakeEncryptedFile file;
+    TestFakeImage::FakeEncryptedFile file;
     file.streams.push_back({.runs = {{first_stream_lcn, 1}},
                             .cluster_bytes = std::vector<BYTE>(
                                 bogus_cluster_size, bogus_cluster_fill),
                             .real_size = bogus_real_size});
 
     (void)TakeLog();
-    const Opened<S> opened = OpenVolume<S>(
-        Tests::BuildFakeNtfsImageWithEncryptedFile(file), fixture.provider);
+    const Opened<S> opened =
+        OpenVolume<S>(TestFakeImage::BuildFakeNtfsImageWithEncryptedFile(file),
+                      fixture.provider);
     CHECK_FALSE(ReadAt<S>(OnlyData<S>(*opened.record), 0, 100).has_value());
     CHECK_THAT(TakeLog(), Catch::Matchers::ContainsSubstring(
                               "the record has no usable $EFS stream"));
@@ -327,14 +331,14 @@ TEMPLATE_TEST_CASE_SIG("The key can come from any entry of the $EFS stream",
     provider->Add(users[1].thumbprint, users[1].wrapped_fek,
                   Tests::MakeFekBlob(Algorithm::Aes128, key));
 
-    Tests::FakeEncryptedFile file;
+    TestFakeImage::FakeEncryptedFile file;
     file.efs_stream = Tests::MakeEfsStream(users);
     file.streams.push_back(
         {.runs = {{first_stream_lcn, 1}},
          .cluster_bytes = Tests::EfsEncrypt(Algorithm::Aes128, key, plaintext),
          .real_size = plaintext.size()});
     const Opened<S> opened = OpenVolume<S>(
-        Tests::BuildFakeNtfsImageWithEncryptedFile(file), provider);
+        TestFakeImage::BuildFakeNtfsImageWithEncryptedFile(file), provider);
     CHECK(ReadAt<S>(OnlyData<S>(*opened.record), 0, 900) == plaintext);
   }
 
@@ -345,14 +349,14 @@ TEMPLATE_TEST_CASE_SIG("The key can come from any entry of the $EFS stream",
     provider->Add(recovery[0].thumbprint, recovery[0].wrapped_fek,
                   Tests::MakeFekBlob(Algorithm::Aes128, key));
 
-    Tests::FakeEncryptedFile file;
+    TestFakeImage::FakeEncryptedFile file;
     file.efs_stream = Tests::MakeEfsStream(users, recovery);
     file.streams.push_back(
         {.runs = {{first_stream_lcn, 1}},
          .cluster_bytes = Tests::EfsEncrypt(Algorithm::Aes128, key, plaintext),
          .real_size = plaintext.size()});
     const Opened<S> opened = OpenVolume<S>(
-        Tests::BuildFakeNtfsImageWithEncryptedFile(file), provider);
+        TestFakeImage::BuildFakeNtfsImageWithEncryptedFile(file), provider);
     CHECK(ReadAt<S>(OnlyData<S>(*opened.record), 0, 900) == plaintext);
   }
 }
@@ -365,15 +369,15 @@ TEMPLATE_TEST_CASE_SIG("A resident $EFS stream works like a non-resident one",
   const TestEfsEntry user = TestUser();
   const auto provider = ProviderFor(user, Algorithm::Aes256, key);
 
-  Tests::FakeEncryptedFile file;
+  TestFakeImage::FakeEncryptedFile file;
   file.efs_resident = true;
   file.efs_stream = Tests::MakeEfsStream(std::span(&user, 1));
   file.streams.push_back(
       {.runs = {{first_stream_lcn, 1}},
        .cluster_bytes = Tests::EfsEncrypt(Algorithm::Aes256, key, plaintext),
        .real_size = plaintext.size()});
-  const Opened<S> opened =
-      OpenVolume<S>(Tests::BuildFakeNtfsImageWithEncryptedFile(file), provider);
+  const Opened<S> opened = OpenVolume<S>(
+      TestFakeImage::BuildFakeNtfsImageWithEncryptedFile(file), provider);
   CHECK(ReadAt<S>(OnlyData<S>(*opened.record), 0, 900) == plaintext);
 }
 
@@ -398,9 +402,9 @@ TEMPLATE_TEST_CASE_SIG(
   const auto provider =
       ProviderFor(user, Algorithm::Aes256, Tests::TestKey(Algorithm::Aes256));
 
-  const std::vector<BYTE> on_disk(Tests::fake_cluster_size, 0x42);
+  const std::vector<BYTE> on_disk(TestFakeImage::fake_cluster_size, 0x42);
 
-  Tests::FakeEncryptedFile file;
+  TestFakeImage::FakeEncryptedFile file;
   file.efs_stream = Tests::MakeEfsStream(std::span(&user, 1));
   file.streams.push_back({.runs = {{first_stream_lcn, 1}},
                           .cluster_bytes = on_disk,
@@ -409,9 +413,9 @@ TEMPLATE_TEST_CASE_SIG(
                           .flagged_compressed = true});
 
   (void)TakeLog();
-  const Opened<S> opened =
-      OpenVolume<S>(Tests::BuildFakeNtfsImageWithEncryptedFile(file), provider,
-                    std::nullopt, VolumeOptions{.recover_errors = true});
+  const Opened<S> opened = OpenVolume<S>(
+      TestFakeImage::BuildFakeNtfsImageWithEncryptedFile(file), provider,
+      std::nullopt, VolumeOptions{.recover_errors = true});
 
   // Never decrypted: the bytes come back exactly as they sit on disk.
   const auto read = ReadAt<S>(OnlyData<S>(*opened.record), 0, on_disk.size());
@@ -430,9 +434,9 @@ TEMPLATE_TEST_CASE_SIG(
   const auto provider =
       ProviderFor(user, Algorithm::Aes256, Tests::TestKey(Algorithm::Aes256));
 
-  const std::vector<BYTE> on_disk(Tests::fake_cluster_size, 0x42);
+  const std::vector<BYTE> on_disk(TestFakeImage::fake_cluster_size, 0x42);
 
-  Tests::FakeEncryptedFile file;
+  TestFakeImage::FakeEncryptedFile file;
   file.efs_stream = Tests::MakeEfsStream(std::span(&user, 1));
   file.streams.push_back({.runs = {{first_stream_lcn, 1}},
                           .cluster_bytes = on_disk,
@@ -440,9 +444,9 @@ TEMPLATE_TEST_CASE_SIG(
                           .flagged_encrypted = true,
                           .flagged_compressed = true});
 
-  auto volume =
-      std::make_unique<NtfsVolume<S>>(std::make_unique<Tests::MemoryDiskReader>(
-          Tests::BuildFakeNtfsImageWithEncryptedFile(file)));
+  auto volume = std::make_unique<NtfsVolume<S>>(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(
+          TestFakeImage::BuildFakeNtfsImageWithEncryptedFile(file)));
   REQUIRE(volume->IsVolumeOK());
   volume->SetEfsKeyProvider(provider);
 
@@ -464,7 +468,7 @@ TEMPLATE_TEST_CASE_SIG(
   const TestEfsEntry user = TestUser();
   const auto provider = ProviderFor(user, Algorithm::Aes256, key);
 
-  Tests::FakeEncryptedFile file;
+  TestFakeImage::FakeEncryptedFile file;
   file.efs_stream = Tests::MakeEfsStream(std::span(&user, 1));
   file.trailing_undersized_attribute = true;
   file.streams.push_back(
@@ -472,9 +476,10 @@ TEMPLATE_TEST_CASE_SIG(
        .cluster_bytes = Tests::EfsEncrypt(Algorithm::Aes256, key, plaintext),
        .real_size = size_value});
 
-  NtfsVolume<S> volume(std::make_unique<Tests::MemoryDiskReader>(
-                           Tests::BuildFakeNtfsImageWithEncryptedFile(file)),
-                       VolumeOptions{.recover_errors = true});
+  NtfsVolume<S> volume(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(
+          TestFakeImage::BuildFakeNtfsImageWithEncryptedFile(file)),
+      VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
   volume.SetEfsKeyProvider(provider);
 
@@ -497,7 +502,7 @@ TEMPLATE_TEST_CASE_SIG(
   const TestEfsEntry user = TestUser();
   const auto provider = ProviderFor(user, Algorithm::Aes256, key);
 
-  Tests::FakeEncryptedFile file;
+  TestFakeImage::FakeEncryptedFile file;
   file.efs_resident = true;
   file.efs_body_overruns = true;
   file.efs_stream = Tests::MakeEfsStream(std::span(&user, 1));
@@ -506,9 +511,10 @@ TEMPLATE_TEST_CASE_SIG(
        .cluster_bytes = Tests::EfsEncrypt(Algorithm::Aes256, key, plaintext),
        .real_size = size_value});
 
-  NtfsVolume<S> volume(std::make_unique<Tests::MemoryDiskReader>(
-                           Tests::BuildFakeNtfsImageWithEncryptedFile(file)),
-                       VolumeOptions{.recover_errors = true});
+  NtfsVolume<S> volume(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(
+          TestFakeImage::BuildFakeNtfsImageWithEncryptedFile(file)),
+      VolumeOptions{.recover_errors = true});
   REQUIRE(volume.IsVolumeOK());
   volume.SetEfsKeyProvider(provider);
 
@@ -525,9 +531,9 @@ TEMPLATE_TEST_CASE_SIG("An encrypted directory parses and lists its entries",
                        "[efs]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   // The named records are not built: only recover_errors lists these entries.
-  Opened<S> opened =
-      OpenVolume<S>(Tests::BuildFakeNtfsImageWithEncryptedDirectory(), nullptr,
-                    std::nullopt, VolumeOptions{.recover_errors = true});
+  Opened<S> opened = OpenVolume<S>(
+      TestFakeImage::BuildFakeNtfsImageWithEncryptedDirectory(), nullptr,
+      std::nullopt, VolumeOptions{.recover_errors = true});
   CHECK(opened.record->IsEncrypted());
   CHECK(opened.record->IsDirectory());
 
@@ -542,9 +548,9 @@ TEMPLATE_TEST_CASE_SIG("An encrypted directory parses and lists its entries",
   REQUIRE(names.size() == 2);
   // The REQUIRE above checks the size of names.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(names[0] == Tests::encrypted_directory_names[0]);
+  CHECK(names[0] == TestFakeImage::encrypted_directory_names[0]);
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(names[1] == Tests::encrypted_directory_names[1]);
+  CHECK(names[1] == TestFakeImage::encrypted_directory_names[1]);
 }
 
 #ifdef NTFS_BROWSER_ENABLE_DECOMPRESSION
@@ -558,8 +564,8 @@ TEMPLATE_TEST_CASE_SIG(
     "[efs]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
   Opened<S> opened = OpenVolume<S>(
-      Tests::BuildFakeNtfsImageWithCompressedEncryptedDirectory(), nullptr,
-      std::nullopt, VolumeOptions{.recover_errors = true});
+      TestFakeImage::BuildFakeNtfsImageWithCompressedEncryptedDirectory(),
+      nullptr, std::nullopt, VolumeOptions{.recover_errors = true});
   CHECK(opened.record->IsEncrypted());
   CHECK(opened.record->IsCompressed());
   CHECK(opened.record->IsDirectory());
@@ -575,9 +581,9 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(names.size() == 2);
   // The REQUIRE above checks the size of names.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(names[0] == Tests::encrypted_directory_names[0]);
+  CHECK(names[0] == TestFakeImage::encrypted_directory_names[0]);
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  CHECK(names[1] == Tests::encrypted_directory_names[1]);
+  CHECK(names[1] == TestFakeImage::encrypted_directory_names[1]);
 }
 #endif
 
@@ -596,10 +602,11 @@ TEMPLATE_TEST_CASE_SIG(
   // Ciphertext up to the initialized size, then residue the key never wrote.
   std::vector<BYTE> cluster =
       Tests::EfsEncrypt(Algorithm::Aes256, key, head, 0);
-  cluster.resize(size_t{ClustersFor(real_size)} * Tests::fake_cluster_size,
+  cluster.resize(size_t{ClustersFor(real_size)} *
+                     TestFakeImage::fake_cluster_size,
                  residue_fill);
 
-  Tests::FakeEncryptedFile file;
+  TestFakeImage::FakeEncryptedFile file;
   file.efs_stream = Tests::MakeEfsStream(std::span(&user, 1));
   file.streams.push_back({.runs = {{first_stream_lcn, ClustersFor(real_size)}},
                           .cluster_bytes = cluster,
@@ -609,8 +616,8 @@ TEMPLATE_TEST_CASE_SIG(
   std::vector<BYTE> expected = head;
   expected.resize(real_size, 0);
 
-  const Opened<S> opened =
-      OpenVolume<S>(Tests::BuildFakeNtfsImageWithEncryptedFile(file), provider);
+  const Opened<S> opened = OpenVolume<S>(
+      TestFakeImage::BuildFakeNtfsImageWithEncryptedFile(file), provider);
   const auto read = ReadAt<S>(OnlyData<S>(*opened.record), 0, real_size);
   REQUIRE(read.has_value());
   CHECK(Tests::Unwrap(read) == expected);

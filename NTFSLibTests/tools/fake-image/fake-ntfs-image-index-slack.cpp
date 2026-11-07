@@ -18,7 +18,7 @@
 #include "data/ntfs-bpb.h"
 #include "fake-ntfs-image-internal.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage {
 
 namespace {
 
@@ -131,9 +131,10 @@ std::vector<BYTE> BuildFakeNtfsImageWithIndexBlocks(
       record, offset, {.start_vcn = 0, .clusters = clusters, .lcn = blocks_lcn},
       ULONGLONG{block_size} * blocks.size());
   WriteEndOfAttributesMarker(record, offset);
-  const size_t root_offset = static_cast<size_t>(mft_lcn) * cluster_size +
-                             static_cast<size_t>(fake_file_record_size) *
-                                 static_cast<size_t>(Mft::Idx::Root);
+  const size_t root_offset =
+      static_cast<size_t>(mft_lcn) * cluster_size +
+      static_cast<size_t>(fake_file_record_size) *
+          static_cast<size_t>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root);
   std::memcpy(&image.at(root_offset), record.data(), record.size());
 
   // FullCache reads whole blocks, so the image must run past the end of the
@@ -154,4 +155,4 @@ std::vector<BYTE> BuildFakeNtfsImageWithIndexBlocks(
   return image;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage

@@ -66,7 +66,7 @@ class FaultyDiskReader final : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   }
 
  private:
-  NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader inner_;
+  NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader inner_;
   ULONGLONG fault_begin_;
   ULONGLONG fault_end_;
   Fault fault_;
@@ -76,9 +76,9 @@ class FaultyDiskReader final : public NTFS_BROWSER_NAMESPACE::IDiskReader {
 #ifdef NTFS_BROWSER_ENABLE_DECOMPRESSION
 // Fake images put their compressed or stored unit data at LCN 30 onwards.
 constexpr ULONGLONG compressed_fault_begin =
-    30ULL * NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size;
+    30ULL * NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size;
 constexpr ULONGLONG compressed_fault_end =
-    40ULL * NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size;
+    40ULL * NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size;
 #endif
 
 }  // namespace
@@ -90,15 +90,18 @@ namespace {
 template <Cache::Strategy S>
 void CheckUnalignedFirstClusterFails(FaultyDiskReader::Fault fault) {
   const ULONGLONG block_begin =
-      index_block_lcn * NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size;
+      index_block_lcn *
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size;
   const ULONGLONG block_end =
-      block_begin + NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size;
+      block_begin + NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size;
   auto reader = std::make_unique<FaultyDiskReader>(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithForgedIndexBlock(),
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+          BuildFakeNtfsImageWithForgedIndexBlock(),
       block_begin, block_end, fault);
   FaultyDiskReader* const faulty = reader.get();
   auto parsed = OpenRecordFrom<S>(
-      std::move(reader), NTFS_BROWSER_NAMESPACE::Tests::index_alloc_dir_idx);
+      std::move(reader),
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::index_alloc_dir_idx);
   faulty->Arm();
   REQUIRE(parsed.record->ParseAttrs());
   const auto& alloc = parsed.record->GetAttr(Attr::Type::IndexAllocation);
@@ -148,17 +151,17 @@ TEST_CASE("A compression unit whose clusters cannot be read yields no data",
     REQUIRE(data.size() == 1);
 
     std::vector<BYTE> buffer(
-        NTFS_BROWSER_NAMESPACE::Tests::compression_unit_size);
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::compression_unit_size);
     CHECK_FALSE(data[0]->ReadData(0, buffer).has_value());
   };
 
   SECTION("a compressed unit whose real clusters cannot be read") {
-    check_unit_read_fails(
-        NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithCompressedFile());
+    check_unit_read_fails(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                              BuildFakeNtfsImageWithCompressedFile());
   }
 
   SECTION("a stored unit whose clusters cannot be read") {
-    check_unit_read_fails(NTFS_BROWSER_NAMESPACE::Tests::
+    check_unit_read_fails(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
                               BuildFakeNtfsImageWithStoredCompressionUnit());
   }
 }
@@ -168,25 +171,27 @@ namespace {
 
 // Every fake image puts $MFT at LCN 1.
 constexpr ULONGLONG fake_mft_begin =
-    NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size;
+    NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size;
 
 // The bytes of the records below Mft::Idx::User, read by the direct path.
 constexpr ULONGLONG fake_mft_direct_end =
     fake_mft_begin +
     static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::User) *
-        NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size;
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_file_record_size;
 
 // Clusters of the data run that maps $MFT's fragmented records (see
 // BuildFakeNtfsImageWithFragmentedMftInvalidRecord()).
 constexpr ULONGLONG fragmented_mft_fault_begin =
     static_cast<ULONGLONG>(
-        NTFS_BROWSER_NAMESPACE::Tests::fragmented_mft_data_run_lcn) *
-    NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size;
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::fragmented_mft_data_run_lcn) *
+    NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size;
 constexpr ULONGLONG fragmented_mft_fault_end =
     static_cast<ULONGLONG>(
-        NTFS_BROWSER_NAMESPACE::Tests::fragmented_mft_data_run_lcn +
-        NTFS_BROWSER_NAMESPACE::Tests::fragmented_mft_invalid_record_idx + 1) *
-    NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size;
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::fragmented_mft_data_run_lcn +
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+            fragmented_mft_invalid_record_idx +
+        1) *
+    NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size;
 
 // A record number far past any $MFT extent.
 constexpr ULONGLONG unmapped_record_idx = 1ULL << 40U;
@@ -199,8 +204,8 @@ TEMPLATE_TEST_CASE_SIG(
     "[file-record][disk-read]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<FaultyDiskReader>(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage(), fake_mft_begin,
-      fake_mft_direct_end, FaultyDiskReader::Fault::Fail);
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage(),
+      fake_mft_begin, fake_mft_direct_end, FaultyDiskReader::Fault::Fail);
   FaultyDiskReader* const faulty = reader.get();
   const NTFS_BROWSER_NAMESPACE::NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
@@ -222,7 +227,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[file-record][disk-read]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<FaultyDiskReader>(
-      NTFS_BROWSER_NAMESPACE::Tests::
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::
           BuildFakeNtfsImageWithFragmentedMftInvalidRecord(),
       fragmented_mft_fault_begin, fragmented_mft_fault_end,
       FaultyDiskReader::Fault::Fail);
@@ -235,8 +240,8 @@ TEMPLATE_TEST_CASE_SIG(
   (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
   bool parsed = true;
   REQUIRE_NOTHROW(
-      parsed = record.ParseFileRecord(
-          NTFS_BROWSER_NAMESPACE::Tests::fragmented_mft_invalid_record_idx));
+      parsed = record.ParseFileRecord(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                                          fragmented_mft_invalid_record_idx));
   CHECK_FALSE(parsed);
   CHECK(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog().find(
             "Cannot read file record 16") != std::string::npos);
@@ -246,8 +251,9 @@ TEMPLATE_TEST_CASE_SIG("A record past every $MFT extent yields no record",
                        "[file-record][disk-read]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const NTFS_BROWSER_NAMESPACE::NtfsVolume<S> volume(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage()));
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage()));
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
@@ -265,16 +271,18 @@ TEMPLATE_TEST_CASE_SIG(
     "[file-record][disk-read]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const NTFS_BROWSER_NAMESPACE::NtfsVolume<S> volume(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::
               BuildFakeNtfsImageWithForgedDirectRecord()));
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
   (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
   bool parsed = true;
-  REQUIRE_NOTHROW(parsed = record.ParseFileRecord(
-                      NTFS_BROWSER_NAMESPACE::Tests::forged_direct_record_idx));
+  REQUIRE_NOTHROW(
+      parsed = record.ParseFileRecord(
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::forged_direct_record_idx));
   CHECK_FALSE(parsed);
   const std::string log = NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
   CHECK(log.find("Offset must be lower than 1024.") != std::string::npos);
@@ -311,8 +319,9 @@ TEMPLATE_TEST_CASE_SIG(
   // A volume whose $MFT does not parse has no extent map, so every record
   // takes the direct path.
   const NTFS_BROWSER_NAMESPACE::NtfsVolume<S> volume(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::
               BuildFakeNtfsImageWithCorruptMftRecord()));
   REQUIRE_FALSE(volume.IsVolumeOK());
 
@@ -334,8 +343,9 @@ TEMPLATE_TEST_CASE_SIG(
     "[file-record][disk-read][characterization]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const NTFS_BROWSER_NAMESPACE::NtfsVolume<S> volume(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage()));
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage()));
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
@@ -354,15 +364,18 @@ TEMPLATE_TEST_CASE_SIG(
     "and warns",
     "[file-record][disk-read][characterization]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
-  PutWord(image,
-          fake_mft_begin +
-              static_cast<size_t>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root) *
-                  NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size +
-              first_sector_fixup_offset,
-          unverified_fixup_word);
+  std::vector<BYTE> image =
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage();
+  PutWord(
+      image,
+      fake_mft_begin +
+          static_cast<size_t>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root) *
+              NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_file_record_size +
+          first_sector_fixup_offset,
+      unverified_fixup_word);
   const NTFS_BROWSER_NAMESPACE::NtfsVolume<S> volume(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           std::move(image)));
   REQUIRE(volume.IsVolumeOK());
 
@@ -383,8 +396,8 @@ TEMPLATE_TEST_CASE_SIG(
     "[file-record][disk-read][characterization]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<FaultyDiskReader>(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage(), fake_mft_begin,
-      fake_mft_direct_end, FaultyDiskReader::Fault::Throw);
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage(),
+      fake_mft_begin, fake_mft_direct_end, FaultyDiskReader::Fault::Throw);
   FaultyDiskReader* const faulty = reader.get();
   const NTFS_BROWSER_NAMESPACE::NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());

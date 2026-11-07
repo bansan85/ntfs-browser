@@ -27,6 +27,7 @@
 namespace DirSample = NTFS_BROWSER_NAMESPACE::Tests::DirSample;
 namespace MftListSample = NTFS_BROWSER_NAMESPACE::Tests::MftListSample;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using Catch::Matchers::ContainsSubstring;
 using NtfsDevice::JsonValue;
@@ -133,8 +134,8 @@ struct Tool {
 // The image files the tools list, made once per test.
 struct Images {
   MftListSample::TempTreeImage mft_list{
-      Tests::BuildFakeNtfsImageWithListMftScan(list_record_count,
-                                               list_fragment_clusters)};
+      TestFakeImage::BuildFakeNtfsImageWithListMftScan(list_record_count,
+                                                       list_fragment_clusters)};
   DirSample::TempImage dir;
 };
 

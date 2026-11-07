@@ -46,7 +46,8 @@ std::uint64_t LocalFakeWriteTime() {
 std::unique_ptr<FullVolume> OpenVolume(std::vector<BYTE> image,
                                        bool include_deleted = true) {
   return std::make_unique<FullVolume>(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           std::move(image)),
       NTFS_BROWSER_NAMESPACE::VolumeOptions{.include_deleted =
                                                 include_deleted});
@@ -95,8 +96,8 @@ void CheckNamedRootPaths(FullVolume& volume) {
 
 TEST_CASE("NtfsUndel search lists freed records in record number order",
           "[undel][search][characterization]") {
-  const auto volume = OpenVolume(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithFreedFileTree());
+  const auto volume = OpenVolume(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                                     BuildFakeNtfsImageWithFreedFileTree());
 
   const SearchResult result = Search(*volume, L".*");
 
@@ -110,8 +111,8 @@ TEST_CASE("NtfsUndel search lists freed records in record number order",
 
 TEST_CASE("NtfsUndel search builds each path from the directory entries",
           "[undel][search][characterization]") {
-  const auto volume = OpenVolume(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithFreedFileTree());
+  const auto volume = OpenVolume(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                                     BuildFakeNtfsImageWithFreedFileTree());
 
   const SearchResult result = Search(*volume, L".*");
 
@@ -127,15 +128,16 @@ TEST_CASE("NtfsUndel search builds each path from the directory entries",
 TEST_CASE("NtfsUndel search paths start at the root when it is named .",
           "[undel][search][characterization]") {
   const auto volume = OpenVolume(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithNamedRoot(L"."));
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithNamedRoot(
+          L"."));
 
   CheckNamedRootPaths(*volume);
 }
 
 TEST_CASE("NtfsUndel search paths do not take the root's name from its record",
           "[undel][search][characterization]") {
-  const auto volume =
-      OpenVolume(NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithNamedRoot(
+  const auto volume = OpenVolume(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithNamedRoot(
           L"Volume"));
 
   CheckNamedRootPaths(*volume);
@@ -143,8 +145,8 @@ TEST_CASE("NtfsUndel search paths do not take the root's name from its record",
 
 TEST_CASE("NtfsUndel search stops a path at a loop of directory entries",
           "[undel][search]") {
-  const auto volume = OpenVolume(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithIndexCycle());
+  const auto volume = OpenVolume(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                                     BuildFakeNtfsImageWithIndexCycle());
 
   const SearchResult result = Search(*volume, L"old\\.tmp");
 
@@ -156,8 +158,8 @@ TEST_CASE("NtfsUndel search stops a path at a loop of directory entries",
 
 TEST_CASE("NtfsUndel search does not loop on a directory indexing itself",
           "[undel][search]") {
-  const auto volume = OpenVolume(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithIndexCycle());
+  const auto volume = OpenVolume(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                                     BuildFakeNtfsImageWithIndexCycle());
 
   const SearchResult result = Search(*volume, L"self\\.tmp");
 
@@ -169,8 +171,8 @@ TEST_CASE("NtfsUndel search does not loop on a directory indexing itself",
 
 TEST_CASE("NtfsUndel search reports the write time of each freed record",
           "[undel][search][characterization]") {
-  const auto volume = OpenVolume(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithFreedFileTree());
+  const auto volume = OpenVolume(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                                     BuildFakeNtfsImageWithFreedFileTree());
 
   const SearchResult result = Search(*volume, L".*");
 
@@ -182,8 +184,8 @@ TEST_CASE("NtfsUndel search reports the write time of each freed record",
 
 TEST_CASE("NtfsUndel search matches the whole name as a regex",
           "[undel][search][characterization]") {
-  const auto volume = OpenVolume(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithFreedFileTree());
+  const auto volume = OpenVolume(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                                     BuildFakeNtfsImageWithFreedFileTree());
 
   CHECK(References(Search(*volume, L"old\\.tmp")) ==
         std::vector<std::uint64_t>{19});
@@ -195,8 +197,8 @@ TEST_CASE("NtfsUndel search matches the whole name as a regex",
 
 TEST_CASE("NtfsUndel search trims blanks around the filter",
           "[undel][search][characterization]") {
-  const auto volume = OpenVolume(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithFreedFileTree());
+  const auto volume = OpenVolume(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                                     BuildFakeNtfsImageWithFreedFileTree());
 
   CHECK(References(Search(*volume, L"  stale\\.txt \t")) ==
         std::vector<std::uint64_t>{22});
@@ -204,8 +206,8 @@ TEST_CASE("NtfsUndel search trims blanks around the filter",
 
 TEST_CASE("NtfsUndel search with only blanks as filter matches nothing",
           "[undel][search][characterization]") {
-  const auto volume = OpenVolume(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithFreedFileTree());
+  const auto volume = OpenVolume(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                                     BuildFakeNtfsImageWithFreedFileTree());
 
   // Blanks are trimmed to an empty pattern, which only an empty name matches.
   // Records without a name are never candidates.
@@ -214,8 +216,8 @@ TEST_CASE("NtfsUndel search with only blanks as filter matches nothing",
 
 TEST_CASE("NtfsUndel search rejects a filter that is not a regex",
           "[undel][search][characterization]") {
-  const auto volume = OpenVolume(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithFreedFileTree());
+  const auto volume = OpenVolume(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                                     BuildFakeNtfsImageWithFreedFileTree());
 
   CHECK_FALSE(NtfsUndel::SearchDeletedFiles(*volume, L"[", {}).has_value());
   CHECK_FALSE(NtfsUndel::SearchDeletedFiles(*volume, L"(abc", {}).has_value());
@@ -223,8 +225,8 @@ TEST_CASE("NtfsUndel search rejects a filter that is not a regex",
 
 TEST_CASE("NtfsUndel search does not scan records past max_records",
           "[undel][search][characterization]") {
-  const auto volume = OpenVolume(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithFreedFileTree());
+  const auto volume = OpenVolume(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                                     BuildFakeNtfsImageWithFreedFileTree());
 
   // Record 19 is still scanned. Records 20 and up are not.
   const SearchControl control{.max_records = 20};
@@ -235,8 +237,8 @@ TEST_CASE("NtfsUndel search does not scan records past max_records",
 
 TEST_CASE("NtfsUndel search stops at once when stop is requested",
           "[undel][search][characterization]") {
-  const auto volume = OpenVolume(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithFreedFileTree());
+  const auto volume = OpenVolume(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                                     BuildFakeNtfsImageWithFreedFileTree());
 
   const SearchControl control{.stop_requested = [] { return true; }};
 
@@ -246,8 +248,8 @@ TEST_CASE("NtfsUndel search stops at once when stop is requested",
 
 TEST_CASE("NtfsUndel search truncates the list at max_listed",
           "[undel][search][characterization]") {
-  const auto volume = OpenVolume(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithFreedFileTree());
+  const auto volume = OpenVolume(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                                     BuildFakeNtfsImageWithFreedFileTree());
 
   const SearchResult result = Search(*volume, L".*", {.max_listed = 2});
 
@@ -257,8 +259,8 @@ TEST_CASE("NtfsUndel search truncates the list at max_listed",
 
 TEST_CASE("NtfsUndel search flags truncation when the list fills exactly",
           "[undel][search][characterization]") {
-  const auto volume = OpenVolume(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithFreedFileTree());
+  const auto volume = OpenVolume(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                                     BuildFakeNtfsImageWithFreedFileTree());
 
   // Four freed files fill a list of four. The flag still says the list was
   // cut, as the dialog warns in that case.
@@ -281,9 +283,9 @@ TEST_CASE("NtfsUndel search lists kMaxListedFiles rows by default",
 
 TEST_CASE("NtfsUndel search lists nothing without include_deleted",
           "[undel][search][characterization]") {
-  const auto volume = OpenVolume(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithFreedFileTree(),
-      /*include_deleted=*/false);
+  const auto volume = OpenVolume(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                                     BuildFakeNtfsImageWithFreedFileTree(),
+                                 /*include_deleted=*/false);
 
   CHECK(Search(*volume, L".*").files.empty());
 }

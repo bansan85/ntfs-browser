@@ -31,6 +31,7 @@
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
@@ -48,12 +49,13 @@ constexpr size_t file_size = 1000;
 
 // First byte of the $EFS stream of the fake image, at LCN 60 of 1 KiB.
 constexpr ULONGLONG efs_stream_offset =
-    ULONGLONG{Tests::fake_efs_stream_lcn} * Tests::fake_cluster_size;
+    ULONGLONG{TestFakeImage::fake_efs_stream_lcn} *
+    TestFakeImage::fake_cluster_size;
 
 // An encrypted file of one stream, the key provider that opens it, and the
 // plaintext it reads back as. what shapes the file before the image is built.
 struct Encrypted {
-  Tests::FakeEncryptedFile file;
+  TestFakeImage::FakeEncryptedFile file;
   std::shared_ptr<TestKeyProvider> provider;
   std::vector<BYTE> plaintext;
 };
@@ -84,9 +86,9 @@ TEMPLATE_TEST_CASE_SIG(
   Encrypted encrypted = MakeEncrypted();
   encrypted.file.other_logged_stream_name = L"$TXF_DATA";
 
-  const Opened<S> opened =
-      OpenVolume<S>(Tests::BuildFakeNtfsImageWithEncryptedFile(encrypted.file),
-                    encrypted.provider);
+  const Opened<S> opened = OpenVolume<S>(
+      TestFakeImage::BuildFakeNtfsImageWithEncryptedFile(encrypted.file),
+      encrypted.provider);
 
   CHECK(ReadAt<S>(OnlyData<S>(*opened.record), 0, file_size) ==
         encrypted.plaintext);
@@ -99,9 +101,9 @@ TEMPLATE_TEST_CASE_SIG("An $EFS stream above 64 KiB is not read",
   encrypted.file.efs_stream.assign(oversized_efs_stream, 0);
 
   (void)Tests::TakeCapturedLog();
-  const Opened<S> opened =
-      OpenVolume<S>(Tests::BuildFakeNtfsImageWithEncryptedFile(encrypted.file),
-                    encrypted.provider);
+  const Opened<S> opened = OpenVolume<S>(
+      TestFakeImage::BuildFakeNtfsImageWithEncryptedFile(encrypted.file),
+      encrypted.provider);
 
   CHECK_THAT(Tests::TakeCapturedLog(),
              ContainsSubstring("$EFS stream is too large"));
@@ -113,10 +115,10 @@ TEST_CASE("An $EFS stream that cannot be read leaves the data locked",
   constexpr Cache::Strategy S = Cache::Strategy::NoCache;
   Encrypted encrypted = MakeEncrypted();
   auto reader = std::make_unique<Tests::ScriptedDiskReader>(
-      Tests::BuildFakeNtfsImageWithEncryptedFile(encrypted.file));
+      TestFakeImage::BuildFakeNtfsImageWithEncryptedFile(encrypted.file));
   // The $EFS stream is one cluster; the data stream sits elsewhere.
   reader->FaultRange(efs_stream_offset,
-                     efs_stream_offset + Tests::fake_cluster_size,
+                     efs_stream_offset + TestFakeImage::fake_cluster_size,
                      Tests::ScriptedDiskReader::Fault::Fail);
   NtfsVolume<S> volume(std::move(reader), VolumeOptions{});
   REQUIRE(volume.IsVolumeOK());

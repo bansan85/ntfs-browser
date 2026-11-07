@@ -33,9 +33,9 @@ constexpr size_t first_sector_end = 510;
 // Record buffer whose update sequence array sits at us_offset, with the given
 // sector-end words.
 std::vector<BYTE> FixupBuffer(WORD first_end, WORD second_end) {
-  std::vector<BYTE> buffer(NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size,
-                           0);
-  NTFS_BROWSER_NAMESPACE::Tests::EditFileRecordHeader(
+  std::vector<BYTE> buffer(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_file_record_size, 0);
+  NTFS_BROWSER_NAMESPACE::Test::FakeImage::EditFileRecordHeader(
       buffer, [](Data::FileRecordHeader& header) {
         header.magic = Data::FileRecordHeader::file_record_magic;
         header.offset_of_us = fixup_us_offset;

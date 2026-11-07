@@ -21,8 +21,9 @@ TEMPLATE_TEST_CASE_SIG(
     "[ntfs-volume][regression]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   auto reader = std::make_unique<
-      NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithCorruptMftRecord());
+      NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+          BuildFakeNtfsImageWithCorruptMftRecord());
 
   const NtfsVolume<S> volume(std::move(reader));
 

@@ -34,9 +34,9 @@ namespace Data = NTFS_BROWSER_NAMESPACE::Data;
 namespace Volume = NTFS_BROWSER_NAMESPACE::Volume;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
 using NTFS_BROWSER_NAMESPACE::Tests::DfirMuseumDir;
 using NTFS_BROWSER_NAMESPACE::Tests::DfirNtfsDir;
-using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
 using NTFS_BROWSER_NAMESPACE::Tests::ReadCorpusFile;
 using NTFS_BROWSER_NAMESPACE::Tests::RequireCorpusFile;
 

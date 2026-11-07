@@ -20,8 +20,8 @@
 #include "record/slack-carver.h"
 
 namespace Record = NTFS_BROWSER_NAMESPACE::Record;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
-using Tests::FakeSlackName;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
+using TestFakeImage::FakeSlackName;
 
 namespace {
 
@@ -86,7 +86,7 @@ constexpr size_t after_terminator = marker_at + terminator.size();
 TEST_CASE("a complete name in the slack is carved", "[record][slack]") {
   std::vector<BYTE> record = EmptyRecord();
   const FakeSlackName slack = Named(L"report.txt");
-  Put(record, after_terminator, Tests::EncodeSlackName(slack));
+  Put(record, after_terminator, TestFakeImage::EncodeSlackName(slack));
 
   const auto carved = Carve(record);
 
@@ -110,7 +110,7 @@ TEST_CASE("several names are carved in the order they sit", "[record][slack]") {
   std::vector<BYTE> record = EmptyRecord();
   size_t offset = after_terminator;
   for (const std::wstring name : {L"first.txt", L"second.txt", L"third.txt"}) {
-    const std::vector<BYTE> bytes = Tests::EncodeSlackName(Named(name));
+    const std::vector<BYTE> bytes = TestFakeImage::EncodeSlackName(Named(name));
     Put(record, offset, bytes);
     offset += bytes.size();
   }
@@ -125,7 +125,8 @@ TEST_CASE("several names are carved in the order they sit", "[record][slack]") {
 
 TEST_CASE("a name on any even offset of the slack is found",
           "[record][slack]") {
-  const std::vector<BYTE> bytes = Tests::EncodeSlackName(Named(L"found.dat"));
+  const std::vector<BYTE> bytes =
+      TestFakeImage::EncodeSlackName(Named(L"found.dat"));
   for (size_t offset = after_terminator; offset + bytes.size() <= record_size;
        offset += 2) {
     std::vector<BYTE> record = EmptyRecord();
@@ -142,7 +143,8 @@ TEST_CASE("a name on any even offset of the slack is found",
 TEST_CASE("a name beyond the 2 bytes alignment is not looked for",
           "[record][slack]") {
   std::vector<BYTE> record = EmptyRecord();
-  Put(record, after_terminator + 1, Tests::EncodeSlackName(Named(L"odd.dat")));
+  Put(record, after_terminator + 1,
+      TestFakeImage::EncodeSlackName(Named(L"odd.dat")));
 
   CHECK(Carve(record).empty());
 }
@@ -153,7 +155,8 @@ TEST_CASE("a name that starts inside the terminator has no parent",
   // The structure begins on the four bytes after the marker word: its parent
   // reference is half the live record's.
   Put(record, marker_at + 4,
-      Tests::EncodeSlackName({.name = L"t3.txt", .with_entry_header = false}));
+      TestFakeImage::EncodeSlackName(
+          {.name = L"t3.txt", .with_entry_header = false}));
 
   const auto carved = Carve(record);
 
@@ -173,7 +176,8 @@ TEST_CASE("a name whose start the live record overwrote is partial",
   // The structure began before the marker: the live attributes overwrote its
   // parent reference and its times, and the terminator its last time.
   Put(record, marker_at - 16,
-      Tests::EncodeSlackName({.name = L"t2.txt", .with_entry_header = false}));
+      TestFakeImage::EncodeSlackName(
+          {.name = L"t2.txt", .with_entry_header = false}));
   PutTerminator(record);
 
   const auto carved = Carve(record);
@@ -198,7 +202,7 @@ TEST_CASE("a partial name needs five characters", "[record][slack]") {
                                 Case{L"ab.cd", true}, Case{L"abc.def", true}}) {
     std::vector<BYTE> record = EmptyRecord();
     Put(record, marker_at - 16,
-        Tests::EncodeSlackName(
+        TestFakeImage::EncodeSlackName(
             {.name = test_case.name, .with_entry_header = false}));
     PutTerminator(record);
 
@@ -297,7 +301,8 @@ TEST_CASE("random bytes with a plausible name header give no name",
 
 TEST_CASE("a copy of the same name is reported once", "[record][slack]") {
   std::vector<BYTE> record = EmptyRecord();
-  const std::vector<BYTE> bytes = Tests::EncodeSlackName(Named(L"twin.txt"));
+  const std::vector<BYTE> bytes =
+      TestFakeImage::EncodeSlackName(Named(L"twin.txt"));
   Put(record, after_terminator, bytes);
   Put(record, after_terminator + bytes.size() + 24, bytes);
 
@@ -310,9 +315,10 @@ TEST_CASE("the same name with other times is reported twice",
   FakeSlackName first = Named(L"twin.txt");
   FakeSlackName second = first;
   second.times.at(0) += 0x1000;
-  const std::vector<BYTE> bytes = Tests::EncodeSlackName(first);
+  const std::vector<BYTE> bytes = TestFakeImage::EncodeSlackName(first);
   Put(record, after_terminator, bytes);
-  Put(record, after_terminator + bytes.size(), Tests::EncodeSlackName(second));
+  Put(record, after_terminator + bytes.size(),
+      TestFakeImage::EncodeSlackName(second));
 
   CHECK(Carve(record).size() == 2);
 }
@@ -326,7 +332,7 @@ TEST_CASE("each time must be plausible", "[record][slack]") {
       std::vector<BYTE> record = EmptyRecord();
       FakeSlackName slack = Named(L"clock.txt");
       slack.times.at(which) = bad;
-      Put(record, after_terminator, Tests::EncodeSlackName(slack));
+      Put(record, after_terminator, TestFakeImage::EncodeSlackName(slack));
 
       INFO("time " << which << " = " << bad);
       CHECK(Carve(record).empty());
@@ -343,7 +349,7 @@ TEST_CASE("the edges of the plausible time range", "[record][slack]") {
     std::vector<BYTE> record = EmptyRecord();
     FakeSlackName slack = Named(L"edge.txt");
     slack.times.at(3) = time;
-    Put(record, after_terminator, Tests::EncodeSlackName(slack));
+    Put(record, after_terminator, TestFakeImage::EncodeSlackName(slack));
 
     INFO(time);
     CHECK(Carve(record).empty() != accepted);
@@ -357,7 +363,7 @@ TEST_CASE("attribute flags NTFS never sets reject the structure",
     std::vector<BYTE> record = EmptyRecord();
     FakeSlackName slack = Named(L"flags.txt");
     slack.flags = flags;
-    Put(record, after_terminator, Tests::EncodeSlackName(slack));
+    Put(record, after_terminator, TestFakeImage::EncodeSlackName(slack));
 
     INFO(flags);
     CHECK(Carve(record).empty());
@@ -368,7 +374,7 @@ TEST_CASE("a directory entry flag is accepted", "[record][slack]") {
   std::vector<BYTE> record = EmptyRecord();
   FakeSlackName slack = Named(L"folder");
   slack.flags = 0x10000000 | 0x20;
-  Put(record, after_terminator, Tests::EncodeSlackName(slack));
+  Put(record, after_terminator, TestFakeImage::EncodeSlackName(slack));
 
   CHECK(Carve(record).size() == 1);
 }
@@ -378,7 +384,7 @@ TEST_CASE("a namespace above 3 rejects the structure", "[record][slack]") {
     std::vector<BYTE> record = EmptyRecord();
     FakeSlackName slack = Named(L"space.txt");
     slack.name_space = name_space;
-    Put(record, after_terminator, Tests::EncodeSlackName(slack));
+    Put(record, after_terminator, TestFakeImage::EncodeSlackName(slack));
 
     INFO(+name_space);
     CHECK(Carve(record).empty());
@@ -390,7 +396,7 @@ TEST_CASE("every namespace from 0 to 3 is accepted", "[record][slack]") {
     std::vector<BYTE> record = EmptyRecord();
     FakeSlackName slack = Named(L"space.txt");
     slack.name_space = name_space;
-    Put(record, after_terminator, Tests::EncodeSlackName(slack));
+    Put(record, after_terminator, TestFakeImage::EncodeSlackName(slack));
 
     const auto carved = Carve(record);
 
@@ -413,7 +419,7 @@ TEST_CASE("a name with a forbidden character is rejected", "[record][slack]") {
   };
   for (const std::wstring& name : bad_names) {
     std::vector<BYTE> record = EmptyRecord();
-    Put(record, after_terminator, Tests::EncodeSlackName(Named(name)));
+    Put(record, after_terminator, TestFakeImage::EncodeSlackName(Named(name)));
 
     INFO(name.size());
     CHECK(Carve(record).empty());
@@ -427,7 +433,7 @@ TEST_CASE("a name with a lone surrogate is rejected", "[record][slack]") {
         std::array<WORD, 2>{0xDC00, 0x0041},
         std::array<WORD, 2>{0x0041, 0xD800}}) {
     std::vector<BYTE> record = EmptyRecord();
-    std::vector<BYTE> bytes = Tests::EncodeSlackName(Named(L"xx"));
+    std::vector<BYTE> bytes = TestFakeImage::EncodeSlackName(Named(L"xx"));
     // Entry header 16, then the name at 0x42: the two units.
     std::memcpy(&bytes.at(16 + 0x42), units.data(), sizeof(units));
     Put(record, after_terminator, bytes);
@@ -438,7 +444,7 @@ TEST_CASE("a name with a lone surrogate is rejected", "[record][slack]") {
 
 TEST_CASE("a surrogate pair in a name is accepted", "[record][slack]") {
   std::vector<BYTE> record = EmptyRecord();
-  std::vector<BYTE> bytes = Tests::EncodeSlackName(Named(L"xx"));
+  std::vector<BYTE> bytes = TestFakeImage::EncodeSlackName(Named(L"xx"));
   const std::array<WORD, 2> pair{0xD83D, 0xDE00};
   std::memcpy(&bytes.at(16 + 0x42), pair.data(), sizeof(pair));
   Put(record, after_terminator, bytes);
@@ -452,7 +458,7 @@ TEST_CASE("a surrogate pair in a name is accepted", "[record][slack]") {
 TEST_CASE("a name of 255 characters is carved", "[record][slack]") {
   std::vector<BYTE> record = EmptyRecord(4096);
   const std::wstring name(255, L'n');
-  Put(record, after_terminator, Tests::EncodeSlackName(Named(name)));
+  Put(record, after_terminator, TestFakeImage::EncodeSlackName(Named(name)));
 
   const auto carved = Carve(record);
 
@@ -462,7 +468,8 @@ TEST_CASE("a name of 255 characters is carved", "[record][slack]") {
 
 TEST_CASE("a name that ends on the last byte of the record is carved",
           "[record][slack]") {
-  const std::vector<BYTE> bytes = Tests::EncodeSlackName(Named(L"edge.txt"));
+  const std::vector<BYTE> bytes =
+      TestFakeImage::EncodeSlackName(Named(L"edge.txt"));
   // The padding to 8 bytes is not part of the name.
   const size_t name_end = 16 + 0x42 + (8 * 2);
   std::vector<BYTE> record = EmptyRecord(marker_at + 8 + name_end);
@@ -476,7 +483,8 @@ TEST_CASE("a name that ends on the last byte of the record is carved",
 
 TEST_CASE("a name that runs one byte past the record is not carved",
           "[record][slack]") {
-  const std::vector<BYTE> bytes = Tests::EncodeSlackName(Named(L"edge.txt"));
+  const std::vector<BYTE> bytes =
+      TestFakeImage::EncodeSlackName(Named(L"edge.txt"));
   const size_t name_end = 16 + 0x42 + (8 * 2);
   std::vector<BYTE> record = EmptyRecord(marker_at + 8 + name_end - 1);
   Put(record, after_terminator, std::span(bytes).first(name_end - 1));
@@ -501,7 +509,7 @@ TEST_CASE("a parent reference to record 0 is unknown", "[record][slack]") {
   FakeSlackName slack = Named(L"orphan.txt");
   slack.parent_record = 0;
   slack.parent_sequence = 0;
-  Put(record, after_terminator, Tests::EncodeSlackName(slack));
+  Put(record, after_terminator, TestFakeImage::EncodeSlackName(slack));
 
   const auto carved = Carve(record);
 
@@ -516,7 +524,7 @@ TEST_CASE("a parent sequence number is kept", "[record][slack]") {
   FakeSlackName slack = Named(L"seq.txt");
   slack.parent_record = 0x00ABCDEFULL;
   slack.parent_sequence = 0x7FFE;
-  Put(record, after_terminator, Tests::EncodeSlackName(slack));
+  Put(record, after_terminator, TestFakeImage::EncodeSlackName(slack));
 
   const auto carved = Carve(record);
 
@@ -550,7 +558,8 @@ TEST_CASE("a structure ending where the used size ends is carved",
   // Leftover bytes sit past the used size of the record, up to its allocated
   // size: only the bytes after the terminator count.
   std::vector<BYTE> record = EmptyRecord();
-  Put(record, record_size - 128, Tests::EncodeSlackName(Named(L"late.txt")));
+  Put(record, record_size - 128,
+      TestFakeImage::EncodeSlackName(Named(L"late.txt")));
 
   const auto carved = Carve(record);
 
@@ -559,7 +568,8 @@ TEST_CASE("a structure ending where the used size ends is carved",
 }
 
 TEST_CASE("the scan stops on dense overlapping candidates", "[record][slack]") {
-  const std::vector<BYTE> bytes = Tests::EncodeSlackName(Named(L"dense.txt"));
+  const std::vector<BYTE> bytes =
+      TestFakeImage::EncodeSlackName(Named(L"dense.txt"));
   for (const size_t stride : {size_t{2}, size_t{4}, size_t{8}, size_t{10}}) {
     std::vector<BYTE> record = EmptyRecord(4096);
     for (size_t offset = after_terminator;
@@ -599,7 +609,8 @@ TEST_CASE("a slack of a repeating name header terminates", "[record][slack]") {
 
 TEST_CASE("the carver does not change its input", "[record][slack]") {
   std::vector<BYTE> record = EmptyRecord();
-  Put(record, after_terminator, Tests::EncodeSlackName(Named(L"still.txt")));
+  Put(record, after_terminator,
+      TestFakeImage::EncodeSlackName(Named(L"still.txt")));
   const std::vector<BYTE> before = record;
 
   static_cast<void>(Carve(record));
@@ -613,7 +624,7 @@ TEST_CASE("a parent record number that cannot exist is unknown",
     std::vector<BYTE> record = EmptyRecord();
     FakeSlackName slack = Named(L"marker.txt");
     slack.parent_record = parent;
-    Put(record, after_terminator, Tests::EncodeSlackName(slack));
+    Put(record, after_terminator, TestFakeImage::EncodeSlackName(slack));
 
     const auto carved = Carve(record);
 

@@ -31,7 +31,8 @@
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
@@ -51,8 +52,8 @@ constexpr std::uint64_t mib_at_100_mbps_ns = 10'485'760;
 
 // A model with round numbers: one byte takes one nanosecond for a single read,
 // half of one for the whole disk.
-Tests::DiskModel RoundModel() {
-  Tests::DiskModel model;
+TestDiskReaders::DiskModel RoundModel() {
+  TestDiskReaders::DiskModel model;
   model.seek_ns = 1000;
   model.per_read_ns = 500;
   model.single_bytes_per_second = 1'000'000'000;
@@ -63,8 +64,8 @@ Tests::DiskModel RoundModel() {
 }
 
 // The simulated hard disk of NtfsBench: a long seek, one lane.
-Tests::DiskModel HardDisk() {
-  Tests::DiskModel model;
+TestDiskReaders::DiskModel HardDisk() {
+  TestDiskReaders::DiskModel model;
   model.seek_ns = 8000000;
   model.per_read_ns = 100000;
   model.single_bytes_per_second = 116'000'000;
@@ -73,17 +74,17 @@ Tests::DiskModel HardDisk() {
   return model;
 }
 
-std::unique_ptr<Tests::ThrottledDiskReader>
-    MakeReader(const Tests::DiskModel& model, Tests::SimulatedClock& clock,
-               const Caps& caps = {}) {
-  return std::make_unique<Tests::ThrottledDiskReader>(
-      std::make_unique<Tests::MemoryDiskReader>(
+std::unique_ptr<TestDiskReaders::ThrottledDiskReader>
+    MakeReader(const TestDiskReaders::DiskModel& model,
+               TestDiskReaders::SimulatedClock& clock, const Caps& caps = {}) {
+  return std::make_unique<TestDiskReaders::ThrottledDiskReader>(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(
           std::vector<BYTE>(disk_bytes, BYTE{7})),
       model, clock, caps);
 }
 
 // Reads length bytes at offset, which the test cannot go on without.
-void Read(const Tests::ThrottledDiskReader& reader, ULONGLONG offset,
+void Read(const TestDiskReaders::ThrottledDiskReader& reader, ULONGLONG offset,
           ULONGLONG length) {
   std::vector<BYTE> buffer(static_cast<std::size_t>(length));
   LARGE_INTEGER addr{};
@@ -93,7 +94,7 @@ void Read(const Tests::ThrottledDiskReader& reader, ULONGLONG offset,
 
 // Announces count adjacent ranges of one MiB from offset 0, then reads them
 // all, in order.
-void ReadAnnouncedMebibytes(const Tests::ThrottledDiskReader& reader,
+void ReadAnnouncedMebibytes(const TestDiskReaders::ThrottledDiskReader& reader,
                             std::size_t count) {
   for (std::size_t index = 0; index < count; index++) {
     reader.Prefetch(index * mib, mib);
@@ -106,12 +107,12 @@ void ReadAnnouncedMebibytes(const Tests::ThrottledDiskReader& reader,
 // What a run of the scripted reads left behind.
 struct Outcome {
   std::uint64_t now_ns;
-  Tests::ThrottleStats stats;
+  TestDiskReaders::ThrottleStats stats;
 };
 
 // Announcements, reads of both kinds, a withdrawal and a pattern change.
 Outcome RunScript() {
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(RoundModel(), clock);
   reader->Prefetch(0, 64 * page);
   reader->Prefetch(mib, 16 * page);
@@ -131,7 +132,7 @@ Outcome RunScript() {
 struct ScanOutcome {
   std::uint64_t sim_ns;
   std::size_t entries;
-  Tests::ThrottleStats stats;
+  TestDiskReaders::ThrottleStats stats;
 };
 
 // Slots of the fixture whose $MFT the scan reads, and slots per fragment.
@@ -142,14 +143,15 @@ constexpr ULONGLONG scan_fragment_clusters = 250;
 // reads ahead: the one NtfsBench simulate uses.
 constexpr std::uint64_t scan_consume_ns_per_mib = 1000000;
 
-ScanOutcome ScanOnDisk(const std::vector<BYTE>& image, Tests::DiskModel model,
+ScanOutcome ScanOnDisk(const std::vector<BYTE>& image,
+                       TestDiskReaders::DiskModel model,
                        const VolumeOptions& options) {
   model.consume_ns_per_mib = scan_consume_ns_per_mib;
-  Tests::SimulatedClock clock;
-  auto throttled = std::make_unique<Tests::ThrottledDiskReader>(
-      std::make_unique<Tests::MemoryDiskReader>(image), model, clock,
+  TestDiskReaders::SimulatedClock clock;
+  auto throttled = std::make_unique<TestDiskReaders::ThrottledDiskReader>(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(image), model, clock,
       options.tuning.reader);
-  const Tests::ThrottledDiskReader* const disk = throttled.get();
+  const TestDiskReaders::ThrottledDiskReader* const disk = throttled.get();
   const NtfsVolume<Cache::Strategy::NoCache> volume(std::move(throttled),
                                                     options);
   REQUIRE(volume.IsVolumeOK());
@@ -173,7 +175,7 @@ VolumeOptions WithKnob(std::string_view name, std::uint64_t value) {
 
 TEST_CASE("A simulated read costs what the model's arithmetic says",
           "[bench][throttled]") {
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(RoundModel(), clock);
 
   // The first read seeks: 500 + 1000 + 4096 bytes at one byte per ns.
@@ -190,7 +192,7 @@ TEST_CASE("A simulated read costs what the model's arithmetic says",
   Read(*reader, mib, page);
   CHECK(clock.NowNs() == 5596 + 500 + 4096 + 500 + 1000 + 4096);
 
-  const Tests::ThrottleStats& stats = reader->Stats();
+  const TestDiskReaders::ThrottleStats& stats = reader->Stats();
   CHECK(stats.disk_reads == 3);
   CHECK(stats.disk_bytes == 3 * page);
   CHECK(stats.unannounced_reads == 3);
@@ -201,9 +203,9 @@ TEST_CASE("A simulated read costs what the model's arithmetic says",
 
 TEST_CASE("The consumer's work is priced per MiB handed over",
           "[bench][throttled]") {
-  Tests::DiskModel model = RoundModel();
+  TestDiskReaders::DiskModel model = RoundModel();
   model.consume_ns_per_mib = 1000000;
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(model, clock);
 
   Read(*reader, 0, mib);
@@ -226,10 +228,10 @@ TEST_CASE("The same reads give the same simulated time", "[bench][throttled]") {
 
 TEST_CASE("A long simulated run takes no real time", "[bench][throttled]") {
   // 1 MB/s: each MiB read takes about a second of simulated time.
-  Tests::DiskModel model = RoundModel();
+  TestDiskReaders::DiskModel model = RoundModel();
   model.single_bytes_per_second = 1000000;
   model.max_bytes_per_second = 1000000;
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(model, clock);
   constexpr std::size_t reads = 1200;
 
@@ -246,7 +248,7 @@ TEST_CASE("A long simulated run takes no real time", "[bench][throttled]") {
 
 TEST_CASE("A read that matches an announced range waits until it completes",
           "[bench][throttled]") {
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(RoundModel(), clock);
 
   reader->Prefetch(0, mib);
@@ -266,7 +268,7 @@ TEST_CASE("A read that matches an announced range waits until it completes",
 
 TEST_CASE("A range already complete costs the caller no wait",
           "[bench][throttled]") {
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(RoundModel(), clock);
   reader->Prefetch(0, mib);
   const std::uint64_t late = 5000000;
@@ -281,7 +283,7 @@ TEST_CASE("A range already complete costs the caller no wait",
 
 TEST_CASE("A read in the middle of a range is served and keeps the range",
           "[bench][throttled]") {
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(RoundModel(), clock);
   reader->Prefetch(0, 4 * page);
 
@@ -297,7 +299,7 @@ TEST_CASE("A read in the middle of a range is served and keeps the range",
 
 TEST_CASE("A read outside every announced range is synchronous",
           "[bench][throttled]") {
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(RoundModel(), clock);
   reader->Prefetch(0, page);
 
@@ -305,7 +307,7 @@ TEST_CASE("A read outside every announced range is synchronous",
   Read(*reader, 0, 2 * page);
   Read(*reader, 4 * mib, page);
 
-  const Tests::ThrottleStats& stats = reader->Stats();
+  const TestDiskReaders::ThrottleStats& stats = reader->Stats();
   CHECK(stats.unannounced_reads == 2);
   CHECK(stats.served_reads == 0);
   // The announced range and the two reads.
@@ -316,7 +318,7 @@ TEST_CASE("A read outside every announced range is synchronous",
 
 TEST_CASE("A read that matches a later range drops the ones before it",
           "[bench][throttled]") {
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(RoundModel(), clock);
   reader->Prefetch(0, page);
   reader->Prefetch(mib, page);
@@ -336,7 +338,7 @@ TEST_CASE("Withdrawing the announcements counts the ranges that were wasted",
   for (Tuning::ReaderTuning& tuning : caps) {
     tuning.max_reads = max_reads;
   }
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(RoundModel(), clock, caps);
   for (std::size_t index = 0; index < 3; index++) {
     reader->Prefetch(index * mib, page);
@@ -355,7 +357,7 @@ TEST_CASE("Withdrawing the announcements counts the ranges that were wasted",
 
 TEST_CASE("A range a read used is not counted as wasted",
           "[bench][throttled]") {
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(RoundModel(), clock);
   reader->Prefetch(0, 4 * page);
   reader->Prefetch(mib, page);
@@ -372,7 +374,7 @@ TEST_CASE("A hint over the range cap is not announced", "[bench][throttled]") {
   for (Tuning::ReaderTuning& tuning : caps) {
     tuning.max_range_bytes = 8 * page;
   }
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(RoundModel(), clock, caps);
 
   reader->Prefetch(0, 64 * page);
@@ -389,7 +391,7 @@ TEST_CASE("The caps of the pattern in force decide how many reads start",
   Caps caps;
   caps.at(static_cast<std::size_t>(Tuning::Pattern::ScatteredGrouped))
       .max_reads = 1;
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(RoundModel(), clock, caps);
   const auto announce = [&reader] {
     for (std::size_t index = 0; index < 3; index++) {
@@ -413,7 +415,7 @@ TEST_CASE("The bytes in flight are capped by max_bytes", "[bench][throttled]") {
   for (Tuning::ReaderTuning& tuning : caps) {
     tuning.max_bytes = max_bytes;
   }
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(RoundModel(), clock, caps);
 
   for (std::size_t index = 0; index < 8; index++) {
@@ -432,13 +434,13 @@ TEST_CASE("The lanes of the model bound how many reads overlap",
   INFO("lanes " << lanes);
   // Four reads of one MiB at 100 MB/s each, with a disk that could carry far
   // more: only the lanes limit the overlap.
-  Tests::DiskModel model;
+  TestDiskReaders::DiskModel model;
   model.seek_ns = 0;
   model.per_read_ns = 0;
   model.single_bytes_per_second = 100'000'000;
   model.max_bytes_per_second = 1'000'000'000'000;
   model.lanes = lanes;
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(model, clock);
 
   ReadAnnouncedMebibytes(*reader, 4);
@@ -452,13 +454,13 @@ TEST_CASE("The bandwidth of the model bounds the throughput",
   const std::size_t count = GENERATE(1U, 4U, 8U);
   INFO("ranges " << count);
   // Eight lanes at 1 GB/s each, but 100 MB/s for the disk as a whole.
-  Tests::DiskModel model;
+  TestDiskReaders::DiskModel model;
   model.seek_ns = 0;
   model.per_read_ns = 0;
   model.single_bytes_per_second = 1'000'000'000;
   model.max_bytes_per_second = 100'000'000;
   model.lanes = 8;
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(model, clock);
 
   ReadAnnouncedMebibytes(*reader, count);
@@ -472,13 +474,13 @@ TEST_CASE("The bandwidth of the model bounds the throughput",
 TEST_CASE("A single read is bound by the speed of one lane",
           "[bench][throttled]") {
   // The disk could carry 2 GB/s, but one read streams at 100 MB/s.
-  Tests::DiskModel model;
+  TestDiskReaders::DiskModel model;
   model.seek_ns = 0;
   model.per_read_ns = 0;
   model.single_bytes_per_second = 100'000'000;
   model.max_bytes_per_second = 2'000'000'000;
   model.lanes = 8;
-  Tests::SimulatedClock clock;
+  TestDiskReaders::SimulatedClock clock;
   const auto reader = MakeReader(model, clock);
 
   Read(*reader, 0, mib);
@@ -488,13 +490,15 @@ TEST_CASE("A single read is bound by the speed of one lane",
 
 TEST_CASE("A scan with fewer reads in flight takes longer",
           "[bench][throttled]") {
-  const std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithListMftScan(
-      scan_records, scan_fragment_clusters);
+  const std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithListMftScan(scan_records,
+                                                       scan_fragment_clusters);
   const bool hard_disk = GENERATE(false, true);
   const std::string knob =
       GENERATE(as<std::string>{}, "reader.max_reads", "reader.max_bytes");
   INFO((hard_disk ? "hard disk, " : "SSD, ") << knob);
-  const Tests::DiskModel model = hard_disk ? HardDisk() : Tests::DiskModel{};
+  const TestDiskReaders::DiskModel model =
+      hard_disk ? HardDisk() : TestDiskReaders::DiskModel{};
   const std::uint64_t smallest = knob == "reader.max_reads" ? 1 : page;
 
   const ScanOutcome normal = ScanOnDisk(image, model, VolumeOptions{});
@@ -508,10 +512,12 @@ TEST_CASE("A scan with fewer reads in flight takes longer",
 
 TEST_CASE("A scan on a simulated disk is repeatable and serves its hints",
           "[bench][throttled]") {
-  const std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithListMftScan(
-      scan_records, scan_fragment_clusters);
+  const std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithListMftScan(scan_records,
+                                                       scan_fragment_clusters);
   const bool hard_disk = GENERATE(false, true);
-  const Tests::DiskModel model = hard_disk ? HardDisk() : Tests::DiskModel{};
+  const TestDiskReaders::DiskModel model =
+      hard_disk ? HardDisk() : TestDiskReaders::DiskModel{};
 
   const ScanOutcome first = ScanOnDisk(image, model, VolumeOptions{});
   const ScanOutcome second = ScanOnDisk(image, model, VolumeOptions{});
@@ -524,7 +530,7 @@ TEST_CASE("A scan on a simulated disk is repeatable and serves its hints",
   // A hard disk with one lane and a long seek is slower than the SSD.
   if (hard_disk) {
     const ScanOutcome ssd =
-        ScanOnDisk(image, Tests::DiskModel{}, VolumeOptions{});
+        ScanOnDisk(image, TestDiskReaders::DiskModel{}, VolumeOptions{});
     CHECK(first.sim_ns > ssd.sim_ns);
   }
 }

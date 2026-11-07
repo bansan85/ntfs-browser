@@ -35,13 +35,13 @@
 
 #include "mft/tree-testing.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 namespace Attr {
 
 struct HeaderCommon;
 
 }  // namespace Attr
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
@@ -50,6 +50,8 @@ namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 
 namespace {
 
@@ -72,9 +74,9 @@ ScanResult ScanWithThreads(const std::vector<BYTE>& image,
                            const VolumeOptions& options, unsigned threads,
                            size_t progress_stops_at = 0) {
   static_cast<void>(Tests::TakeCapturedLog());
-  auto reader = std::make_unique<Tests::CountingDiskReader>(
-      std::make_unique<Tests::MemoryDiskReader>(image));
-  const Tests::CountingDiskReader* const counting = reader.get();
+  auto reader = std::make_unique<TestDiskReaders::CountingDiskReader>(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(image));
+  const TestDiskReaders::CountingDiskReader* const counting = reader.get();
   const NtfsVolume<S> volume(std::move(reader), options);
   REQUIRE(volume.IsVolumeOK());
   return Tests::CaptureScan(volume, counting, threads, progress_stops_at);
@@ -167,8 +169,8 @@ class WaitingBatch {
 // Reads of a scan: the calls that read, the hints left out.
 size_t ReadCount(const ScanResult& scan) {
   return static_cast<size_t>(std::ranges::count_if(
-      scan.calls, [](const Tests::CountingDiskReader::Call& call) {
-        return call.kind == Tests::CountingDiskReader::Kind::Read;
+      scan.calls, [](const TestDiskReaders::CountingDiskReader::Call& call) {
+        return call.kind == TestDiskReaders::CountingDiskReader::Kind::Read;
       }));
 }
 
@@ -181,8 +183,9 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::FullCache) {
   const bool include_deleted = GENERATE(false, true);
   const bool recover = GENERATE(false, true);
-  const std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithBusyMftScan(
-      busy_record_count, busy_fragment_clusters);
+  const std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithBusyMftScan(busy_record_count,
+                                                       busy_fragment_clusters);
 
   CheckSameWhateverTheThreads<S>(image, OptionsOf(include_deleted, recover));
 }
@@ -195,7 +198,7 @@ TEMPLATE_TEST_CASE_SIG(
   const bool include_deleted = GENERATE(false, true);
   const bool recover = GENERATE(false, true);
   const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithFragmentedMftScan(4000, 250);
+      TestFakeImage::BuildFakeNtfsImageWithFragmentedMftScan(4000, 250);
 
   CheckSameWhateverTheThreads<S>(image, OptionsOf(include_deleted, recover));
 }
@@ -207,16 +210,17 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::FullCache) {
   const bool include_deleted = GENERATE(false, true);
   const bool recover = GENERATE(false, true);
-  const auto listed =
-      GENERATE(Tests::FakeListedState::Live, Tests::FakeListedState::Freed);
-  const auto residency = GENERATE(Tests::FakeListResidency::Resident,
-                                  Tests::FakeListResidency::NonResident);
-  const auto high = GENERATE(Tests::FakeListedExtension::Genuine,
-                             Tests::FakeListedExtension::Foreign,
-                             Tests::FakeListedExtension::Base);
+  const auto listed = GENERATE(TestFakeImage::FakeListedState::Live,
+                               TestFakeImage::FakeListedState::Freed);
+  const auto residency =
+      GENERATE(TestFakeImage::FakeListResidency::Resident,
+               TestFakeImage::FakeListResidency::NonResident);
+  const auto high = GENERATE(TestFakeImage::FakeListedExtension::Genuine,
+                             TestFakeImage::FakeListedExtension::Foreign,
+                             TestFakeImage::FakeListedExtension::Base);
   const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithMftTreeAttributeList(high, residency,
-                                                        listed);
+      TestFakeImage::BuildFakeNtfsImageWithMftTreeAttributeList(high, residency,
+                                                                listed);
 
   const ScanResult one =
       ScanWithThreads<S>(image, OptionsOf(include_deleted, recover), 1);
@@ -226,8 +230,9 @@ TEMPLATE_TEST_CASE_SIG(
   CHECK(many.parsed_by_threads > 0);
   // The second pass has one waiting record, when the scan shows it. Threads
   // parse it unless its list is non-resident.
-  const bool waits = listed == Tests::FakeListedState::Live || include_deleted;
-  const bool resident = residency == Tests::FakeListResidency::Resident;
+  const bool waits =
+      listed == TestFakeImage::FakeListedState::Live || include_deleted;
+  const bool resident = residency == TestFakeImage::FakeListResidency::Resident;
   CHECK(one.waiting_by_threads == 0);
   CHECK(many.waiting_by_threads == (waits && resident ? 1U : 0U));
   CheckSameScan(one, many);
@@ -240,8 +245,9 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::FullCache) {
   const bool include_deleted = GENERATE(false, true);
   const bool recover = GENERATE(false, true);
-  const std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithListMftScan(
-      list_record_count, list_fragment_clusters);
+  const std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithListMftScan(list_record_count,
+                                                       list_fragment_clusters);
 
   const ScanResult one =
       ScanWithThreads<S>(image, OptionsOf(include_deleted, recover), 1);
@@ -268,8 +274,9 @@ TEMPLATE_TEST_CASE_SIG(
   // and the second pass reads them. A record is 1024 bytes in the fixture.
   const size_t budget =
       GENERATE(size_t{0}, size_t{16} << 10, size_t{256} << 10);
-  const std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithListMftScan(
-      list_record_count, list_fragment_clusters);
+  const std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithListMftScan(list_record_count,
+                                                       list_fragment_clusters);
   const HeldBudget held(budget);
 
   const ScanResult one =
@@ -306,8 +313,9 @@ TEST_CASE(
   const std::optional<size_t> records =
       GENERATE(std::optional<size_t>{0}, std::optional<size_t>{70},
                std::optional<size_t>{});
-  const std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithListMftScan(
-      list_record_count, list_fragment_clusters);
+  const std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithListMftScan(list_record_count,
+                                                       list_fragment_clusters);
   const WaitingBatch batch(records);
 
   const ScanResult one = ScanWithThreads<Cache::Strategy::NoCache>(
@@ -327,10 +335,10 @@ TEMPLATE_TEST_CASE_SIG(
   const bool include_deleted = GENERATE(false, true);
   const bool recover = GENERATE(false, true);
   const std::vector<BYTE> image =
-      GENERATE(Tests::BuildFakeNtfsImageWithMftTree(),
-               Tests::BuildFakeNtfsImageWithMftTreeStrayExtension(),
-               Tests::BuildFakeNtfsImageWithFreedFileTree(),
-               Tests::BuildFakeNtfsImageWithMftExtensionRecord());
+      GENERATE(TestFakeImage::BuildFakeNtfsImageWithMftTree(),
+               TestFakeImage::BuildFakeNtfsImageWithMftTreeStrayExtension(),
+               TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(),
+               TestFakeImage::BuildFakeNtfsImageWithMftExtensionRecord());
 
   const ScanResult one =
       ScanWithThreads<S>(image, OptionsOf(include_deleted, recover), 1);
@@ -344,8 +352,9 @@ TEST_CASE(
     "A scan stopped by its progress callback is the same whatever the "
     "thread count",
     "[mft][tree][threads]") {
-  const std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithBusyMftScan(
-      busy_record_count, busy_fragment_clusters);
+  const std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithBusyMftScan(busy_record_count,
+                                                       busy_fragment_clusters);
 
   for (const size_t stop : {size_t{1}, size_t{2}, size_t{3}}) {
     INFO("stop at " << stop);
@@ -358,8 +367,9 @@ TEST_CASE(
     "A scan names the slots the threads parsed and the ones it parsed "
     "itself",
     "[mft][tree][threads]") {
-  const std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithBusyMftScan(
-      busy_record_count, busy_fragment_clusters);
+  const std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithBusyMftScan(busy_record_count,
+                                                       busy_fragment_clusters);
 
   const ScanResult many = ScanWithThreads<Cache::Strategy::NoCache>(
       image, OptionsOf(true, true), 4);
@@ -377,7 +387,7 @@ TEST_CASE(
     "takes nothing from other threads",
     "[mft][tree][threads]") {
   const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithFragmentedMftScan(450);
+      TestFakeImage::BuildFakeNtfsImageWithFragmentedMftScan(450);
   const VolumeOptions options = OptionsOf(true, true);
 
   CHECK(ScanWithThreads<Cache::Strategy::NoCache>(image, options, 1)
@@ -408,11 +418,13 @@ TEST_CASE(
     "A raw attribute callback of the volume runs on the scanning thread "
     "alone",
     "[mft][tree][threads]") {
-  const std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithBusyMftScan(
-      busy_record_count, busy_fragment_clusters);
+  const std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithBusyMftScan(busy_record_count,
+                                                       busy_fragment_clusters);
   callback_threads.clear();
   NtfsVolume<Cache::Strategy::NoCache> volume(
-      std::make_unique<Tests::MemoryDiskReader>(image), OptionsOf(true, true));
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(image),
+      OptionsOf(true, true));
   REQUIRE(volume.IsVolumeOK());
   CHECK_FALSE(volume.HasAttrRawCB());
   REQUIRE(volume.InstallAttrRawCB(Attr::Type::FileName, RecordCallbackThread));
@@ -468,7 +480,7 @@ class SlowDiskReader final : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   }
 
  private:
-  Tests::MemoryDiskReader inner_;
+  TestDiskReaders::MemoryDiskReader inner_;
 };
 
 // Slots the scan took from threads, with the thread count left to it.
@@ -499,11 +511,12 @@ TEST_CASE("Threads pay for a scan that does not wait for its volume",
 TEST_CASE("A scan that chooses its threads uses them once the probe says so",
           "[mft][tree][threads]") {
   const AutoLimits limits(1000, 1000, true);
-  const std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithBusyMftScan(
-      busy_record_count, busy_fragment_clusters);
+  const std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithBusyMftScan(busy_record_count,
+                                                       busy_fragment_clusters);
 
   const size_t parsed =
-      AutomaticScanParsedByThreads<Tests::MemoryDiskReader>(image);
+      AutomaticScanParsedByThreads<TestDiskReaders::MemoryDiskReader>(image);
 
   // The first window is the probe, parsed by the scanning thread.
   const size_t slots = busy_record_count - static_cast<size_t>(Mft::Idx::User);
@@ -516,8 +529,9 @@ TEST_CASE("A scan that chooses its threads keeps to one on a slow volume",
   // The probe measures: each read of the volume waits, and loading a window is
   // most of the time of the probe.
   const AutoLimits limits(1000, 1000);
-  const std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithBusyMftScan(
-      busy_record_count, busy_fragment_clusters);
+  const std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithBusyMftScan(busy_record_count,
+                                                       busy_fragment_clusters);
 
   CHECK(AutomaticScanParsedByThreads<SlowDiskReader>(image) == 0);
 }
@@ -527,18 +541,21 @@ TEST_CASE(
     "it asks for",
     "[mft][tree][threads]") {
   const AutoLimits limits(busy_record_count + 1, 1000, true);
-  const std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithBusyMftScan(
-      busy_record_count, busy_fragment_clusters);
+  const std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithBusyMftScan(busy_record_count,
+                                                       busy_fragment_clusters);
 
-  CHECK(AutomaticScanParsedByThreads<Tests::MemoryDiskReader>(image) == 0);
+  CHECK(AutomaticScanParsedByThreads<TestDiskReaders::MemoryDiskReader>(
+            image) == 0);
 }
 
 TEST_CASE(
     "The second pass of a scan that chooses its threads uses them from the "
     "waiting count it asks for, whatever the probe says",
     "[mft][tree][threads]") {
-  const std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithListMftScan(
-      list_record_count, list_fragment_clusters);
+  const std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithListMftScan(list_record_count,
+                                                       list_fragment_clusters);
   const auto scan = [&image](size_t min_waiting) {
     // The probe says no: the first pass parses on this thread alone.
     const AutoLimits limits(1000, 1000, false, min_waiting);
@@ -558,8 +575,9 @@ TEST_CASE(
 TEST_CASE("A scan that chooses its threads is the scan of one thread",
           "[mft][tree][threads]") {
   const AutoLimits limits(1000, 1000, true);
-  const std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithBusyMftScan(
-      busy_record_count, busy_fragment_clusters);
+  const std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithBusyMftScan(busy_record_count,
+                                                       busy_fragment_clusters);
 
   const ScanResult one = ScanWithThreads<Cache::Strategy::NoCache>(
       image, OptionsOf(true, true), 1);

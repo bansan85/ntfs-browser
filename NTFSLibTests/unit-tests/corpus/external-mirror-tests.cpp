@@ -45,14 +45,15 @@ namespace {
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::IDiskReader;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
+using TestDiskReaders::StandaloneMftDiskReader;
 using Tests::DfirNtfsDir;
 using Tests::ReadCorpusFile;
 using Tests::RequireCorpusFile;
-using Tests::StandaloneMftDiskReader;
 
 // Logged when a record comes from $MFTMirr.
 constexpr std::string_view fallback_message = "using its copy in $MFTMirr";

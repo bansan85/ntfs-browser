@@ -17,11 +17,11 @@
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/sequential-disk-reader.h>
 
-using NTFS_BROWSER_NAMESPACE::Tests::MakeFileStreamProducer;
-using NTFS_BROWSER_NAMESPACE::Tests::MakeGeneratorProducer;
-using NTFS_BROWSER_NAMESPACE::Tests::MakeMemoryProducer;
-using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
-using NTFS_BROWSER_NAMESPACE::Tests::SequentialDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MakeFileStreamProducer;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MakeGeneratorProducer;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MakeMemoryProducer;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::SequentialDiskReader;
 
 namespace {
 

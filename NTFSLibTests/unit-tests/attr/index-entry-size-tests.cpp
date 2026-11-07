@@ -45,7 +45,7 @@ constexpr size_t index_entry_size_field = offsetof(Data::IndexEntry, size);
 // one $INDEX_ROOT points at.
 size_t FirstIndexBlockOffset(const std::vector<BYTE>& image) {
   for (size_t offset = 0; offset + sizeof(DWORD) <= image.size();
-       offset += NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size) {
+       offset += NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size) {
     DWORD magic = 0;
     std::memcpy(&magic, &image.at(offset), sizeof(magic));
     if (magic == Data::index_block_magic) {
@@ -60,7 +60,8 @@ template <Cache::Strategy S>
 std::vector<std::wstring> RootNames(std::vector<BYTE> image,
                                     const VolumeOptions& options) {
   const NtfsVolume<S> volume(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           std::move(image)),
       options);
   REQUIRE(volume.IsVolumeOK());
@@ -82,7 +83,7 @@ std::vector<std::wstring> RootNames(std::vector<BYTE> image,
 
 // Gives the block's first entry a size of zero, which no entry can have.
 std::vector<BYTE> WithZeroSizedFirstEntry() {
-  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::
+  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
       BuildFakeNtfsImageWithOrphanedIndexBlocks();
   const size_t block = FirstIndexBlockOffset(image);
   REQUIRE(block < image.size());
@@ -104,7 +105,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[attr-index-alloc]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
   const std::vector<std::wstring> intact =
-      RootNames<S>(NTFS_BROWSER_NAMESPACE::Tests::
+      RootNames<S>(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
                        BuildFakeNtfsImageWithOrphanedIndexBlocks(),
                    VolumeOptions{.recover_errors = true});
   REQUIRE(!intact.empty());
@@ -136,9 +137,9 @@ TEMPLATE_TEST_CASE_SIG(
   // The block still yields nothing: its entries stop at the zero-sized one.
   // Only the VCN 1 orphan comes back, from the orphan scan.
   CHECK(strict.empty());
-  CHECK(recovered ==
-        std::vector<std::wstring>{std::wstring(
-            NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_orphan_name)});
+  CHECK(recovered == std::vector<std::wstring>{
+                         std::wstring(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                                          orphaned_block_orphan_name)});
   CHECK_THAT(
       recovered_log,
       ContainsSubstring("Index Block: index entry exceeds block bounds"));

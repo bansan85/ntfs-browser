@@ -30,7 +30,8 @@ std::unique_ptr<FullCacheVolume>
     OpenVolume(std::vector<BYTE> image,
                NTFS_BROWSER_NAMESPACE::VolumeOptions options = {}) {
   return std::make_unique<FullCacheVolume>(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           std::move(image)),
       options);
 }
@@ -88,9 +89,10 @@ TEST_CASE("NtfsAttr refuses a volume that is not NTFS",
 
 TEST_CASE("NtfsAttr reports a root directory record that does not read",
           "[ntfsattr][characterization]") {
-  const DumpResult result = DumpPath(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithCorruptRootRecord(),
-      report_path);
+  const DumpResult result =
+      DumpPath(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                   BuildFakeNtfsImageWithCorruptRootRecord(),
+               report_path);
 
   REQUIRE(result.message == L"Cannot read root directory of volume");
   REQUIRE(result.dump.empty());
@@ -99,7 +101,7 @@ TEST_CASE("NtfsAttr reports a root directory record that does not read",
 TEST_CASE("NtfsAttr reports root attributes that do not parse",
           "[ntfsattr][characterization]") {
   const DumpResult result =
-      DumpPath(NTFS_BROWSER_NAMESPACE::Tests::
+      DumpPath(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
                    BuildFakeNtfsImageWithAttrOffsetOutOfBounds(),
                report_path);
 

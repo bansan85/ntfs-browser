@@ -134,22 +134,23 @@ std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader>
                     ULONGLONG partition_offset, std::string_view trace_name) {
   const Source source = SourceOf(image);
   if (source == Source::Trace) {
-    return std::make_unique<SequentialDiskReader>(
-        MakeFileStreamProducer(TracePath(trace_name)));
+    return std::make_unique<Test::DiskReaders::SequentialDiskReader>(
+        Test::DiskReaders::MakeFileStreamProducer(TracePath(trace_name)));
   }
 
-  auto reader = std::make_unique<PartitionDiskReader>(partition_offset);
+  auto reader = std::make_unique<Test::DiskReaders::PartitionDiskReader>(
+      partition_offset);
   REQUIRE(reader->Open(image.wstring()));
   if (source == Source::Recording) {
-    return std::make_unique<RecordingDiskReader>(std::move(reader),
-                                                 TracePath(trace_name));
+    return std::make_unique<Test::DiskReaders::RecordingDiskReader>(
+        std::move(reader), TracePath(trace_name));
   }
   return reader;
 }
 
 std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader>
     OpenBareVolumeImage(const std::filesystem::path& image_path) {
-  auto reader = std::make_unique<PartitionDiskReader>(0);
+  auto reader = std::make_unique<Test::DiskReaders::PartitionDiskReader>(0);
   REQUIRE(reader->Open(image_path.wstring()));
   return reader;
 }

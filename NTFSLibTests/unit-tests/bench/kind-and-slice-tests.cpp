@@ -43,12 +43,14 @@ namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using Bench::Detail::KindScope;
 using Bench::Detail::SliceScope;
 using NTFS_BROWSER_NAMESPACE::IDiskReader;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Tests::FakeDataRun;
+using TestFakeImage::FakeDataRun;
 
 namespace {
 
@@ -91,7 +93,7 @@ class SlowDiskReader final : public IDiskReader {
   }
 
  private:
-  Tests::MemoryDiskReader inner_;
+  TestDiskReaders::MemoryDiskReader inner_;
   std::chrono::microseconds delay_;
 };
 
@@ -131,8 +133,9 @@ size_t BucketOf(std::uint64_t value) {
 }
 
 std::vector<BYTE> LiveStaleImage() {
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedNonResidentFile(
-      Support::stale_size, {FakeDataRun{.lcn = 40, .clusters = 4}});
+  std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithFreedNonResidentFile(
+          Support::stale_size, {FakeDataRun{.lcn = 40, .clusters = 4}});
   Support::FillStaleClusters(image, 13);
   return image;
 }
@@ -191,7 +194,7 @@ TEST_CASE("A read lands in the histogram bucket of its size",
           "[bench][kind][histogram]") {
   const std::vector<BYTE> image(small_image_size, BYTE{7});
   const Io::FileReader<Cache::Strategy::NoCache> file(
-      std::make_unique<Tests::MemoryDiskReader>(image));
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(image));
   const std::vector<size_t> lengths{1, 100, 4096, 5000, 65536};
 
   Tests::BenchSessionGuard session;
@@ -228,7 +231,8 @@ TEST_CASE("The reads of a volume open are Boot reads", "[bench][kind]") {
   Tests::BenchSessionGuard session;
   {
     const NtfsVolume<Cache::Strategy::NoCache> volume(
-        std::make_unique<Tests::MemoryDiskReader>(Tests::BuildFakeNtfsImage()));
+        std::make_unique<TestDiskReaders::MemoryDiskReader>(
+            TestFakeImage::BuildFakeNtfsImage()));
     REQUIRE(volume.IsVolumeOK());
   }
   const Bench::Report report = session.Finish();
@@ -240,16 +244,17 @@ TEST_CASE("The reads of a volume open are Boot reads", "[bench][kind]") {
 TEMPLATE_TEST_CASE_SIG("The reads of a scan land in the kinds that made them",
                        "[bench][kind][tree]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithListMftScan(
-      list_record_count, list_fragment_clusters);
+  const std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithListMftScan(list_record_count,
+                                                       list_fragment_clusters);
   VolumeOptions options{.include_deleted = true, .recover_errors = true};
   // No record is held for the second pass: an extension record is read there.
   options.tuning.mft.max_held_record_bytes = 0;
 
   Tests::BenchSessionGuard session;
   {
-    const NtfsVolume<S> volume(std::make_unique<Tests::MemoryDiskReader>(image),
-                               options);
+    const NtfsVolume<S> volume(
+        std::make_unique<TestDiskReaders::MemoryDiskReader>(image), options);
     REQUIRE(volume.IsVolumeOK());
     Mft::MftTree::ScanOptions scan;
     scan.threads = 1;
@@ -275,12 +280,12 @@ TEMPLATE_TEST_CASE_SIG("The reads of a walk land in the kinds that made them",
                        "[bench][kind][walk]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithIndexedMftScan(walk_record_count);
+      TestFakeImage::BuildFakeNtfsImageWithIndexedMftScan(walk_record_count);
 
   Tests::BenchSessionGuard session;
   {
     const NtfsVolume<S> volume(
-        std::make_unique<Tests::MemoryDiskReader>(image),
+        std::make_unique<TestDiskReaders::MemoryDiskReader>(image),
         VolumeOptions{.include_deleted = true, .recover_errors = true});
     REQUIRE(volume.IsVolumeOK());
     const Tests::WalkResult walk = Tests::WalkVolume(volume, true);
@@ -300,7 +305,7 @@ TEMPLATE_TEST_CASE_SIG("The reads of the bitmap and of file data have kinds",
   const std::vector<FakeDataRun> allocated{
       FakeDataRun{.lcn = 40, .clusters = 2}};
   const std::vector<BYTE> bitmap_image = Support::WithBitmap(
-      Tests::BuildFakeNtfsImageWithFreedFileTree(), allocated);
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(), allocated);
 
   SECTION("a bitmap window") {
     auto opened = Support::OpenVolume<S>(bitmap_image);

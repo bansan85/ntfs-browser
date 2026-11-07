@@ -55,27 +55,29 @@ using NTFS_BROWSER_NAMESPACE::Attr::AttrIndexRoot;
 using NTFS_BROWSER_NAMESPACE::Attr::AttrResidentFullCache;
 using NTFS_BROWSER_NAMESPACE::Attr::AttrResidentNoCache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-using NTFS_BROWSER_NAMESPACE::Tests::bad_index_block_first_name;
-using NTFS_BROWSER_NAMESPACE::Tests::bad_index_block_good_name;
-using NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithBadDataRun;
-using NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithBadIndexBlockEntry;
-using NTFS_BROWSER_NAMESPACE::Tests::
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::bad_index_block_first_name;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::bad_index_block_good_name;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithBadDataRun;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+    BuildFakeNtfsImageWithBadIndexBlockEntry;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::
     BuildFakeNtfsImageWithHugeOrphanScanBlockCount;
-using NTFS_BROWSER_NAMESPACE::Tests::
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::
     BuildFakeNtfsImageWithMalformedIndexEntryFilename;
-using NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree;
-using NTFS_BROWSER_NAMESPACE::Tests::
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftTree;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::
     BuildFakeNtfsImageWithMultiClusterOrphanedIndexBlock;
-using NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithNoEndMarker;
-using NTFS_BROWSER_NAMESPACE::Tests::
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+    BuildFakeNtfsImageWithNoEndMarker;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::
     BuildFakeNtfsImageWithResidentEncryptedData;
-using NTFS_BROWSER_NAMESPACE::Tests::malformed_index_entry_mft_ref;
-using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
-using NTFS_BROWSER_NAMESPACE::Tests::mft_tree_deleted_file_idx;
-using NTFS_BROWSER_NAMESPACE::Tests::multi_cluster_orphan_name;
-using NTFS_BROWSER_NAMESPACE::Tests::multi_cluster_reachable_name;
-using NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_orphan_name;
-using NTFS_BROWSER_NAMESPACE::Tests::orphaned_block_reachable_name;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::malformed_index_entry_mft_ref;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_deleted_file_idx;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::multi_cluster_orphan_name;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::multi_cluster_reachable_name;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::orphaned_block_orphan_name;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::orphaned_block_reachable_name;
 using NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog;
 
 namespace {

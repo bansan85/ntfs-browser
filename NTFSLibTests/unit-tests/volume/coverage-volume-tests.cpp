@@ -33,7 +33,7 @@ using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
 
 namespace {
 
@@ -111,7 +111,7 @@ bool VolumeOpens(std::vector<BYTE> image) {
 
 // The fake image whose $MFT DATA is split across an $ATTRIBUTE_LIST.
 std::vector<BYTE> SplitMftImage() {
-  return NTFS_BROWSER_NAMESPACE::Tests::
+  return NTFS_BROWSER_NAMESPACE::Test::FakeImage::
       BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList();
 }
 
@@ -123,8 +123,9 @@ size_t FirstListEntry(const std::vector<BYTE>& image) {
 
 // Offset of the DATA attribute in the split $MFT's extension record.
 size_t ExtensionData(const std::vector<BYTE>& image) {
-  return FirstAttr(image, NTFS_BROWSER_NAMESPACE::Tests::mft_data_split_ext_idx,
-                   Attr::Type::Data);
+  return FirstAttr(
+      image, NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_data_split_ext_idx,
+      Attr::Type::Data);
 }
 
 }  // namespace
@@ -133,7 +134,8 @@ TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume rejects a boot sector without the NTFS signature", "[cov-vol]",
     ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
+  std::vector<BYTE> image =
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage();
   Store<BYTE>(image, bpb_oem_id_field, 'X');
 
   CHECK_FALSE(VolumeOpens<S>(std::move(image)));
@@ -145,14 +147,14 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::FullCache) {
   SECTION("sector size below one WORD") {
     std::vector<BYTE> image =
-        NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage();
     Store<WORD>(image, bpb_bytes_per_sector_field, 1);
     CHECK_FALSE(VolumeOpens<S>(std::move(image)));
   }
 
   SECTION("sectors per cluster magnitude beyond 2^12") {
     std::vector<BYTE> image =
-        NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage();
     // -13 is the first exponent beyond 2^12 sectors.
     Store<BYTE>(image, bpb_sectors_per_cluster_field, 0xF3);
     CHECK_FALSE(VolumeOpens<S>(std::move(image)));
@@ -160,7 +162,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   SECTION("file record size below the header and not whole sectors") {
     std::vector<BYTE> image =
-        NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage();
     // A -1 exponent in this field means 2^1 bytes.
     Store<BYTE>(image, bpb_clusters_per_file_record_field, 0xFF);
     CHECK_FALSE(VolumeOpens<S>(std::move(image)));
@@ -171,7 +173,8 @@ TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume reads a negative sectors-per-cluster as a power of two",
     "[cov-vol]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
+  std::vector<BYTE> image =
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage();
   // A -1 exponent doubles the 512-byte sector: the same 1 KiB cluster.
   Store<BYTE>(image, bpb_sectors_per_cluster_field, 0xFF);
 
@@ -180,7 +183,7 @@ TEMPLATE_TEST_CASE_SIG(
 
   REQUIRE(volume.IsVolumeOK());
   CHECK(volume.GetClusterSize() ==
-        NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size);
 }
 
 TEMPLATE_TEST_CASE_SIG("NtfsVolume rejects a damaged $Volume record",
@@ -188,14 +191,14 @@ TEMPLATE_TEST_CASE_SIG("NtfsVolume rejects a damaged $Volume record",
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   SECTION("$Volume record does not parse") {
     std::vector<BYTE> image =
-        NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage();
     ZeroRecord(image, volume_idx);
     CHECK_FALSE(VolumeOpens<S>(std::move(image)));
   }
 
   SECTION("$Volume has no VolumeInformation attribute") {
     std::vector<BYTE> image =
-        NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage();
     Store<DWORD>(image,
                  RecordOffset(volume_idx) +
                      Load<WORD>(image, RecordOffset(volume_idx) +
@@ -206,7 +209,7 @@ TEMPLATE_TEST_CASE_SIG("NtfsVolume rejects a damaged $Volume record",
 
   SECTION("volume major version below NTFS 3.0") {
     std::vector<BYTE> image =
-        NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage();
     const size_t attr =
         FirstAttr(image, volume_idx, Attr::Type::VolumeInformation);
     Store<BYTE>(image, ResidentBody(image, attr) + volume_info_major_field,
@@ -222,7 +225,8 @@ TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume rejects a $MFT without an unnamed non-resident DATA",
     "[cov-vol]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
+  std::vector<BYTE> image =
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage();
   Store<BYTE>(
       image,
       FirstAttr(image, mft_idx, Attr::Type::Data) + attr_name_length_field, 1);
@@ -248,7 +252,8 @@ TEMPLATE_TEST_CASE_SIG(
 
   SECTION("extension record that does not parse is dropped") {
     std::vector<BYTE> image = SplitMftImage();
-    ZeroRecord(image, NTFS_BROWSER_NAMESPACE::Tests::mft_data_split_ext_idx);
+    ZeroRecord(image,
+               NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_data_split_ext_idx);
     CHECK(VolumeOpens<S>(std::move(image)));
   }
 
@@ -289,11 +294,11 @@ TEMPLATE_TEST_CASE_SIG(
     "NtfsVolume rejects a $MFT continuation that overlaps an accepted extent",
     "[cov-vol]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::
+  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
       BuildFakeNtfsImageWithMftDataTwoExtentsInOneRecord();
-  const std::vector<size_t> extents =
-      AttrOffsets(image, NTFS_BROWSER_NAMESPACE::Tests::mft_two_extents_ext_idx,
-                  Attr::Type::Data);
+  const std::vector<size_t> extents = AttrOffsets(
+      image, NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_two_extents_ext_idx,
+      Attr::Type::Data);
   REQUIRE(extents.size() == 2);
   // The second extent now maps the same VCN the first one maps.
   Store<ULONGLONG>(image, extents[1] + attr_lowest_vcn_field,
@@ -308,24 +313,25 @@ TEST_CASE("NtfsVolume refuses a $MFT read that fails on disk", "[cov-vol]") {
   auto refused = std::make_shared<size_t>(0);
   // VCN 16 of the forged $MFT run sits at LCN 20 + 16.
   const auto lcn_begin =
-      (static_cast<ULONGLONG>(
-           NTFS_BROWSER_NAMESPACE::Tests::fragmented_mft_data_run_lcn) +
-       NTFS_BROWSER_NAMESPACE::Tests::fragmented_mft_invalid_record_idx) *
-      NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size;
+      (static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                                  fragmented_mft_data_run_lcn) +
+       NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+           fragmented_mft_invalid_record_idx) *
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size;
   const auto lcn_end =
-      lcn_begin + NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size;
+      lcn_begin + NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size;
 
   const NtfsVolume<Cache::Strategy::NoCache> volume(
       std::make_unique<RefusingDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::
               BuildFakeNtfsImageWithFragmentedMftInvalidRecord(),
           lcn_begin, lcn_end, refused));
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> record(
       volume);
-  CHECK_FALSE(record.ParseFileRecord(
-      NTFS_BROWSER_NAMESPACE::Tests::fragmented_mft_invalid_record_idx));
+  CHECK_FALSE(record.ParseFileRecord(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                                         fragmented_mft_invalid_record_idx));
   CHECK(*refused > 0);
 }
 
@@ -333,17 +339,17 @@ TEMPLATE_TEST_CASE_SIG("NtfsVolume reports its boot sector geometry",
                        "[cov-vol]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const NtfsVolume<S> volume(std::make_unique<MemoryDiskReader>(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage()));
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage()));
   REQUIRE(volume.IsVolumeOK());
 
   CHECK(volume.GetSectorSize() ==
-        NTFS_BROWSER_NAMESPACE::Tests::fake_bytes_per_sector);
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_bytes_per_sector);
   CHECK(volume.GetClusterSize() ==
-        NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size);
   CHECK(volume.GetFileRecordSize() ==
-        NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size);
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_file_record_size);
   CHECK(volume.GetIndexBlockSize() ==
-        NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size);
   CHECK(volume.GetMFTAddr() == mft_base_offset);
 }
 
@@ -351,7 +357,7 @@ TEMPLATE_TEST_CASE_SIG("NtfsVolume installs and clears raw attribute callbacks",
                        "[cov-vol]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   NtfsVolume<S> volume(std::make_unique<MemoryDiskReader>(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage()));
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage()));
   REQUIRE(volume.IsVolumeOK());
 
   SECTION("an attribute type outside the table is refused") {
@@ -377,7 +383,7 @@ TEMPLATE_TEST_CASE_SIG("NtfsVolume reads a zero-length span", "[cov-vol]",
                        ((Cache::Strategy S), S), Cache::Strategy::NoCache,
                        Cache::Strategy::FullCache) {
   const NtfsVolume<S> volume(std::make_unique<MemoryDiskReader>(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage()));
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage()));
   REQUIRE(volume.IsVolumeOK());
 
   LARGE_INTEGER addr{.QuadPart = 0};
@@ -391,7 +397,7 @@ TEMPLATE_TEST_CASE_SIG("NtfsVolume has no EFS key provider off Windows",
                        "[cov-vol]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const NtfsVolume<S> volume(std::make_unique<MemoryDiskReader>(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage()));
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage()));
   REQUIRE(volume.IsVolumeOK());
 
 #ifndef _WIN32

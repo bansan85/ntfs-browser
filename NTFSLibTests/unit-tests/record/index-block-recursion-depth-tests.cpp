@@ -41,10 +41,10 @@ namespace {
 // by descending past the recursion depth limit.
 template <Cache::Strategy S>
 void RunIndexBlockChainDepthIsBounded() {
-  auto reader =
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::
-              BuildFakeNtfsImageWithDeepIndexBlockChain());
+  auto reader = std::make_unique<
+      NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+          BuildFakeNtfsImageWithDeepIndexBlockChain());
 
   const NtfsVolume<S> volume(std::move(reader));
   REQUIRE(volume.IsVolumeOK());
@@ -57,7 +57,7 @@ void RunIndexBlockChainDepthIsBounded() {
 
   SECTION("FindSubEntry") {
     const std::optional<IndexEntry> found = root.FindSubEntry(
-        NTFS_BROWSER_NAMESPACE::Tests::index_block_chain_leaf_name);
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::index_block_chain_leaf_name);
     CHECK_FALSE(found.has_value());
   }
 

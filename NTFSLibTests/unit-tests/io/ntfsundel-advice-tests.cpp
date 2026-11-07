@@ -24,13 +24,13 @@ namespace {
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using NtfsUndel::RecoverError;
 using NtfsUndel::RecoveryAdvice;
 using NtfsUndel::RecoveryCause;
 using NtfsUndel::RecoveryCheck;
-using Tests::FakeDataRun;
+using TestFakeImage::FakeDataRun;
 
 // The four freed files of the volume, one per data state.
 constexpr std::uint64_t intact_ref = 21;
@@ -42,7 +42,7 @@ constexpr std::uint64_t unknown_ref = 24;
 constexpr std::uint64_t freed_dir_ref = 20;
 
 // Bytes of each file: two clusters.
-constexpr std::uint64_t file_size = 2 * Tests::fake_cluster_size;
+constexpr std::uint64_t file_size = 2 * TestFakeImage::fake_cluster_size;
 
 // Where each file's two clusters are. The unknown file's run lies far past the
 // volume.
@@ -60,10 +60,11 @@ const std::vector<Alloc::Extent> bad_cluster{
 // bitmap that gives one cluster of the second file to another file, and a bad
 // list. Each file's clusters hold a pattern, so a copy can be compared.
 std::vector<BYTE> FourStatesImage() {
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedFileTree();
+  std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
   const auto put = [&image](std::uint64_t idx, ULONGLONG lcn,
                             ULONGLONG real_size = file_size) {
-    Tests::PutFreedNonResidentRecord(
+    TestFakeImage::PutFreedNonResidentRecord(
         image, idx,
         {.real_size = real_size, .runs = {{.lcn = lcn, .clusters = 2}}});
   };
@@ -73,7 +74,7 @@ std::vector<BYTE> FourStatesImage() {
   put(unknown_ref, past_the_volume_lcn);
   for (const ULONGLONG lcn : {intact_lcn, reallocated_lcn, bad_lcn}) {
     for (size_t i = 0; i < file_size; i++) {
-      image.at(lcn * Tests::fake_cluster_size + i) =
+      image.at(lcn * TestFakeImage::fake_cluster_size + i) =
           static_cast<BYTE>(lcn + i * 3);
     }
   }
@@ -249,8 +250,8 @@ TEST_CASE("after a yes the copy reads exactly what the disk holds",
     CHECK(copied.result.error == RecoverError::None);
     CHECK(copied.result.bytes == file_size);
     const std::vector<BYTE> expected(
-        image.begin() + bad_lcn * Tests::fake_cluster_size,
-        image.begin() + bad_lcn * Tests::fake_cluster_size + file_size);
+        image.begin() + bad_lcn * TestFakeImage::fake_cluster_size,
+        image.begin() + bad_lcn * TestFakeImage::fake_cluster_size + file_size);
     CHECK(copied.bytes == expected);
   }
 
@@ -267,9 +268,10 @@ TEST_CASE("a large file that is not intact is asked about twice, once each",
           "[undel][advice]") {
   std::vector<BYTE> image = FourStatesImage();
   // The bad file again, now declaring 150 MiB: over the large-file limit.
-  Tests::PutFreedNonResidentRecord(image, bad_ref,
-                                   {.real_size = 150ULL * 1024 * 1024,
-                                    .runs = {{.lcn = bad_lcn, .clusters = 2}}});
+  TestFakeImage::PutFreedNonResidentRecord(
+      image, bad_ref,
+      {.real_size = 150ULL * 1024 * 1024,
+       .runs = {{.lcn = bad_lcn, .clusters = 2}}});
   const Opened opened = Open(image, bad_ref);
 
   Asked asked;

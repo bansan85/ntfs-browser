@@ -22,11 +22,12 @@
 #include "directory-read-ahead-support.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 namespace ReadAhead = NTFS_BROWSER_NAMESPACE::Tests::ReadAhead;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Tests::CountingDiskReader;
+using TestDiskReaders::CountingDiskReader;
 
 namespace {
 
@@ -226,7 +227,7 @@ TEMPLATE_TEST_CASE_SIG(
 TEST_CASE("The default read ahead plans rounds of reads on a wide tree",
           "[io][directory-read-ahead]") {
   const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithNameTree(ReadAhead::WideTree(40));
+      TestFakeImage::BuildFakeNtfsImageWithNameTree(ReadAhead::WideTree(40));
   // The window of $MFT and the memo spare the probes their rounds: leave them
   // out.
   VolumeOptions options;
@@ -296,8 +297,9 @@ TEST_CASE(
     "[io][directory-read-ahead]") {
   constexpr Cache::Strategy S = Cache::Strategy::NoCache;
   const std::vector<std::vector<BYTE>> images{
-      Tests::BuildFakeNtfsImageWithNameTree(ReadAhead::WideTree(40)),
-      Tests::BuildFakeNtfsImageWithNameTree(ReadAhead::GroupedTree(4, 12))};
+      TestFakeImage::BuildFakeNtfsImageWithNameTree(ReadAhead::WideTree(40)),
+      TestFakeImage::BuildFakeNtfsImageWithNameTree(
+          ReadAhead::GroupedTree(4, 12))};
   for (const std::vector<BYTE>& image : images) {
     VolumeOptions without;
     without.tuning.walk.record_window_bytes = 0;
@@ -375,8 +377,9 @@ TEST_CASE("The record memo spares a listing without a cache its reads of $MFT",
           "[io][directory-read-ahead]") {
   constexpr Cache::Strategy S = Cache::Strategy::NoCache;
   const std::vector<std::vector<BYTE>> images{
-      Tests::BuildFakeNtfsImageWithNameTree(ReadAhead::WideTree(40)),
-      Tests::BuildFakeNtfsImageWithNameTree(ReadAhead::GroupedTree(4, 12))};
+      TestFakeImage::BuildFakeNtfsImageWithNameTree(ReadAhead::WideTree(40)),
+      TestFakeImage::BuildFakeNtfsImageWithNameTree(
+          ReadAhead::GroupedTree(4, 12))};
   for (const std::vector<BYTE>& image : images) {
     // The window would hold the same runs: leave it out.
     VolumeOptions without;

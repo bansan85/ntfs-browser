@@ -183,7 +183,7 @@ TEMPLATE_TEST_CASE_SIG("A stream decrypts end to end with a PFX key provider",
     std::copy(thumbprint.begin(), thumbprint.end(), user.thumbprint.begin());
     user.wrapped_fek = WrappedFek(pfx);
 
-    NTFS_BROWSER_NAMESPACE::Tests::FakeEncryptedFile file;
+    NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeEncryptedFile file;
     file.efs_stream =
         NTFS_BROWSER_NAMESPACE::Tests::MakeEfsStream(std::span(&user, 1));
     file.streams.push_back(
@@ -193,9 +193,10 @@ TEMPLATE_TEST_CASE_SIG("A stream decrypts end to end with a PFX key provider",
          .real_size = plaintext.size()});
 
     NTFS_BROWSER_NAMESPACE::NtfsVolume<S> volume(
-        std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-            NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithEncryptedFile(
-                file)));
+        std::make_unique<
+            NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+            NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                BuildFakeNtfsImageWithEncryptedFile(file)));
     REQUIRE(volume.IsVolumeOK());
     volume.SetEfsKeyProvider(MakePfxKeyProvider(
         DataFile(std::string(pfx.name) + ".pfx"), password_value));

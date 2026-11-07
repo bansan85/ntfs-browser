@@ -35,7 +35,8 @@ using BootImageMaker = std::function<std::vector<BYTE>()>;
 // BuildFakeNtfsImage() with edit applied to its boot sector BPB.
 template <typename Edit>
 std::vector<BYTE> ImageWithBpb(Edit edit) {
-  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
+  std::vector<BYTE> image =
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage();
   edit(*reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::NtfsBpb*>(image.data()));
   return image;
 }
@@ -48,14 +49,16 @@ BootImageMaker EditedBpb(Edit edit) {
 
 // Maker of the unmodified fake image.
 inline BootImageMaker UntouchedImage() {
-  return [] { return NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage(); };
+  return [] {
+    return NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage();
+  };
 }
 
 // Maker of the fake image with 0xFF at one byte of the boot sector.
 inline BootImageMaker ByteSetAt(size_t offset) {
   return [offset] {
     std::vector<BYTE> image =
-        NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImage();
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImage();
     image.at(offset) = 0xFF;
     return image;
   };
@@ -73,11 +76,14 @@ struct BootGeometry {
 
 // What the fake image decodes to. The $MFT sits one cluster in.
 inline BootGeometry FakeGeometry() {
-  return {.sector_size = NTFS_BROWSER_NAMESPACE::Tests::fake_bytes_per_sector,
-          .cluster_size = NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size,
-          .mft_addr = NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size,
+  return {.sector_size =
+              NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_bytes_per_sector,
+          .cluster_size =
+              NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size,
+          .mft_addr =
+              NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size,
           .cluster_buffer_size =
-              NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size};
+              NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size};
 }
 
 // What opening an image logged, and whether the volume came up.
@@ -92,7 +98,8 @@ Opened Open(std::vector<BYTE> image,
             NTFS_BROWSER_NAMESPACE::VolumeOptions options = {}) {
   (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
   const NTFS_BROWSER_NAMESPACE::NtfsVolume<S> volume(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           std::move(image)),
       options);
   return {.ok = volume.IsVolumeOK(),

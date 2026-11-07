@@ -34,11 +34,11 @@ namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 using NTFS_BROWSER_NAMESPACE::IndexEntry;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using NTFS_BROWSER_NAMESPACE::Tests::CountingDiskReader;
-using NTFS_BROWSER_NAMESPACE::Tests::FakeNameTreeOptions;
-using NTFS_BROWSER_NAMESPACE::Tests::FakeTreeNode;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::CountingDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeNameTreeOptions;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeTreeNode;
 using NTFS_BROWSER_NAMESPACE::Tests::FillerName;
-using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
 using NTFS_BROWSER_NAMESPACE::Tests::NameTreeRecord;
 using NTFS_BROWSER_NAMESPACE::Tests::OpenNameTreeVolume;
 
@@ -231,10 +231,10 @@ TEST_CASE("FindSubEntry stops past the twins of a freed name it hides",
                                                        L'a' + index % 26)) +
                                         std::to_wstring(index)}}});
   }
-  auto counter =
-      std::make_unique<CountingDiskReader>(std::make_unique<MemoryDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithNameTree(
-              nodes)));
+  auto counter = std::make_unique<
+      CountingDiskReader>(std::make_unique<MemoryDiskReader>(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithNameTree(
+          nodes)));
   CountingDiskReader* reads = counter.get();
   NtfsVolume<no_cache> volume(std::move(counter));
   REQUIRE(volume.IsVolumeOK());

@@ -27,16 +27,16 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Mft::MftTree;
-using NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftBitmap;
-using NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree;
-using NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size;
-using NTFS_BROWSER_NAMESPACE::Tests::FakeMftBitmap;
-using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
-using NTFS_BROWSER_NAMESPACE::Tests::mft_tree_bitmap_used_idx;
-using NTFS_BROWSER_NAMESPACE::Tests::mft_tree_deleted_file_idx;
-using NTFS_BROWSER_NAMESPACE::Tests::mft_tree_docs_idx;
-using NTFS_BROWSER_NAMESPACE::Tests::mft_tree_record_count;
-using NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftBitmap;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftTree;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_file_record_size;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeMftBitmap;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_bitmap_used_idx;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_deleted_file_idx;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_docs_idx;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_record_count;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_report_idx;
 
 namespace {
 
@@ -184,7 +184,8 @@ void RunBitmapIgnoredWithIncludeDeleted(FakeMftBitmap kind) {
 
 // Every slot that overlaps a logged read.
 std::vector<bool> SlotsRead(const std::vector<ReadSpan>& reads) {
-  const ULONGLONG mft_addr = NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size;
+  const ULONGLONG mft_addr =
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size;
   std::vector<bool> touched(slot_count, false);
   for (ULONGLONG idx = 0; idx < slot_count; idx++) {
     const ULONGLONG begin = mft_addr + idx * fake_file_record_size;

@@ -28,12 +28,12 @@ enum class Strategy : std::uint8_t;
 
 }  // namespace Cache
 
-namespace Tests {
+namespace Test::DiskReaders {
 
 class CountingDiskReader;
 class MemoryDiskReader;
 
-}  // namespace Tests
+}  // namespace Test::DiskReaders
 template <Cache::Strategy S>
 class NtfsVolume;
 
@@ -88,9 +88,11 @@ inline FILETIME ExpectedTime(ULONGLONG utc) {
 }
 
 // The 26-slot MftTree base with a journal written into it.
-inline std::vector<BYTE> JournalImage(const FakeUsnOptions& options) {
-  std::vector<BYTE> image = BuildFakeNtfsImageWithFreedFileTree();
-  PutUsnJournal(image, options);
+inline std::vector<BYTE>
+    JournalImage(const Test::FakeImage::FakeUsnOptions& options) {
+  std::vector<BYTE> image =
+      Test::FakeImage::BuildFakeNtfsImageWithFreedFileTree();
+  Test::FakeImage::PutUsnJournal(image, options);
   return image;
 }
 
@@ -99,15 +101,15 @@ template <Cache::Strategy S>
 struct Opened {
   std::unique_ptr<NtfsVolume<S>> volume;
   // Owned by volume.
-  CountingDiskReader* counter{nullptr};
+  Test::DiskReaders::CountingDiskReader* counter{nullptr};
 };
 
 // Opens image with options, over a counting reader.
 template <Cache::Strategy S>
 Opened<S> OpenVolume(std::vector<BYTE> image,
                      const VolumeOptions& options = RecoverOptions()) {
-  auto counter = std::make_unique<CountingDiskReader>(
-      std::make_unique<MemoryDiskReader>(std::move(image)));
+  auto counter = std::make_unique<Test::DiskReaders::CountingDiskReader>(
+      std::make_unique<Test::DiskReaders::MemoryDiskReader>(std::move(image)));
   Opened<S> opened;
   opened.counter = counter.get();
   opened.volume = std::make_unique<NtfsVolume<S>>(std::move(counter), options);

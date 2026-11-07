@@ -46,13 +46,13 @@
 #include "io/directory-read-ahead-testing.h"
 #include "log/ntfs-common.h"
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 namespace Attr {
 
 struct HeaderCommon;
 
 }  // namespace Attr
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Tests::ReadAhead {
 
@@ -79,18 +79,19 @@ constexpr std::string_view block_magic = "INDX";
 constexpr std::string_view record_magic = "FILE";
 
 // A directory node under parent.
-FakeTreeNode Directory(std::wstring name, std::size_t parent) {
+Test::FakeImage::FakeTreeNode Directory(std::wstring name, std::size_t parent) {
   return {.links = {{.name = std::move(name), .parent = parent}},
           .directory = true};
 }
 
 // A file node under parent.
-FakeTreeNode File(std::wstring name, std::size_t parent) {
+Test::FakeImage::FakeTreeNode File(std::wstring name, std::size_t parent) {
   return {.links = {{.name = std::move(name), .parent = parent}}};
 }
 
 // A node called name, a POSIX name: NTFS lets two of them differ only by case.
-FakeTreeNode PosixName(std::wstring name, std::size_t parent, bool directory) {
+Test::FakeImage::FakeTreeNode PosixName(std::wstring name, std::size_t parent,
+                                        bool directory) {
   return {
       .links = {{.name = std::move(name), .parent = parent, .name_space = 0}},
       .directory = directory};
@@ -105,7 +106,7 @@ std::wstring Number(std::size_t value) {
 // The offset in image of file record record, going by the volume's own $MFT.
 ULONGLONG RecordOffset(const std::vector<BYTE>& image, ULONGLONG record) {
   NtfsVolume<Cache::Strategy::NoCache> volume(
-      std::make_unique<MemoryDiskReader>(image));
+      std::make_unique<Test::DiskReaders::MemoryDiskReader>(image));
   REQUIRE(volume.IsVolumeOK());
   return volume.GetMFTAddr() + (record * volume.GetFileRecordSize());
 }
@@ -130,10 +131,10 @@ std::vector<std::size_t> IndexBlockOffsets(const std::vector<BYTE>& image) {
 }
 
 // A tree in which the same names differ only by case.
-std::vector<FakeTreeNode> CaseTwinTree() {
-  std::vector<FakeTreeNode> nodes;
-  nodes.push_back(PosixName(L"Docs", name_tree_root, true));
-  nodes.push_back(PosixName(L"docs", name_tree_root, true));
+std::vector<Test::FakeImage::FakeTreeNode> CaseTwinTree() {
+  std::vector<Test::FakeImage::FakeTreeNode> nodes;
+  nodes.push_back(PosixName(L"Docs", Test::FakeImage::name_tree_root, true));
+  nodes.push_back(PosixName(L"docs", Test::FakeImage::name_tree_root, true));
   nodes.push_back(PosixName(L"Report.txt", 0, false));
   nodes.push_back(PosixName(L"report.txt", 0, false));
   nodes.push_back(PosixName(L"Sub", 1, true));
@@ -144,36 +145,41 @@ std::vector<FakeTreeNode> CaseTwinTree() {
 }
 
 // A tree with freed directories and files whose entries stayed in the index.
-std::vector<FakeTreeNode> DeletedTree() {
-  std::vector<FakeTreeNode> nodes;
-  nodes.push_back(Directory(L"live", name_tree_root));
+std::vector<Test::FakeImage::FakeTreeNode> DeletedTree() {
+  std::vector<Test::FakeImage::FakeTreeNode> nodes;
+  nodes.push_back(Directory(L"live", Test::FakeImage::name_tree_root));
   nodes.push_back(File(L"live.txt", 0));
-  FakeTreeNode gone = Directory(L"gone", name_tree_root);
+  Test::FakeImage::FakeTreeNode gone =
+      Directory(L"gone", Test::FakeImage::name_tree_root);
   gone.in_use = false;
   gone.keep_entries = true;
   nodes.push_back(gone);
-  FakeTreeNode gone_file = File(L"gone.txt", 0);
+  Test::FakeImage::FakeTreeNode gone_file = File(L"gone.txt", 0);
   gone_file.in_use = false;
   gone_file.keep_entries = true;
   nodes.push_back(gone_file);
-  nodes.push_back(Directory(L"after", name_tree_root));
+  nodes.push_back(Directory(L"after", Test::FakeImage::name_tree_root));
   nodes.push_back(File(L"after.txt", 4));
   return nodes;
 }
 
 // The tree of WideTree(), with the record of one directory spoiled.
 std::vector<BYTE> TreeWithUnreadableDirectory() {
-  const std::vector<FakeTreeNode> nodes = WideTree(8);
-  std::vector<BYTE> image = BuildFakeNtfsImageWithNameTree(nodes);
+  const std::vector<Test::FakeImage::FakeTreeNode> nodes = WideTree(8);
+  std::vector<BYTE> image =
+      Test::FakeImage::BuildFakeNtfsImageWithNameTree(nodes);
   // The third directory of the root: its entry stays, its record is lost.
   const std::size_t victim = 2 * 4;
-  SpoilMagic(image, RecordOffset(image, name_tree_first_record + victim));
+  SpoilMagic(
+      image,
+      RecordOffset(image, Test::FakeImage::name_tree_first_record + victim));
   return image;
 }
 
 // The tree of BigDirectoryTree(), with one of its index blocks spoiled.
 std::vector<BYTE> TreeWithDamagedBlock() {
-  std::vector<BYTE> image = BuildFakeNtfsImageWithNameTree(BigDirectoryTree(4));
+  std::vector<BYTE> image =
+      Test::FakeImage::BuildFakeNtfsImageWithNameTree(BigDirectoryTree(4));
   const std::vector<std::size_t> blocks = IndexBlockOffsets(image);
   REQUIRE(blocks.size() > 4);
   SpoilMagic(image, blocks.at(blocks.size() / 2));
@@ -220,7 +226,8 @@ VolumeOptions WithReadAhead(VolumeOptions options, std::size_t dirs,
 
 // Lists volume recursively, and gathers the text and the log.
 template <Cache::Strategy S>
-Run ListVolume(NtfsVolume<S>& volume, CountingDiskReader& reads) {
+Run ListVolume(NtfsVolume<S>& volume,
+               Test::DiskReaders::CountingDiskReader& reads) {
   reads.Reset();
   (void)TakeCapturedLog();
   const std::uint64_t recovered_before = Log::Detail::RecoveredCount();
@@ -243,13 +250,14 @@ Run ListVolume(NtfsVolume<S>& volume, CountingDiskReader& reads) {
 
 }  // namespace
 
-std::vector<FakeTreeNode> WideTree(std::size_t directories) {
-  std::vector<FakeTreeNode> nodes;
+std::vector<Test::FakeImage::FakeTreeNode> WideTree(std::size_t directories) {
+  std::vector<Test::FakeImage::FakeTreeNode> nodes;
   for (std::size_t index = 0; index < directories; index++) {
     // Four nodes for each directory: it, two files, one subdirectory with a
     // file, in that order of record.
     const std::size_t dir = nodes.size();
-    nodes.push_back(Directory(L"dir" + Number(index), name_tree_root));
+    nodes.push_back(
+        Directory(L"dir" + Number(index), Test::FakeImage::name_tree_root));
     nodes.push_back(File(L"a" + Number(index) + L".txt", dir));
     nodes.push_back(Directory(L"sub" + Number(index), dir));
     nodes.push_back(File(L"b" + Number(index) + L".txt", dir + 2));
@@ -257,17 +265,20 @@ std::vector<FakeTreeNode> WideTree(std::size_t directories) {
   return nodes;
 }
 
-std::vector<FakeTreeNode> SpacedTree(std::size_t directories, std::size_t files,
-                                     std::size_t ballast) {
-  std::vector<FakeTreeNode> nodes;
+std::vector<Test::FakeImage::FakeTreeNode> SpacedTree(std::size_t directories,
+                                                      std::size_t files,
+                                                      std::size_t ballast) {
+  std::vector<Test::FakeImage::FakeTreeNode> nodes;
   for (std::size_t index = 0; index < directories; index++) {
     const std::size_t dir = nodes.size();
-    nodes.push_back(Directory(L"dir" + Number(index), name_tree_root));
+    nodes.push_back(
+        Directory(L"dir" + Number(index), Test::FakeImage::name_tree_root));
     for (std::size_t file = 0; file < files; file++) {
       nodes.push_back(File(L"f" + Number(file) + L".txt", dir));
     }
     for (std::size_t freed = 0; freed < ballast; freed++) {
-      FakeTreeNode node = File(L"b" + Number(freed) + L".txt", dir);
+      Test::FakeImage::FakeTreeNode node =
+          File(L"b" + Number(freed) + L".txt", dir);
       node.in_use = false;
       nodes.push_back(std::move(node));
     }
@@ -275,12 +286,13 @@ std::vector<FakeTreeNode> SpacedTree(std::size_t directories, std::size_t files,
   return nodes;
 }
 
-std::vector<FakeTreeNode> GroupedTree(std::size_t groups,
-                                      std::size_t per_group) {
-  std::vector<FakeTreeNode> nodes;
+std::vector<Test::FakeImage::FakeTreeNode> GroupedTree(std::size_t groups,
+                                                       std::size_t per_group) {
+  std::vector<Test::FakeImage::FakeTreeNode> nodes;
   for (std::size_t group = 0; group < groups; group++) {
     const std::size_t parent = nodes.size();
-    nodes.push_back(Directory(L"group" + Number(group), name_tree_root));
+    nodes.push_back(
+        Directory(L"group" + Number(group), Test::FakeImage::name_tree_root));
     for (std::size_t index = 0; index < per_group; index++) {
       const std::size_t dir = nodes.size();
       nodes.push_back(Directory(L"d" + Number(index), parent));
@@ -290,11 +302,13 @@ std::vector<FakeTreeNode> GroupedTree(std::size_t groups,
   return nodes;
 }
 
-std::vector<FakeTreeNode> BigDirectoryTree(std::size_t directories) {
-  std::vector<FakeTreeNode> nodes;
+std::vector<Test::FakeImage::FakeTreeNode>
+    BigDirectoryTree(std::size_t directories) {
+  std::vector<Test::FakeImage::FakeTreeNode> nodes;
   for (std::size_t index = 0; index < directories; index++) {
     const std::size_t dir = nodes.size();
-    nodes.push_back(Directory(L"big" + Number(index), name_tree_root));
+    nodes.push_back(
+        Directory(L"big" + Number(index), Test::FakeImage::name_tree_root));
     for (std::size_t file = 0; file < big_directory_files; file++) {
       nodes.push_back(File(L"f" + Number(file) + L".txt", dir));
     }
@@ -304,17 +318,19 @@ std::vector<FakeTreeNode> BigDirectoryTree(std::size_t directories) {
   return nodes;
 }
 
-std::vector<FakeTreeNode> ScatteredTree(std::size_t directories,
-                                        std::size_t files,
-                                        std::size_t ballast) {
-  std::vector<FakeTreeNode> nodes;
+std::vector<Test::FakeImage::FakeTreeNode>
+    ScatteredTree(std::size_t directories, std::size_t files,
+                  std::size_t ballast) {
+  std::vector<Test::FakeImage::FakeTreeNode> nodes;
   for (std::size_t index = 0; index < directories; index++) {
     const std::size_t dir = nodes.size();
-    nodes.push_back(Directory(L"dir" + Number(index), name_tree_root));
+    nodes.push_back(
+        Directory(L"dir" + Number(index), Test::FakeImage::name_tree_root));
     for (std::size_t file = 0; file < files; file++) {
       nodes.push_back(File(L"f" + Number(file) + L".txt", dir));
       for (std::size_t freed = 0; freed < ballast; freed++) {
-        FakeTreeNode node = File(L"b" + Number(freed) + L".txt", dir);
+        Test::FakeImage::FakeTreeNode node =
+            File(L"b" + Number(freed) + L".txt", dir);
         node.in_use = false;
         nodes.push_back(std::move(node));
       }
@@ -327,8 +343,8 @@ namespace {
 
 // Adds the subdirectories of the directory at parent, and theirs, down to
 // levels more levels.
-void AddBranches(std::vector<FakeTreeNode>& nodes, std::size_t parent,
-                 std::size_t fanout, std::size_t levels) {
+void AddBranches(std::vector<Test::FakeImage::FakeTreeNode>& nodes,
+                 std::size_t parent, std::size_t fanout, std::size_t levels) {
   if (levels == 0) {
     return;
   }
@@ -342,20 +358,23 @@ void AddBranches(std::vector<FakeTreeNode>& nodes, std::size_t parent,
 
 }  // namespace
 
-std::vector<FakeTreeNode> BranchingTree(std::size_t fanout, std::size_t depth) {
-  std::vector<FakeTreeNode> nodes;
-  AddBranches(nodes, name_tree_root, fanout, depth);
+std::vector<Test::FakeImage::FakeTreeNode> BranchingTree(std::size_t fanout,
+                                                         std::size_t depth) {
+  std::vector<Test::FakeImage::FakeTreeNode> nodes;
+  AddBranches(nodes, Test::FakeImage::name_tree_root, fanout, depth);
   return nodes;
 }
 
-std::vector<FakeTreeNode> LinkedTree(std::size_t directories,
-                                     std::size_t files) {
-  std::vector<FakeTreeNode> nodes;
+std::vector<Test::FakeImage::FakeTreeNode> LinkedTree(std::size_t directories,
+                                                      std::size_t files) {
+  std::vector<Test::FakeImage::FakeTreeNode> nodes;
   for (std::size_t index = 0; index < directories; index++) {
     const std::size_t dir = nodes.size();
-    nodes.push_back(Directory(L"dir" + Number(index), name_tree_root));
+    nodes.push_back(
+        Directory(L"dir" + Number(index), Test::FakeImage::name_tree_root));
     for (std::size_t file = 0; file < files; file++) {
-      FakeTreeNode node = File(L"f" + Number(file) + L".txt", dir);
+      Test::FakeImage::FakeTreeNode node =
+          File(L"f" + Number(file) + L".txt", dir);
       if (file % 2 == 0) {
         // A hard link, which collates far from the first name.
         node.links.push_back({.name = L"z" + Number(file) + L".txt",
@@ -375,15 +394,17 @@ std::vector<FakeTreeNode> LinkedTree(std::size_t directories,
 
 std::vector<TreeFixture> Fixtures() {
   std::vector<TreeFixture> fixtures;
-  const auto add = [&fixtures](std::string name,
-                               const std::vector<FakeTreeNode>& nodes) {
-    fixtures.push_back(
-        {std::move(name), BuildFakeNtfsImageWithNameTree(nodes)});
-  };
+  const auto add =
+      [&fixtures](std::string name,
+                  const std::vector<Test::FakeImage::FakeTreeNode>& nodes) {
+        fixtures.push_back(
+            {std::move(name),
+             Test::FakeImage::BuildFakeNtfsImageWithNameTree(nodes)});
+      };
   add("wide", WideTree(40));
   add("grouped", GroupedTree(4, 12));
   add("deep",
-      MakeNameChain(
+      Test::FakeImage::MakeNameChain(
           24, [](std::size_t level) { return L"level" + Number(level); },
           L"bottom.txt"));
   add("big directories", BigDirectoryTree(6));
@@ -391,13 +412,17 @@ std::vector<TreeFixture> Fixtures() {
   add("freed entries", DeletedTree());
   fixtures.push_back({"unreadable directory", TreeWithUnreadableDirectory()});
   fixtures.push_back({"damaged block", TreeWithDamagedBlock()});
-  fixtures.push_back({"directory loop", BuildFakeNtfsImageWithDirectoryLoop()});
-  fixtures.push_back({"orphaned directory loop",
-                      BuildFakeNtfsImageWithOrphanedDirectoryLoop()});
+  fixtures.push_back({"directory loop",
+                      Test::FakeImage::BuildFakeNtfsImageWithDirectoryLoop()});
   fixtures.push_back(
-      {"orphaned blocks", BuildFakeNtfsImageWithOrphanedIndexBlocks()});
+      {"orphaned directory loop",
+       Test::FakeImage::BuildFakeNtfsImageWithOrphanedDirectoryLoop()});
   fixtures.push_back(
-      {"deep index chain", BuildFakeNtfsImageWithDeepIndexBlockChain()});
+      {"orphaned blocks",
+       Test::FakeImage::BuildFakeNtfsImageWithOrphanedIndexBlocks()});
+  fixtures.push_back(
+      {"deep index chain",
+       Test::FakeImage::BuildFakeNtfsImageWithDeepIndexBlockChain()});
   return fixtures;
 }
 
@@ -415,10 +440,11 @@ template <Cache::Strategy S>
 Run ListRecursively(const std::vector<BYTE>& image, VolumeOptions options,
                     std::size_t dirs, std::uint64_t bytes,
                     Tuning::MediaKind kind) {
-  auto memory = std::make_unique<MemoryDiskReader>(image);
+  auto memory = std::make_unique<Test::DiskReaders::MemoryDiskReader>(image);
   memory->SetMediaKind(kind);
-  auto counting = std::make_unique<CountingDiskReader>(std::move(memory));
-  CountingDiskReader& reads = *counting;
+  auto counting = std::make_unique<Test::DiskReaders::CountingDiskReader>(
+      std::move(memory));
+  Test::DiskReaders::CountingDiskReader& reads = *counting;
   NtfsVolume<S> volume(std::move(counting),
                        WithReadAhead(options, dirs, bytes));
   REQUIRE(volume.IsVolumeOK());
@@ -428,9 +454,9 @@ Run ListRecursively(const std::vector<BYTE>& image, VolumeOptions options,
 template <Cache::Strategy S>
 Run ListWithDefaultTuning(const std::vector<BYTE>& image,
                           const VolumeOptions& options) {
-  auto counting = std::make_unique<CountingDiskReader>(
-      std::make_unique<MemoryDiskReader>(image));
-  CountingDiskReader& reads = *counting;
+  auto counting = std::make_unique<Test::DiskReaders::CountingDiskReader>(
+      std::make_unique<Test::DiskReaders::MemoryDiskReader>(image));
+  Test::DiskReaders::CountingDiskReader& reads = *counting;
   NtfsVolume<S> volume(std::move(counting), options);
   REQUIRE(volume.IsVolumeOK());
   return ListVolume(volume, reads);
@@ -541,10 +567,11 @@ template <Cache::Strategy S>
 LaneRun ListForLane(const std::vector<BYTE>& image,
                     const VolumeOptions& options, Tuning::MediaKind kind,
                     bool raw_callback) {
-  auto memory = std::make_unique<MemoryDiskReader>(image);
+  auto memory = std::make_unique<Test::DiskReaders::MemoryDiskReader>(image);
   memory->SetMediaKind(kind);
-  auto counting = std::make_unique<CountingDiskReader>(std::move(memory));
-  CountingDiskReader& reads = *counting;
+  auto counting = std::make_unique<Test::DiskReaders::CountingDiskReader>(
+      std::move(memory));
+  Test::DiskReaders::CountingDiskReader& reads = *counting;
   NtfsVolume<S> volume(std::move(counting), options);
   REQUIRE(volume.IsVolumeOK());
   if (raw_callback) {
@@ -563,16 +590,20 @@ LaneRun ListForLane(const std::vector<BYTE>& image,
     WalkStack(fr, ahead);
     run.stats = ahead.GetStats();
   }
-  for (const CountingDiskReader::Call& call : reads.Calls()) {
-    const bool lane = call.kind == CountingDiskReader::Kind::PrefetchStanding ||
-                      call.kind == CountingDiskReader::Kind::CancelStanding;
+  for (const Test::DiskReaders::CountingDiskReader::Call& call :
+       reads.Calls()) {
+    const bool lane =
+        call.kind ==
+            Test::DiskReaders::CountingDiskReader::Kind::PrefetchStanding ||
+        call.kind ==
+            Test::DiskReaders::CountingDiskReader::Kind::CancelStanding;
     (lane ? run.lane : run.others).push_back(call);
   }
   return run;
 }
 
-DiskModel HardDiskModel() {
-  DiskModel model;
+Test::DiskReaders::DiskModel HardDiskModel() {
+  Test::DiskReaders::DiskModel model;
   model.seek_ns = 8000000;
   model.per_read_ns = 100000;
   model.single_bytes_per_second = 116'000'000;
@@ -586,22 +617,23 @@ TimedRun ListOnSimulatedDisk(const std::vector<BYTE>& image,
                              VolumeOptions options, std::size_t dirs,
                              std::uint64_t bytes,
                              const SimulatedDevice& device) {
-  SimulatedClock clock;
-  auto memory = std::make_unique<MemoryDiskReader>(image);
+  Test::DiskReaders::SimulatedClock clock;
+  auto memory = std::make_unique<Test::DiskReaders::MemoryDiskReader>(image);
   memory->SetMediaKind(device.kind);
-  auto throttled = std::make_unique<ThrottledDiskReader>(
+  auto throttled = std::make_unique<Test::DiskReaders::ThrottledDiskReader>(
       std::move(memory), device.model, clock,
       WithReadAhead(options, dirs, bytes).tuning.reader);
-  const ThrottledDiskReader& disk = *throttled;
-  auto counting = std::make_unique<CountingDiskReader>(std::move(throttled));
-  CountingDiskReader& reads = *counting;
+  const Test::DiskReaders::ThrottledDiskReader& disk = *throttled;
+  auto counting = std::make_unique<Test::DiskReaders::CountingDiskReader>(
+      std::move(throttled));
+  Test::DiskReaders::CountingDiskReader& reads = *counting;
   NtfsVolume<S> volume(std::move(counting),
                        WithReadAhead(options, dirs, bytes));
   REQUIRE(volume.IsVolumeOK());
 
   // Only the listing is timed, not the opening of the volume.
   const std::uint64_t opened_ns = clock.NowNs();
-  const ThrottleStats opened = disk.Stats();
+  const Test::DiskReaders::ThrottleStats opened = disk.Stats();
   TimedRun timed;
   timed.run = ListVolume(volume, reads);
   timed.elapsed_ns = clock.NowNs() - opened_ns;
@@ -639,7 +671,7 @@ std::string FirstDifference(const std::string& left, const std::string& right) {
 
 MftSpan MftSpanOf(const std::vector<BYTE>& image) {
   NtfsVolume<Cache::Strategy::NoCache> volume(
-      std::make_unique<MemoryDiskReader>(image));
+      std::make_unique<Test::DiskReaders::MemoryDiskReader>(image));
   REQUIRE(volume.IsVolumeOK());
   const ULONGLONG first = volume.GetMFTAddr();
   return {.first = first,
@@ -647,13 +679,13 @@ MftSpan MftSpanOf(const std::vector<BYTE>& image) {
               first + (volume.GetRecordsCount() * volume.GetFileRecordSize())};
 }
 
-std::vector<std::uint32_t>
-    SectorReadCounts(const std::vector<CountingDiskReader::Call>& calls,
-                     std::size_t image_bytes) {
+std::vector<std::uint32_t> SectorReadCounts(
+    const std::vector<Test::DiskReaders::CountingDiskReader::Call>& calls,
+    std::size_t image_bytes) {
   constexpr ULONGLONG sector = 512;
   std::vector<std::uint32_t> counts((image_bytes / sector) + 1, 0);
-  for (const CountingDiskReader::Call& call : calls) {
-    if (call.kind != CountingDiskReader::Kind::Read) {
+  for (const Test::DiskReaders::CountingDiskReader::Call& call : calls) {
+    if (call.kind != Test::DiskReaders::CountingDiskReader::Kind::Read) {
       continue;
     }
     for (ULONGLONG at = call.offset / sector;

@@ -21,13 +21,13 @@
 #include <ntfs-browser/test/support/test-log-sink.h>
 #include <ntfs-browser/volume-options.h>
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 namespace Alloc {
 
 struct BadClusters;
 
 }  // namespace Alloc
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Alloc {
@@ -49,12 +49,12 @@ class FileRecord;
 
 }  // namespace Io
 
-namespace Tests {
+namespace Test::DiskReaders {
 
 class CountingDiskReader;
 class MemoryDiskReader;
 
-}  // namespace Tests
+}  // namespace Test::DiskReaders
 template <Cache::Strategy S>
 class NtfsVolume;
 
@@ -68,18 +68,18 @@ inline constexpr ULONGLONG base_volume_clusters = 64;
 
 // First byte of the bitmap data in such an image.
 inline constexpr ULONGLONG bitmap_data_offset =
-    base_volume_clusters * fake_cluster_size;
+    base_volume_clusters * Test::FakeImage::fake_cluster_size;
 
 // Bytes of the stale stream the freed non-resident fixture keeps: four
 // clusters.
-inline constexpr ULONGLONG stale_size = 4 * fake_cluster_size;
+inline constexpr ULONGLONG stale_size = 4 * Test::FakeImage::fake_cluster_size;
 
 // The volume opened over an image, and the counting reader under it.
 template <Cache::Strategy S>
 struct Opened {
   std::unique_ptr<NtfsVolume<S>> volume;
   // Owned by volume.
-  CountingDiskReader* counter{nullptr};
+  Test::DiskReaders::CountingDiskReader* counter{nullptr};
 };
 
 // Options that list freed records, and nothing else.
@@ -91,8 +91,8 @@ inline VolumeOptions DeletedOptions() {
 template <Cache::Strategy S>
 Opened<S> OpenVolume(std::vector<BYTE> image,
                      const VolumeOptions& options = DeletedOptions()) {
-  auto counter = std::make_unique<CountingDiskReader>(
-      std::make_unique<MemoryDiskReader>(std::move(image)));
+  auto counter = std::make_unique<Test::DiskReaders::CountingDiskReader>(
+      std::make_unique<Test::DiskReaders::MemoryDiskReader>(std::move(image)));
   Opened<S> opened;
   opened.counter = counter.get();
   opened.volume = std::make_unique<NtfsVolume<S>>(std::move(counter), options);
@@ -102,30 +102,32 @@ Opened<S> OpenVolume(std::vector<BYTE> image,
 
 // image with a non-resident $Bitmap that marks exactly allocated_runs, and the
 // clusters of the bitmap itself.
-inline std::vector<BYTE> WithBitmap(std::vector<BYTE> image,
-                                    std::span<const FakeDataRun> allocated_runs,
-                                    const FakeBitmapOptions& options = {}) {
-  const std::vector<BYTE> bits = AllocatedBitmapFor(image, allocated_runs);
-  PutClusterBitmap(image, bits, options);
+inline std::vector<BYTE>
+    WithBitmap(std::vector<BYTE> image,
+               std::span<const Test::FakeImage::FakeDataRun> allocated_runs,
+               const Test::FakeImage::FakeBitmapOptions& options = {}) {
+  const std::vector<BYTE> bits =
+      Test::FakeImage::AllocatedBitmapFor(image, allocated_runs);
+  Test::FakeImage::PutClusterBitmap(image, bits, options);
   return image;
 }
 
 // image with record 8 rewritten as $BadClus naming bad_extents. Call it after
 // WithBitmap(): the bitmap grows the image, and $Bad declares its size.
-inline std::vector<BYTE>
-    WithBadClusters(std::vector<BYTE> image,
-                    std::span<const Alloc::Extent> bad_extents,
-                    const FakeBadClusterOptions& options = {}) {
-  PutBadClusterList(image, bad_extents, options);
+inline std::vector<BYTE> WithBadClusters(
+    std::vector<BYTE> image, std::span<const Alloc::Extent> bad_extents,
+    const Test::FakeImage::FakeBadClusterOptions& options = {}) {
+  Test::FakeImage::PutBadClusterList(image, bad_extents, options);
   return image;
 }
 
 // allocated plus the runs of extents: a bitmap that marks the bad clusters
 // allocated, as NTFS does.
-inline std::vector<FakeDataRun>
-    WithBadRuns(std::vector<FakeDataRun> allocated,
+inline std::vector<Test::FakeImage::FakeDataRun>
+    WithBadRuns(std::vector<Test::FakeImage::FakeDataRun> allocated,
                 std::span<const Alloc::Extent> extents) {
-  for (const FakeDataRun& run : ExtentsAsRuns(extents)) {
+  for (const Test::FakeImage::FakeDataRun& run :
+       Test::FakeImage::ExtentsAsRuns(extents)) {
     allocated.push_back(run);
   }
   return allocated;
@@ -152,7 +154,8 @@ const Alloc::BadClusters& RequiredBadList(const NtfsVolume<S>& volume) {
 // The stale file's record, parsed with its attributes.
 template <Cache::Strategy S>
 std::unique_ptr<Io::FileRecord<S>> ParsedStale(const Opened<S>& opened) {
-  return ParsedRecord(*opened.volume, mft_tree_stale_child_idx);
+  return ParsedRecord(*opened.volume,
+                      Test::FakeImage::mft_tree_stale_child_idx);
 }
 
 // Reads the whole stale stream.
@@ -181,7 +184,8 @@ std::string LogOfReadingStale(std::vector<BYTE> image,
 // given step, so a read returns something to compare.
 inline void FillStaleClusters(std::vector<BYTE>& image, size_t step) {
   for (size_t i = 0; i < stale_size; i++) {
-    image.at(40 * fake_cluster_size + i) = static_cast<BYTE>(i * step);
+    image.at(40 * Test::FakeImage::fake_cluster_size + i) =
+        static_cast<BYTE>(i * step);
   }
 }
 

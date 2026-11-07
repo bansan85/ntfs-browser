@@ -28,11 +28,11 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree;
-using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
-using NTFS_BROWSER_NAMESPACE::Tests::mft_tree_hard_link_idx;
-using NTFS_BROWSER_NAMESPACE::Tests::mft_tree_report_idx;
-using NTFS_BROWSER_NAMESPACE::Tests::mft_tree_reused_dir_idx;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftTree;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_hard_link_idx;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_report_idx;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_reused_dir_idx;
 using NTFS_BROWSER_NAMESPACE::Tests::ScratchFileNameBody;
 using NTFS_BROWSER_NAMESPACE::Tests::ScratchHeader;
 using NTFS_BROWSER_NAMESPACE::Tests::ScratchRecord;
@@ -75,8 +75,9 @@ std::set<ULONGLONG> Records(const Mft::MftTree& tree) {
 void SetSignature(std::vector<BYTE>& image, ULONGLONG idx,
                   const std::array<char, 4>& signature) {
   std::memcpy(
-      &image.at(NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size +
-                idx * NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size),
+      &image.at(
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size +
+          idx * NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_file_record_size),
       signature.data(), signature.size());
 }
 
@@ -217,9 +218,9 @@ TEMPLATE_TEST_CASE_SIG(
   // number.
   const auto tear = [](std::vector<BYTE>& image) {
     constexpr std::size_t first_sector_end = 510;
-    image.at(NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size +
+    image.at(NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size +
              (mft_tree_report_idx *
-              NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size) +
+              NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_file_record_size) +
              first_sector_end) = 0x77;
   };
   const auto [strict, recovering] = DamagedCounts<S>(scratch, tear);

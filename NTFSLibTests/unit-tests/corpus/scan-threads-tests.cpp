@@ -28,6 +28,7 @@
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace Fs = std::filesystem;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
@@ -102,9 +103,9 @@ TEST_CASE("The NPS ntfs1 image scans the same whatever the thread count",
                               .recover_errors = true};
   const auto scan = [&](unsigned threads) {
     static_cast<void>(Tests::TakeCapturedLog());
-    auto counting = std::make_unique<Tests::CountingDiskReader>(
+    auto counting = std::make_unique<TestDiskReaders::CountingDiskReader>(
         Tests::OpenCorpusImage(Tests::ntfs1_image, 0, trace));
-    const Tests::CountingDiskReader* const reader = counting.get();
+    const TestDiskReaders::CountingDiskReader* const reader = counting.get();
     const NtfsVolume<Cache::Strategy::NoCache> volume(std::move(counting),
                                                       options);
     REQUIRE(volume.IsVolumeOK());
@@ -132,9 +133,9 @@ TEMPLATE_TEST_CASE_SIG(
                               .recover_errors = recover};
   const auto scan = [&](unsigned threads) {
     static_cast<void>(Tests::TakeCapturedLog());
-    auto counting = std::make_unique<Tests::CountingDiskReader>(
-        std::make_unique<Tests::MemoryDiskReader>(bytes));
-    const Tests::CountingDiskReader* const reader = counting.get();
+    auto counting = std::make_unique<TestDiskReaders::CountingDiskReader>(
+        std::make_unique<TestDiskReaders::MemoryDiskReader>(bytes));
+    const TestDiskReaders::CountingDiskReader* const reader = counting.get();
     const NtfsVolume<S> volume(std::move(counting), options);
     REQUIRE(volume.IsVolumeOK());
     return Tests::CaptureScan(volume, reader, threads);

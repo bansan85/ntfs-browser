@@ -20,10 +20,11 @@
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
-using Tests::CountingDiskReader;
-using Tests::FakeDataRun;
+using TestDiskReaders::CountingDiskReader;
+using TestFakeImage::FakeDataRun;
 
 namespace {
 
@@ -31,8 +32,9 @@ using Kind = CountingDiskReader::Kind;
 
 // The freed file over four clusters at LCN 40.
 std::vector<BYTE> StaleFile() {
-  return Tests::BuildFakeNtfsImageWithFreedNonResidentFile(
-      4 * Tests::fake_cluster_size, {FakeDataRun{.lcn = 40, .clusters = 4}});
+  return TestFakeImage::BuildFakeNtfsImageWithFreedNonResidentFile(
+      4 * TestFakeImage::fake_cluster_size,
+      {FakeDataRun{.lcn = 40, .clusters = 4}});
 }
 
 // Whether a read-only volume may issue this call on its reader.
@@ -93,8 +95,8 @@ void CheckEveryBadClusterQueryOnlyReads() {
 
 TEST_CASE("the counting reader records open, read and size calls",
           "[alloc][read-only]") {
-  CountingDiskReader reader(
-      std::make_unique<Tests::MemoryDiskReader>(std::vector<BYTE>(4096, 0x5A)));
+  CountingDiskReader reader(std::make_unique<TestDiskReaders::MemoryDiskReader>(
+      std::vector<BYTE>(4096, 0x5A)));
   std::vector<BYTE> out(16);
   LARGE_INTEGER addr{.QuadPart = 128};
 

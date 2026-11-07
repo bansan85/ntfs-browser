@@ -29,7 +29,8 @@ std::unique_ptr<NoCacheVolume>
     OpenVolume(std::vector<BYTE> image,
                NTFS_BROWSER_NAMESPACE::VolumeOptions options = {}) {
   return std::make_unique<NoCacheVolume>(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           std::move(image)),
       options);
 }
@@ -70,9 +71,10 @@ TEST_CASE("NtfsDump refuses a volume that is not NTFS",
 
 TEST_CASE("NtfsDump reports a root directory record that does not read",
           "[ntfsdump][characterization]") {
-  const DumpResult result = DumpPath(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithCorruptRootRecord(),
-      report_path);
+  const DumpResult result =
+      DumpPath(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                   BuildFakeNtfsImageWithCorruptRootRecord(),
+               report_path);
 
   REQUIRE(result.message == L"Cannot read root directory of volume");
   REQUIRE(result.dump.empty());
@@ -81,7 +83,7 @@ TEST_CASE("NtfsDump reports a root directory record that does not read",
 TEST_CASE("NtfsDump reports root attributes that do not parse",
           "[ntfsdump][characterization]") {
   const DumpResult result =
-      DumpPath(NTFS_BROWSER_NAMESPACE::Tests::
+      DumpPath(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
                    BuildFakeNtfsImageWithAttrOffsetOutOfBounds(),
                report_path);
 
@@ -168,11 +170,11 @@ TEST_CASE("NtfsDump reports a freed final file as not found",
 TEST_CASE("NtfsDump reports a data run that cannot be read",
           "[ntfsdump][characterization]") {
   // Clusters past the end of the image, so the read fails.
-  const DumpResult result =
-      DumpPath(NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithDumpTree(
-                   NTFS_BROWSER_NAMESPACE::Tests::dump_big_file_size,
-                   {{.lcn = 1000, .clusters = 20}}),
-               big_path);
+  const DumpResult result = DumpPath(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithDumpTree(
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::dump_big_file_size,
+          {{.lcn = 1000, .clusters = 20}}),
+      big_path);
 
   REQUIRE(result.message == L"Read data error");
   REQUIRE(result.dump.empty());
@@ -183,11 +185,11 @@ TEST_CASE(
     "file holds",
     "[ntfsdump][characterization]") {
   // One cluster mapped for a file of 20000 bytes: the read comes back short.
-  const DumpResult result =
-      DumpPath(NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithDumpTree(
-                   NTFS_BROWSER_NAMESPACE::Tests::dump_big_file_size,
-                   {{.lcn = 40, .clusters = 1}}),
-               big_path);
+  const DumpResult result = DumpPath(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithDumpTree(
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::dump_big_file_size,
+          {{.lcn = 40, .clusters = 1}}),
+      big_path);
 
   REQUIRE(result.message == L"Read data error");
   REQUIRE(result.dump.empty());

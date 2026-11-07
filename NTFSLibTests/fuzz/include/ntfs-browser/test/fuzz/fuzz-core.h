@@ -13,7 +13,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/volume-options.h>
 
-namespace NtfsFuzz {
+namespace NTFS_BROWSER_NAMESPACE::Test::Fuzz {
 
 // Character type of argv: wchar_t on Windows, char elsewhere.
 using ArgChar = std::filesystem::path::value_type;
@@ -71,4 +71,4 @@ void ProbeClusterAccountOnce(
 int RunCommandLine(const std::vector<std::basic_string<ArgChar>>& args,
                    std::ostream& err);
 
-}  // namespace NtfsFuzz
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Fuzz

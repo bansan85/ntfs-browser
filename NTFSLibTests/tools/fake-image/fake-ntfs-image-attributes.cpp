@@ -21,7 +21,7 @@
 #include "data/index-block.h"
 #include "fake-ntfs-image-internal.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage {
 
 namespace {
 
@@ -111,7 +111,8 @@ DWORD WriteRunList(std::span<BYTE> dest, const FakeNonResidentAttr& layout) {
 
 }  // namespace
 
-DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, Attr::Type type,
+DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset,
+                           NTFS_BROWSER_NAMESPACE::Attr::Type type,
                            const FakeNonResidentAttr& layout) {
   const FakeNonResidentOverrides& overrides = layout.overrides;
   auto& attr = InitNonResidentAttr(record, offset, type);
@@ -171,7 +172,8 @@ FakeRecord MakeNonResidentDataRecord(
 
   DWORD offset = attr_offset_value;
   offset += WriteStandardInformationAttr(record, offset, permission);
-  offset += WriteNonResidentAttr(record, offset, Attr::Type::Data,
+  offset += WriteNonResidentAttr(record, offset,
+                                 NTFS_BROWSER_NAMESPACE::Attr::Type::Data,
                                  {.comp_unit_size = comp_unit_size,
                                   .real_size = real_size,
                                   .runs = runs,
@@ -196,8 +198,9 @@ FakeRecord MakeIndexAllocationDirRecord(
   offset += WriteStandardInformationAttr(record, offset, permission);
 
   offset += WriteIndexRootAttr(record, offset, root_names);
-  offset += WriteNonResidentAttr(record, offset, Attr::Type::IndexAllocation,
-                                 index_alloc);
+  offset += WriteNonResidentAttr(
+      record, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::IndexAllocation,
+      index_alloc);
 
   WriteEndOfAttributesMarker(record, offset);
   return record;
@@ -302,7 +305,7 @@ void WriteTrailingDefect(FakeRecord& record, DWORD offset,
       auto& attr =
           *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
               &record.at(offset));
-      attr.header.type = Attr::Type::Bitmap;
+      attr.header.type = NTFS_BROWSER_NAMESPACE::Attr::Type::Bitmap;
       attr.header.non_resident = 0;
       attr.header.total_size = undersized_total_size;
       break;
@@ -311,7 +314,7 @@ void WriteTrailingDefect(FakeRecord& record, DWORD offset,
       auto& attr =
           *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident*>(
               &record.at(offset));
-      attr.header.type = Attr::Type::Bitmap;
+      attr.header.type = NTFS_BROWSER_NAMESPACE::Attr::Type::Bitmap;
       attr.header.non_resident = 1;
       attr.comp_unit_size = compression_unit_size_shift;
       attr.header.total_size =
@@ -322,7 +325,8 @@ void WriteTrailingDefect(FakeRecord& record, DWORD offset,
       auto& attr =
           *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident*>(
               &record.at(offset));
-      attr.header.type = Attr::Type::StandardInformation;
+      attr.header.type =
+          NTFS_BROWSER_NAMESPACE::Attr::Type::StandardInformation;
       attr.header.non_resident = 1;
       attr.header.total_size = AlignAttrSize(
           NTFS_BROWSER_NAMESPACE::Data::header_non_resident_base_size +
@@ -332,4 +336,4 @@ void WriteTrailingDefect(FakeRecord& record, DWORD offset,
   }
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage

@@ -30,9 +30,11 @@ namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
-using Call = Tests::CountingDiskReader::Call;
-using Kind = Tests::CountingDiskReader::Kind;
+using Call = TestDiskReaders::CountingDiskReader::Call;
+using Kind = TestDiskReaders::CountingDiskReader::Kind;
 
 namespace {
 
@@ -56,15 +58,15 @@ constexpr ULONGLONG across_length = 100;
 template <Cache::Strategy S>
 struct CountedFile {
   std::unique_ptr<Io::FileReader<S>> file;
-  const Tests::CountingDiskReader* counting;
+  const TestDiskReaders::CountingDiskReader* counting;
 };
 
 template <Cache::Strategy S>
 CountedFile<S> MakeCountedFile() {
-  auto counting = std::make_unique<Tests::CountingDiskReader>(
-      std::make_unique<Tests::MemoryDiskReader>(
+  auto counting = std::make_unique<TestDiskReaders::CountingDiskReader>(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(
           std::vector<BYTE>(image_bytes, BYTE{5})));
-  const Tests::CountingDiskReader* const pointer = counting.get();
+  const TestDiskReaders::CountingDiskReader* const pointer = counting.get();
   return {std::make_unique<Io::FileReader<S>>(std::move(counting)), pointer};
 }
 
@@ -246,10 +248,10 @@ TEMPLATE_TEST_CASE_SIG(
     "A session over a volume logs the standing ranges of its $MFT slots",
     "[bench][standing]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  auto counting = std::make_unique<Tests::CountingDiskReader>(
-      std::make_unique<Tests::MemoryDiskReader>(
-          Tests::BuildFakeNtfsImageWithFragmentedMftScan(450)));
-  const Tests::CountingDiskReader* const reader = counting.get();
+  auto counting = std::make_unique<TestDiskReaders::CountingDiskReader>(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(
+          TestFakeImage::BuildFakeNtfsImageWithFragmentedMftScan(450)));
+  const TestDiskReaders::CountingDiskReader* const reader = counting.get();
   const NtfsVolume<S> volume(std::move(counting));
   REQUIRE(volume.IsVolumeOK());
 

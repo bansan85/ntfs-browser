@@ -11,7 +11,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders {
 
 MemoryDiskReader::MemoryDiskReader(std::vector<BYTE> data)
     : data_(std::move(data)) {}
@@ -43,10 +43,14 @@ bool MemoryDiskReader::ReadInto(LARGE_INTEGER& addr,
 
 std::optional<ULONGLONG> MemoryDiskReader::Size() const { return data_.size(); }
 
-Tuning::MediaKind MemoryDiskReader::GetMediaKind() const { return kind_; }
+NTFS_BROWSER_NAMESPACE::Tuning::MediaKind
+    MemoryDiskReader::GetMediaKind() const {
+  return kind_;
+}
 
-void MemoryDiskReader::SetMediaKind(Tuning::MediaKind kind) noexcept {
+void MemoryDiskReader::SetMediaKind(
+    NTFS_BROWSER_NAMESPACE::Tuning::MediaKind kind) noexcept {
   kind_ = kind;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders

@@ -53,7 +53,7 @@ class CountingDiskReader final : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   }
 
  private:
-  NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader inner_;
+  NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader inner_;
   std::shared_ptr<int> reads_;
 };
 

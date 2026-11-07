@@ -30,7 +30,7 @@
 #include "data/std-info-permission.h"
 #include "fake-ntfs-image-internal.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage {
 
 std::vector<BYTE>
     BuildFakeNtfsImageWithOrphanedEntryNamedRecord(FakeNamedRecordState state) {
@@ -99,7 +99,8 @@ void PutMftTreeLiveRecords(std::vector<BYTE>& image) {
   const RecordFlag file = RecordFlag::InUse;
   const RecordFlag dir = RecordFlag::InUse | RecordFlag::Dir;
 
-  PutMftRecord(image, static_cast<ULONGLONG>(Mft::Idx::Root),
+  PutMftRecord(image,
+               static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root),
                MakeMftTreeRecord(dir, root_sequence_number,
                                  {{.name = L".", .parent_ref = root}}));
   PutMftRecord(image, mft_tree_docs_idx,
@@ -175,7 +176,8 @@ void PutMftTreeFreedRecords(std::vector<BYTE>& image) {
 std::vector<BYTE> BuildFakeNtfsImageWithMftTree() {
   std::vector<BYTE> image = BuildFakeNtfsImage();
   // $MFT goes in first, then the tree under it.
-  PutMftRecord(image, static_cast<ULONGLONG>(Mft::Idx::Mft),
+  PutMftRecord(image,
+               static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Mft),
                MakeMftTreeMftRecord());
   PutMftTreeLiveRecords(image);
   PutMftTreeFreedRecords(image);
@@ -190,7 +192,9 @@ std::vector<BYTE> BuildFakeNtfsImageWithMftExtensionRecord() {
   const FakeRecord record = MakeMftTreeRecord(
       NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag::InUse, mft_sequence, {}, {},
       NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Normal,
-      MakeFileReference(static_cast<ULONGLONG>(Mft::Idx::Mft), mft_sequence));
+      MakeFileReference(
+          static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Mft),
+          mft_sequence));
 
   PutMftRecord(image, mft_tree_zeroed_idx, record);
   return image;
@@ -207,7 +211,7 @@ constexpr WORD tree_freed_extension_sequence = 3;
 
 // One entry of the $ATTRIBUTE_LIST of mft_tree_list_base_idx.
 struct FakeTreeListEntry {
-  Attr::Type type;
+  NTFS_BROWSER_NAMESPACE::Attr::Type type;
   ULONGLONG record;
 };
 
@@ -245,7 +249,8 @@ void DamageTreeList(std::vector<BYTE>& list, FakeListBytes bytes) {
                 NTFS_BROWSER_NAMESPACE::Data::attribute_list_entry_header_size);
   };
   // Not a type NTFS defines.
-  constexpr auto undefined_type = static_cast<Attr::Type>(0x12345678);
+  constexpr auto undefined_type =
+      static_cast<NTFS_BROWSER_NAMESPACE::Attr::Type>(0x12345678);
   // Past the list: the three entries take 96 bytes.
   constexpr WORD past_end_record_size = 0x1000;
   // Under an entry header, but not 0.
@@ -285,7 +290,8 @@ void DamageTreeList(std::vector<BYTE>& list, FakeListBytes bytes) {
 // returns its total_size.
 DWORD WriteTreeAttributeList(FakeRecord& record, DWORD offset,
                              const std::vector<BYTE>& list) {
-  auto& attr = InitResidentAttr(record, offset, Attr::Type::AttributeList);
+  auto& attr = InitResidentAttr(
+      record, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::AttributeList);
   attr.attr_size = gsl::narrow<DWORD>(list.size());
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
   std::memcpy(&record.at(offset + attr.attr_offset), list.data(), list.size());
@@ -307,10 +313,11 @@ FakeRecord
   if (list == FakeListResidency::Resident) {
     offset += WriteTreeAttributeList(base, offset, list_bytes);
   } else {
-    offset += WriteNonResidentAttr(base, offset, Attr::Type::AttributeList,
-                                   {.comp_unit_size = 0,
-                                    .real_size = list_bytes.size(),
-                                    .runs = list_runs});
+    offset += WriteNonResidentAttr(
+        base, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::AttributeList,
+        {.comp_unit_size = 0,
+         .real_size = list_bytes.size(),
+         .runs = list_runs});
   }
   WriteEndOfAttributesMarker(base, offset);
   return base;
@@ -350,9 +357,12 @@ std::vector<BYTE> BuildFakeNtfsImageWithMftTreeAttributeList(
           StdInfoPermission::Normal, base_ref));
 
   const std::array<FakeTreeListEntry, 3> entries{
-      {{.type = Attr::Type::FileName, .record = mft_tree_list_low_ext_idx},
-       {.type = Attr::Type::FileName, .record = mft_tree_list_high_ext_idx},
-       {.type = Attr::Type::Data, .record = mft_tree_list_high_ext_idx}}};
+      {{.type = NTFS_BROWSER_NAMESPACE::Attr::Type::FileName,
+        .record = mft_tree_list_low_ext_idx},
+       {.type = NTFS_BROWSER_NAMESPACE::Attr::Type::FileName,
+        .record = mft_tree_list_high_ext_idx},
+       {.type = NTFS_BROWSER_NAMESPACE::Attr::Type::Data,
+        .record = mft_tree_list_high_ext_idx}}};
   std::vector<BYTE> list_bytes = TreeListBytes(entries);
   DamageTreeList(list_bytes, bytes);
   const std::vector<FakeDataRun> list_runs{{mft_tree_list_lcn, 1}};
@@ -455,7 +465,8 @@ FakeRecord MakeFreedNonResidentFileRecord(const FakeFreedStream& stream) {
                         {.name = L"stale.txt",
                          .parent_ref = MakeFileReference(mft_tree_docs_idx, 1)},
                         false);
-  offset += WriteNonResidentAttr(record, offset, Attr::Type::Data,
+  offset += WriteNonResidentAttr(record, offset,
+                                 NTFS_BROWSER_NAMESPACE::Attr::Type::Data,
                                  {.comp_unit_size = 0,
                                   .real_size = stream.real_size,
                                   .runs = stream.runs,
@@ -538,7 +549,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithIndexCycle() {
 
   // Docs is left out of the root, so Docs has no parent but NewDir.
   const std::array<FakeIndexName, 2> root_names{
-      {{L".", static_cast<ULONGLONG>(Mft::Idx::Root), true},
+      {{L".", static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root),
+        true},
        {L"Self", mft_tree_zeroed_idx, true}}};
   PutRootRecord(image, MakeRootDirRecord(L".", root_names));
 
@@ -656,7 +668,7 @@ FakeRecord MakeNonResidentFileRecord(WORD sequence, const FakeFileName& name,
       record, offset, NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Normal);
   offset += WriteFileNameAttr(record, offset, name, false);
   offset += WriteNonResidentAttr(
-      record, offset, Attr::Type::Data,
+      record, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::Data,
       {.comp_unit_size = 0, .real_size = real_size, .runs = runs});
   WriteEndOfAttributesMarker(record, offset);
   return record;
@@ -737,8 +749,8 @@ std::vector<BYTE>
   // Index entries stay in collation order, as the lookups expect. The root
   // lists itself as "." too, as a real volume's does.
   const std::array<FakeIndexName, 4> root_names{
-      {{L".", static_cast<ULONGLONG>(Mft::Idx::Root), true,
-        root_sequence_number},
+      {{L".", static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root),
+        true, root_sequence_number},
        {L"big.bin", dump_big_file_idx, false},
        {L"Docs", mft_tree_docs_idx, true},
        {L"empty.txt", dump_empty_file_idx, false}}};
@@ -799,7 +811,8 @@ std::vector<BYTE> AccurateMftBitmap() {
 // total_size.
 DWORD WriteResidentBitmapAttr(FakeRecord& record, DWORD offset,
                               const std::vector<BYTE>& bytes) {
-  auto& attr = InitResidentAttr(record, offset, Attr::Type::Bitmap);
+  auto& attr = InitResidentAttr(record, offset,
+                                NTFS_BROWSER_NAMESPACE::Attr::Type::Bitmap);
   attr.attr_size = gsl::narrow<DWORD>(bytes.size());
   attr.header.total_size = AlignAttrSize(sizeof(attr) + bytes.size());
   std::memcpy(&record.at(offset + attr.attr_offset), bytes.data(),
@@ -831,7 +844,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithMftBitmap(FakeMftBitmap kind) {
                           : mft_bitmap_unreadable_lcn;
     write_bitmap = [lcn, &bitmap](FakeRecord& record, DWORD offset) {
       return WriteNonResidentAttr(
-          record, offset, Attr::Type::Bitmap,
+          record, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::Bitmap,
           {.real_size = bitmap.size(), .runs = {{lcn, 1}}});
     };
     if (kind == FakeMftBitmap::NonResident) {
@@ -844,9 +857,10 @@ std::vector<BYTE> BuildFakeNtfsImageWithMftBitmap(FakeMftBitmap kind) {
     };
   }
 
-  PutMftRecord(image, static_cast<ULONGLONG>(Mft::Idx::Mft),
+  PutMftRecord(image,
+               static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Mft),
                MakeMftTreeMftRecord(write_bitmap));
   return image;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage

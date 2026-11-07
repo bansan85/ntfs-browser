@@ -45,6 +45,8 @@ namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Account = NTFS_BROWSER_NAMESPACE::Tests::AccountSupport;
 namespace AllocSupport = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 namespace TreeSupport = NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport;
@@ -80,7 +82,7 @@ struct CheckScan {
 std::vector<BYTE> CheckImage() {
   Account::Volume volume;
   volume.bitmap_options.volume_clusters = 400;
-  constexpr ULONGLONG bytes = file_clusters * Tests::fake_cluster_size;
+  constexpr ULONGLONG bytes = file_clusters * TestFakeImage::fake_cluster_size;
   volume.Put(22, Account::Freed(
                      100, Account::Stream({{data_lcn, file_clusters}}, bytes)));
   volume.Put(
@@ -96,8 +98,8 @@ CheckScan ScanCheck(const VolumeOptions& options) {
                     Alloc::DataCheckMode::Full));
   CheckScan scan;
   scan.data_calls = Region(scanned.opened.counter->Calls(),
-                           data_lcn * Tests::fake_cluster_size,
-                           (data_lcn + 36) * Tests::fake_cluster_size);
+                           data_lcn * TestFakeImage::fake_cluster_size,
+                           (data_lcn + 36) * TestFakeImage::fake_cluster_size);
   return scan;
 }
 
@@ -135,7 +137,7 @@ class WorkerLoggingReader final : public IDiskReader {
   }
 
  private:
-  Tests::MemoryDiskReader inner_;
+  TestDiskReaders::MemoryDiskReader inner_;
   std::shared_ptr<WorkerReads> seen_;
 };
 
@@ -170,7 +172,7 @@ void ReadForwardTwice(const NtfsVolume<Cache::Strategy::NoCache>& volume,
 // reads of the caller there, once the worker has made expected of them.
 WorkerReadList ReadAheadFrom(const VolumeOptions& options, size_t expected) {
   // The volume, then room for the stream far from what opening it reads.
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithMftTree();
+  std::vector<BYTE> image = TestFakeImage::BuildFakeNtfsImageWithMftTree();
   const ULONGLONG base = image.size();
   image.resize(base + (1U << 20U));
   const auto seen = std::make_shared<WorkerReads>();
@@ -189,22 +191,23 @@ WorkerReadList ReadAheadFrom(const VolumeOptions& options, size_t expected) {
 }
 
 ULONGLONG ReadAheadBase() {
-  return Tests::BuildFakeNtfsImageWithMftTree().size();
+  return TestFakeImage::BuildFakeNtfsImageWithMftTree().size();
 }
 
 }  // namespace
 
 TEST_CASE("cache.block_bytes sets the block FullCache reads and holds",
           "[tuning][knob-effect][cache]") {
-  const std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithMftTree();
+  const std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithMftTree();
   REQUIRE(image.size() >= large_block);
   const std::uint64_t block =
       GENERATE(min_bytes, std::uint64_t{16384}, large_block);
   INFO("block " << block);
 
-  auto reader = std::make_unique<Tests::CountingDiskReader>(
-      std::make_unique<Tests::MemoryDiskReader>(image));
-  Tests::CountingDiskReader& reads = *reader;
+  auto reader = std::make_unique<TestDiskReaders::CountingDiskReader>(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(image));
+  TestDiskReaders::CountingDiskReader& reads = *reader;
   const NtfsVolume<Cache::Strategy::FullCache> volume(
       std::move(reader), Tuned({}, {{"cache.block_bytes", block}}));
   REQUIRE(volume.IsVolumeOK());
@@ -235,7 +238,8 @@ TEST_CASE("cache.block_bytes sets the block FullCache reads and holds",
 
 TEST_CASE("cache.max_run_bytes sets the most one read of the cache covers",
           "[tuning][knob-effect][cache]") {
-  const std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithMftTree();
+  const std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithMftTree();
   constexpr std::uint64_t blocks = 8;
   constexpr std::uint64_t first = 4 * min_bytes;
   REQUIRE(image.size() >= first + (blocks * min_bytes));
@@ -243,9 +247,9 @@ TEST_CASE("cache.max_run_bytes sets the most one read of the cache covers",
                                      blocks * min_bytes, 16 * min_bytes);
   INFO("run " << run);
 
-  auto reader = std::make_unique<Tests::CountingDiskReader>(
-      std::make_unique<Tests::MemoryDiskReader>(image));
-  Tests::CountingDiskReader& reads = *reader;
+  auto reader = std::make_unique<TestDiskReaders::CountingDiskReader>(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(image));
+  TestDiskReaders::CountingDiskReader& reads = *reader;
   const NtfsVolume<Cache::Strategy::FullCache> volume(
       std::move(reader), Tuned({}, {{"cache.max_run_bytes", run}}));
   REQUIRE(volume.IsVolumeOK());
@@ -274,11 +278,12 @@ TEST_CASE("cache.max_run_bytes sets the most one read of the cache covers",
 
 TEST_CASE("cache.max_bytes sets the memory FullCache keeps once a view ends",
           "[tuning][knob-effect][cache]") {
-  const std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithMftTree();
+  const std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithMftTree();
   const std::uint64_t ceiling = GENERATE(std::uint64_t{0}, large_block);
 
   const NtfsVolume<Cache::Strategy::FullCache> volume(
-      std::make_unique<Tests::MemoryDiskReader>(image),
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(image),
       Tuned({}, {{"cache.max_bytes", ceiling}}));
   REQUIRE(volume.IsVolumeOK());
   volume.MinifyCache();
@@ -296,11 +301,12 @@ TEST_CASE("cache.max_bytes sets the memory FullCache keeps once a view ends",
 
 TEST_CASE("alloc.bitmap_window_bytes sets the size of the bitmap reads",
           "[tuning][knob-effect][alloc]") {
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithMftTree();
-  const std::vector<BYTE> bits = Tests::AllocatedBitmapFor(image, {});
-  Tests::PutClusterBitmap(image, bits,
-                          {.volume_clusters = two_window_clusters});
-  const ULONGLONG bitmap_from = two_window_clusters * Tests::fake_cluster_size;
+  std::vector<BYTE> image = TestFakeImage::BuildFakeNtfsImageWithMftTree();
+  const std::vector<BYTE> bits = TestFakeImage::AllocatedBitmapFor(image, {});
+  TestFakeImage::PutClusterBitmap(image, bits,
+                                  {.volume_clusters = two_window_clusters});
+  const ULONGLONG bitmap_from =
+      two_window_clusters * TestFakeImage::fake_cluster_size;
 
   const auto summary = [&](const VolumeOptions& options) {
     const auto opened =
@@ -345,7 +351,7 @@ TEST_CASE("check.max_read_bytes sets the size of one read of the content check",
   CHECK(Count(base.data_calls, Kind::Read) == 1);
   CHECK(LongestRead(tuned.data_calls) <= read_bytes);
   CHECK(Count(tuned.data_calls, Kind::Read) ==
-        (2 * file_clusters * Tests::fake_cluster_size) / read_bytes);
+        (2 * file_clusters * TestFakeImage::fake_cluster_size) / read_bytes);
 }
 
 TEST_CASE("check.max_gap_bytes sets the hole a read of the content check spans",
@@ -358,9 +364,9 @@ TEST_CASE("check.max_gap_bytes sets the hole a read of the content check spans",
   CHECK(Count(base.data_calls, Kind::Read) == 1);
   CHECK(Count(apart.data_calls, Kind::Read) == 2);
   CHECK(LongestRead(apart.data_calls) ==
-        file_clusters * Tests::fake_cluster_size);
+        file_clusters * TestFakeImage::fake_cluster_size);
   CHECK(LongestRead(base.data_calls) >
-        2 * file_clusters * Tests::fake_cluster_size);
+        2 * file_clusters * TestFakeImage::fake_cluster_size);
 }
 
 TEST_CASE("check.max_announced_reads bounds the reads announced ahead",
@@ -392,11 +398,11 @@ TEST_CASE("check.max_announced_bytes bounds the bytes announced ahead",
 TEST_CASE("usn.read_chunk_bytes sets the size of the reads of $J",
           "[tuning][knob-effect][usn]") {
   // Nine MiB of journal.
-  const Tests::FakeUsnOptions journal{
+  const TestFakeImage::FakeUsnOptions journal{
       .raw_stream = std::vector<BYTE>(std::size_t{9} << 20U, BYTE{0})};
   const std::vector<BYTE> image = UsnSupport::JournalImage(journal);
   const ULONGLONG journal_from =
-      Tests::BuildFakeNtfsImageWithFreedFileTree().size();
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree().size();
   const std::uint64_t chunk =
       GENERATE(std::uint64_t{262144}, std::uint64_t{2} << 20U);
   INFO("chunk " << chunk);
@@ -423,7 +429,7 @@ TEST_CASE("usn.read_chunk_bytes sets the size of the reads of $J",
 
 TEST_CASE("usn.read_chunk_bytes leaves the records of the journal as they were",
           "[tuning][knob-effect][usn]") {
-  const Tests::FakeUsnOptions journal{
+  const TestFakeImage::FakeUsnOptions journal{
       .records = {UsnSupport::MakeRecord({.name = L"a.txt", .record = 40}),
                   UsnSupport::MakeRecord({.name = L"b.txt", .record = 41})}};
   const std::vector<BYTE> image = UsnSupport::JournalImage(journal);
@@ -448,11 +454,11 @@ TEST_CASE("usn.read_chunk_bytes leaves the records of the journal as they were",
 
 TEST_CASE("mft.journal_piece_bytes sets the ranges announced for $J",
           "[tuning][knob-effect][usn]") {
-  const Tests::FakeUsnOptions journal{
+  const TestFakeImage::FakeUsnOptions journal{
       .raw_stream = std::vector<BYTE>(std::size_t{9} << 20U, BYTE{0})};
   const std::vector<BYTE> image = UsnSupport::JournalImage(journal);
   const ULONGLONG journal_from =
-      Tests::BuildFakeNtfsImageWithFreedFileTree().size();
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree().size();
   const std::uint64_t piece = std::uint64_t{1} << 20U;
 
   const auto hints = [&](const VolumeOptions& options) {

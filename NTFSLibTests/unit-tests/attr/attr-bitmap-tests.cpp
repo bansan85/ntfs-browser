@@ -35,8 +35,9 @@ namespace {
 template <Cache::Strategy S>
 void CheckMultiClusterBitmapIsWrapped() {
   const NtfsVolume<S> volume(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::
               BuildFakeNtfsImageWithMultiClusterBitmap()));
   REQUIRE(volume.IsVolumeOK());
 
@@ -51,8 +52,8 @@ void CheckMultiClusterBitmapIsWrapped() {
   const auto& bitmap = *bitmap_attrs[0];
   CHECK(bitmap.IsNonResident());
   CHECK(bitmap.GetDataSize() ==
-        NTFS_BROWSER_NAMESPACE::Tests::multi_cluster_bitmap_clusters *
-            NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::multi_cluster_bitmap_clusters *
+            NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size);
 }
 
 }  // namespace

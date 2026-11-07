@@ -211,7 +211,8 @@ std::optional<Usn::Journal> ReadJournalOf(std::span<const BYTE> stream,
                                           ULONGLONG sparse_head_bytes,
                                           Cache::Strategy strategy,
                                           const VolumeOptions& options) {
-  FakeUsnOptions journal_options{.sparse_head_bytes = sparse_head_bytes};
+  Test::FakeImage::FakeUsnOptions journal_options{.sparse_head_bytes =
+                                                      sparse_head_bytes};
   journal_options.raw_stream.assign(stream.begin(), stream.end());
   std::vector<BYTE> image = UsnSupport::JournalImage(journal_options);
 

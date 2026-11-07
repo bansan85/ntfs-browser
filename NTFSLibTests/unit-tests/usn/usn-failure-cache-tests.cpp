@@ -14,11 +14,11 @@
 #include <ntfs-browser/test/usn/usn-test-support.h>
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
 namespace AllocSupport = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
-using Tests::FakeUsnRecord;
+using TestFakeImage::FakeUsnRecord;
 
 namespace {
 
@@ -60,7 +60,7 @@ void CheckTheVolumeKeepsWorkingAfterAFailure() {
   REQUIRE(opened.volume->GetUsnJournal() == nullptr);
 
   FileRecord<S> record(*opened.volume);
-  CHECK(record.ParseFileRecord(Tests::mft_tree_docs_idx));
+  CHECK(record.ParseFileRecord(TestFakeImage::mft_tree_docs_idx));
   CHECK(record.ParseAttrs());
 }
 

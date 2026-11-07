@@ -24,14 +24,14 @@
 #include <ntfs-browser/tool/device-access/text-convert.h>
 
 using Catch::Matchers::ContainsSubstring;
-using NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithNameTree;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithNameTree;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeTreeNode;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::MakeNameChain;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::name_tree_root;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::name_tree_write_time;
 using NTFS_BROWSER_NAMESPACE::Tests::ExoticNames;
-using NTFS_BROWSER_NAMESPACE::Tests::FakeTreeNode;
 using NTFS_BROWSER_NAMESPACE::Tests::FillerName;
 using NTFS_BROWSER_NAMESPACE::Tests::LongTempDir;
-using NTFS_BROWSER_NAMESPACE::Tests::MakeNameChain;
-using NTFS_BROWSER_NAMESPACE::Tests::name_tree_root;
-using NTFS_BROWSER_NAMESPACE::Tests::name_tree_write_time;
 using NTFS_BROWSER_NAMESPACE::Tests::sample_failure_exit_code;
 using NTFS_BROWSER_NAMESPACE::Tests::SampleRun;
 using NTFS_BROWSER_NAMESPACE::Tests::DirSample::Below;
@@ -68,8 +68,10 @@ FakeTreeNode PosixName(std::wstring name, std::size_t parent,
 
 // The image of a default TempImage: Docs in the root, report.txt in Docs.
 std::vector<BYTE> ReportImage() {
-  return NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithReportName(
-      L"report.txt", NTFS_BROWSER_NAMESPACE::Tests::dump_broken_alter_time);
+  return NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+      BuildFakeNtfsImageWithReportName(
+          L"report.txt",
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::dump_broken_alter_time);
 }
 
 // The listing line of an entry of the name tree.

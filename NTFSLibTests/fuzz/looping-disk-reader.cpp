@@ -8,7 +8,7 @@
 
 #include <ntfs-browser/test/fuzz/looping-disk-reader.h>
 
-namespace NtfsFuzz {
+namespace NTFS_BROWSER_NAMESPACE::Test::Fuzz {
 
 namespace {
 
@@ -78,4 +78,4 @@ std::optional<ULONGLONG> LoopingDiskReader::Size() const {
   return data_.size();
 }
 
-}  // namespace NtfsFuzz
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Fuzz

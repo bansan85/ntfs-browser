@@ -30,11 +30,11 @@
 #include "mft-tree-parent-support.h"
 
 using Catch::Matchers::ContainsSubstring;
-using NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree;
-using NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithNameTree;
-using NTFS_BROWSER_NAMESPACE::Tests::FakeDataRun;
-using NTFS_BROWSER_NAMESPACE::Tests::FakeTreeNode;
-using NTFS_BROWSER_NAMESPACE::Tests::MakeNameChain;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftTree;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithNameTree;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeDataRun;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeTreeNode;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::MakeNameChain;
 using NTFS_BROWSER_NAMESPACE::Tests::NameTreeRecord;
 using NTFS_BROWSER_NAMESPACE::Tests::SampleRun;
 using NTFS_BROWSER_NAMESPACE::Tests::MftListSample::RunMftList;
@@ -123,21 +123,21 @@ std::vector<FakeTreeNode> WideTree() {
 std::vector<BYTE> WideImage() {
   const std::vector<FakeTreeNode> nodes = WideTree();
   std::vector<BYTE> image = BuildFakeNtfsImageWithNameTree(nodes);
-  NTFS_BROWSER_NAMESPACE::Tests::FakeUsnOptions journal;
+  NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeUsnOptions journal;
   for (std::size_t node = wide_first_file; node < nodes.size(); node += 5) {
     journal.records.push_back(
         {.name = nodes[node].links.front().name,
          .file_record = NameTreeRecord(node),
          .file_sequence = nodes[node].in_use ? WORD{1} : WORD{2},
-         .reason = node % 2 == 0
-                       ? NTFS_BROWSER_NAMESPACE::Tests::fake_usn_default_reason
-                       : 0x80000200});
+         .reason = node % 2 == 0 ? NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                                       fake_usn_default_reason
+                                 : 0x80000200});
   }
   // A file no record accounts for.
   journal.records.push_back({.name = L"ghost.bin",
                              .file_record = NameTreeRecord(nodes.size() + 40),
                              .file_sequence = 2});
-  NTFS_BROWSER_NAMESPACE::Tests::PutUsnJournal(image, journal);
+  NTFS_BROWSER_NAMESPACE::Test::FakeImage::PutUsnJournal(image, journal);
   return image;
 }
 

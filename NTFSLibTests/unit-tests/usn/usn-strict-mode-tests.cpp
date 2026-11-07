@@ -12,7 +12,7 @@
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::UsnSupport;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using NTFS_BROWSER_NAMESPACE::Tests::FakeUsnRecord;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeUsnRecord;
 
 namespace {
 

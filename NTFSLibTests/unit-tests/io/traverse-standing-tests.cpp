@@ -29,25 +29,27 @@
 #include <ntfs-browser/test/support/walk-comparison.h>
 #include <ntfs-browser/volume-options.h>
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 class IndexEntryView;
 template <Cache::Strategy S>
 class NtfsVolume;
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::IndexEntryView;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
 using NTFS_BROWSER_NAMESPACE::Io::RecordStanding;
-using Tests::CountingDiskReader;
-using Tests::MemoryDiskReader;
+using TestDiskReaders::CountingDiskReader;
+using TestDiskReaders::MemoryDiskReader;
 using Tests::WalkedEntry;
 using Tests::WalkResult;
 
@@ -105,7 +107,7 @@ struct Fixture {
 };
 
 std::vector<Fixture> Fixtures() {
-  using namespace NTFS_BROWSER_NAMESPACE::Tests;
+  using namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage;
   return {
       {"indexed scan", BuildFakeNtfsImageWithIndexedMftScan(100), true},
       {"indexed scan, small blocks",
@@ -134,7 +136,7 @@ RecordStanding ExpectedStanding(const WalkedEntry& entry) {
   if (kind == zeroed_kind) {
     return RecordStanding::Unreadable;
   }
-  if (entry.sequence == Tests::indexed_scan_stale_sequence) {
+  if (entry.sequence == TestFakeImage::indexed_scan_stale_sequence) {
     return RecordStanding::Reused;
   }
   return RecordStanding::Live;
@@ -142,7 +144,7 @@ RecordStanding ExpectedStanding(const WalkedEntry& entry) {
 
 // The bytes of slot idx of the fixture's $MFT: the range its probe reads.
 ULONGLONG SlotOffset(ULONGLONG idx) {
-  return Tests::FragmentedMftScanSlotOffset(idx);
+  return TestFakeImage::FragmentedMftScanSlotOffset(idx);
 }
 
 // What a walk of the root directory alone did to the reader, and what it
@@ -219,7 +221,7 @@ TEMPLATE_TEST_CASE_SIG("The batched walk gives every standing of a record",
                        ((Cache::Strategy S), S), Cache::Strategy::NoCache,
                        Cache::Strategy::FullCache) {
   const WalkResult walk = CheckSameWalk<S>(
-      Tests::BuildFakeNtfsImageWithIndexedMftScan(scan_records),
+      TestFakeImage::BuildFakeNtfsImageWithIndexedMftScan(scan_records),
       {.include_deleted = true, .recover_errors = true});
 
   for (const WalkedEntry& entry : walk.entries) {
@@ -240,7 +242,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[file-record][traverse-standing]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithIndexedMftScan(scan_records);
+      TestFakeImage::BuildFakeNtfsImageWithIndexedMftScan(scan_records);
 
   const WalkResult strict = CheckSameWalk<S>(image, {});
   for (const WalkedEntry& entry : strict.entries) {
@@ -259,7 +261,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[file-record][traverse-standing]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const WalkResult walk = CheckSameWalk<S>(
-      Tests::BuildFakeNtfsImageWithIndexedMftScan(scan_records),
+      TestFakeImage::BuildFakeNtfsImageWithIndexedMftScan(scan_records),
       {.include_deleted = true});
 
   CHECK_THAT(walk.log, ContainsSubstring("does not parse"));
@@ -271,7 +273,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[file-record][traverse-standing]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithIndexedMftScan(scan_records);
+      TestFakeImage::BuildFakeNtfsImageWithIndexedMftScan(scan_records);
   const RootWalk plain = WalkRootOnly<S>(image, false);
   const RootWalk batched = WalkRootOnly<S>(image, true);
 
@@ -284,9 +286,9 @@ TEMPLATE_TEST_CASE_SIG(
     INFO("slot " << idx);
     const std::string found = "File Record " + std::to_string(idx) + " Found";
     // One entry names the record, plus the alias and the stale entry.
-    const size_t names = 1 +
-                         (idx % Tests::indexed_scan_alias_every == 0 ? 1 : 0) +
-                         (idx % Tests::indexed_scan_stale_every == 0 ? 1 : 0);
+    const size_t names =
+        1 + (idx % TestFakeImage::indexed_scan_alias_every == 0 ? 1 : 0) +
+        (idx % TestFakeImage::indexed_scan_stale_every == 0 ? 1 : 0);
     CHECK(Occurrences(plain.log, found) == names);
     CHECK(Occurrences(batched.log, found) == names);
   }
@@ -295,7 +297,7 @@ TEMPLATE_TEST_CASE_SIG(
 TEST_CASE("The batched walk reads a record once however many entries name it",
           "[file-record][traverse-standing]") {
   const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithIndexedMftScan(scan_records);
+      TestFakeImage::BuildFakeNtfsImageWithIndexedMftScan(scan_records);
   const RootWalk plain = WalkRootOnly<Cache::Strategy::NoCache>(image, false);
   const RootWalk batched = WalkRootOnly<Cache::Strategy::NoCache>(image, true);
 
@@ -321,7 +323,7 @@ TEST_CASE(
     "The batched walk over a block cache reads no more than the default one",
     "[file-record][traverse-standing]") {
   const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithIndexedMftScan(scan_records);
+      TestFakeImage::BuildFakeNtfsImageWithIndexedMftScan(scan_records);
   CHECK(ReadsIn(WalkRootOnly<Cache::Strategy::FullCache>(image, true).calls) <=
         ReadsIn(WalkRootOnly<Cache::Strategy::FullCache>(image, false).calls));
 }
@@ -330,7 +332,8 @@ TEST_CASE("The batched walk reads the records in $MFT order and announces them",
           "[file-record][traverse-standing]") {
   const auto calls =
       WalkRootOnly<Cache::Strategy::NoCache>(
-          Tests::BuildFakeNtfsImageWithIndexedMftScan(scan_records), true)
+          TestFakeImage::BuildFakeNtfsImageWithIndexedMftScan(scan_records),
+          true)
           .calls;
 
   const ULONGLONG first_slot =
@@ -368,7 +371,7 @@ TEST_CASE("The batched walk reads the records in $MFT order and announces them",
   }
   CHECK(widest_group > 1);
   // Neighbouring records come in one read.
-  CHECK(longest_read > Tests::fake_file_record_size);
+  CHECK(longest_read > TestFakeImage::fake_file_record_size);
   // Nothing is left announced: a withdrawal follows the last hint.
   const auto last_hint = std::ranges::find_if(
       calls.rbegin(), calls.rend(), [](const CountingDiskReader::Call& call) {
@@ -382,9 +385,9 @@ TEMPLATE_TEST_CASE_SIG(
     "The batched walk gives a directory of many index blocks",
     "[file-record][traverse-standing]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const WalkResult walk =
-      CheckSameWalk<S>(Tests::BuildFakeNtfsImageWithIndexedMftScan(150, 4),
-                       {.include_deleted = true, .recover_errors = true});
+  const WalkResult walk = CheckSameWalk<S>(
+      TestFakeImage::BuildFakeNtfsImageWithIndexedMftScan(150, 4),
+      {.include_deleted = true, .recover_errors = true});
 
   // Every slot past the system files, and the aliases and stale entries.
   CHECK(walk.entries.size() > 150 - static_cast<ULONGLONG>(Mft::Idx::User));

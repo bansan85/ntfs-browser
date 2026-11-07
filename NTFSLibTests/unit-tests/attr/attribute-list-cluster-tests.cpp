@@ -31,13 +31,16 @@ namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 
 namespace {
 
 // First byte of cluster index of the fixture's $ATTRIBUTE_LIST.
 constexpr ULONGLONG ListCluster(DWORD index) {
-  return static_cast<ULONGLONG>(Tests::multi_cluster_list_lcn + index) *
-         Tests::fake_cluster_size;
+  return static_cast<ULONGLONG>(TestFakeImage::multi_cluster_list_lcn + index) *
+         TestFakeImage::fake_cluster_size;
 }
 
 // The listed record of the fixture, not attribute-parsed yet, and the reader
@@ -45,17 +48,17 @@ constexpr ULONGLONG ListCluster(DWORD index) {
 template <Cache::Strategy S>
 struct CountedListRecord {
   ParsedRecord<S> opened;
-  Tests::CountingDiskReader* reader;
+  TestDiskReaders::CountingDiskReader* reader;
 };
 
 template <Cache::Strategy S>
 CountedListRecord<S> OpenCountedListRecord(const VolumeOptions& options = {}) {
-  auto reader = std::make_unique<Tests::CountingDiskReader>(
-      std::make_unique<Tests::MemoryDiskReader>(
-          Tests::BuildFakeNtfsImageWithMultiClusterAttributeList()));
-  Tests::CountingDiskReader* const counting = reader.get();
+  auto reader = std::make_unique<TestDiskReaders::CountingDiskReader>(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(
+          TestFakeImage::BuildFakeNtfsImageWithMultiClusterAttributeList()));
+  TestDiskReaders::CountingDiskReader* const counting = reader.get();
   ParsedRecord<S> opened = OpenRecordFrom<S>(
-      std::move(reader), Tests::attr_list_lifetime_base_idx, options);
+      std::move(reader), TestFakeImage::attr_list_lifetime_base_idx, options);
   // Only ParseAttrs() reads the mask.
   opened.record->SetAttrMask(Attr::Mask::Data);
   return {std::move(opened), counting};
@@ -68,7 +71,8 @@ std::optional<std::vector<BYTE>> ImportedData(const Io::FileRecord<S>& record) {
   if (attrs.size() != 1) {
     return std::nullopt;
   }
-  std::vector<BYTE> bytes(Tests::attr_list_lifetime_data_content.size());
+  std::vector<BYTE> bytes(
+      TestFakeImage::attr_list_lifetime_data_content.size());
   const std::optional<ULONGLONG> read = attrs.front()->ReadData(0, bytes);
   if (!read || *read != bytes.size()) {
     return std::nullopt;
@@ -78,8 +82,8 @@ std::optional<std::vector<BYTE>> ImportedData(const Io::FileRecord<S>& record) {
 
 // What the extension record's $DATA holds.
 std::vector<BYTE> ExpectedData() {
-  return {Tests::attr_list_lifetime_data_content.begin(),
-          Tests::attr_list_lifetime_data_content.end()};
+  return {TestFakeImage::attr_list_lifetime_data_content.begin(),
+          TestFakeImage::attr_list_lifetime_data_content.end()};
 }
 
 }  // namespace

@@ -31,15 +31,16 @@ namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using Alloc::ClusterState;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using Support::ThrowingCallback;
-using Tests::FakeBitmapOptions;
-using Tests::FakeBitmapShape;
-using Tests::FakeDataRun;
+using TestFakeImage::FakeBitmapOptions;
+using TestFakeImage::FakeBitmapShape;
+using TestFakeImage::FakeDataRun;
 
 namespace {
 
@@ -61,7 +62,7 @@ constexpr ULONGLONG two_cluster_volume = 8300;
 constexpr ULONGLONG two_cluster_data_lcn = 8320;
 
 // Bytes of a bitmap window in the window tests: one cluster of bitmap.
-constexpr size_t one_cluster_window = Tests::fake_cluster_size;
+constexpr size_t one_cluster_window = TestFakeImage::fake_cluster_size;
 
 // Fails every read that touches [first, last), and forwards the others.
 class FailingRangeReader final : public NTFS_BROWSER_NAMESPACE::IDiskReader {
@@ -85,7 +86,7 @@ class FailingRangeReader final : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   }
 
  private:
-  Tests::MemoryDiskReader inner_;
+  TestDiskReaders::MemoryDiskReader inner_;
   ULONGLONG first_;
   ULONGLONG last_;
 };
@@ -94,8 +95,8 @@ class FailingRangeReader final : public NTFS_BROWSER_NAMESPACE::IDiskReader {
 std::vector<BYTE> TreeWithBitmap(const FakeBitmapOptions& options = {}) {
   const std::vector<FakeDataRun> allocated{
       FakeDataRun{.lcn = 40, .clusters = 2}};
-  return Support::WithBitmap(Tests::BuildFakeNtfsImageWithFreedFileTree(),
-                             allocated, options);
+  return Support::WithBitmap(
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(), allocated, options);
 }
 
 // Checks that a volume with no usable bitmap answers unknown to everything. It
@@ -114,7 +115,7 @@ void CheckNothingIsReadBeforeAQuery() {
   const std::vector<BYTE> image = TreeWithBitmap();
   const auto opened = Support::OpenVolume<S>(image);
   const auto record = Support::ParsedRecord(
-      *opened.volume, static_cast<ULONGLONG>(Tests::mft_tree_docs_idx));
+      *opened.volume, static_cast<ULONGLONG>(TestFakeImage::mft_tree_docs_idx));
 
   CHECK(opened.counter->ReadsInRange(Support::bitmap_data_offset,
                                      image.size()) == 0);
@@ -129,7 +130,7 @@ void CheckAMissingBitmapIsUnknownAndLoggedOnce(bool recover,
   // Record 6 is zero-filled in the freed tree.
   const Support::CapturedLevels log;
   const auto opened = Support::OpenVolume<S>(
-      Tests::BuildFakeNtfsImageWithFreedFileTree(),
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(),
       VolumeOptions{.include_deleted = true, .recover_errors = recover});
 
   CheckEveryAnswerIsUnknown(*opened.volume, 0, 10);
@@ -168,14 +169,15 @@ void CheckAFailedWindowOnly() {
       TreeWithBitmap({.shape = FakeBitmapShape::NonResident,
                       .volume_clusters = two_cluster_volume});
   const ULONGLONG second_cluster =
-      (two_cluster_data_lcn + 1) * Tests::fake_cluster_size;
+      (two_cluster_data_lcn + 1) * TestFakeImage::fake_cluster_size;
 
   const Support::CapturedLevels log;
   Alloc::SetBitmapWindowBytesForTests(one_cluster_window);
-  auto counter = std::make_unique<Tests::CountingDiskReader>(
+  auto counter = std::make_unique<TestDiskReaders::CountingDiskReader>(
       std::make_unique<FailingRangeReader>(
-          image, second_cluster, second_cluster + Tests::fake_cluster_size));
-  Tests::CountingDiskReader* const reads = counter.get();
+          image, second_cluster,
+          second_cluster + TestFakeImage::fake_cluster_size));
+  TestDiskReaders::CountingDiskReader* const reads = counter.get();
   const NtfsVolume<Cache::Strategy::NoCache> volume(
       std::move(counter), VolumeOptions{.include_deleted = true});
   REQUIRE(volume.IsVolumeOK());
@@ -183,14 +185,14 @@ void CheckAFailedWindowOnly() {
   CHECK(volume.GetClusterState(40) == ClusterState::Allocated);
   CHECK(volume.GetClusterState(8200) == ClusterState::Unknown);
   const size_t after_first = reads->ReadsInRange(
-      second_cluster, second_cluster + Tests::fake_cluster_size);
+      second_cluster, second_cluster + TestFakeImage::fake_cluster_size);
   CHECK(after_first > 0);
 
   CHECK(volume.GetClusterState(8201) == ClusterState::Unknown);
   CHECK(volume.GetClusterState(41) == ClusterState::Allocated);
-  CHECK(reads->ReadsInRange(second_cluster,
-                            second_cluster + Tests::fake_cluster_size) ==
-        after_first);
+  CHECK(reads->ReadsInRange(
+            second_cluster,
+            second_cluster + TestFakeImage::fake_cluster_size) == after_first);
   CHECK(log.Count(partial_message) == 1);
 
   Alloc::SetBitmapWindowBytesForTests(0);
@@ -199,8 +201,9 @@ void CheckAFailedWindowOnly() {
 template <Cache::Strategy S>
 void CheckAShortBitmapLogsOnce() {
   const std::array<BYTE, 4> four_bytes{0x00, 0x00, 0x00, 0x00};
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedFileTree();
-  Tests::PutClusterBitmap(
+  std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
+  TestFakeImage::PutClusterBitmap(
       image, four_bytes,
       {.shape = FakeBitmapShape::Resident, .pad_to_volume = false});
 

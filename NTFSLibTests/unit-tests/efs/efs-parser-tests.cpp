@@ -165,7 +165,7 @@ TEMPLATE_TEST_CASE_SIG(
     CHECK_FALSE(
         NTFS_BROWSER_NAMESPACE::Efs::ParseEfsStream(stream).has_value());
 
-    NTFS_BROWSER_NAMESPACE::Tests::FakeEncryptedFile file;
+    NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeEncryptedFile file;
     file.efs_stream = stream;
     file.streams.push_back({.runs = {{first_stream_lcn, 1}},
                             .cluster_bytes = std::vector<BYTE>(
@@ -174,10 +174,10 @@ TEMPLATE_TEST_CASE_SIG(
     if (stream.empty()) {
       continue;
     }
-    const Opened<S> opened = OpenVolume<S>(
-        NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithEncryptedFile(
-            file),
-        fixture.provider);
+    const Opened<S> opened =
+        OpenVolume<S>(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                          BuildFakeNtfsImageWithEncryptedFile(file),
+                      fixture.provider);
     CHECK_FALSE(ReadAt<S>(OnlyData<S>(*opened.record), 0, 100).has_value());
   }
 }

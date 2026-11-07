@@ -21,11 +21,12 @@
 #include <ntfs-browser/test/fuzz/fuzz-core.h>
 #include <ntfs-browser/volume-options.h>
 
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Tests::FakeUsnOptions;
-using Tests::FakeUsnPatch;
-using Tests::FakeUsnRecord;
+using TestFakeImage::FakeUsnOptions;
+using TestFakeImage::FakeUsnPatch;
+using TestFakeImage::FakeUsnRecord;
 
 namespace {
 
@@ -56,7 +57,8 @@ std::vector<FakeUsnRecord> Records(size_t count) {
 
 // Offset of record index in a stream of Records(): they all take the same size.
 size_t StartOf(size_t index) {
-  const size_t size = Tests::EncodeUsnRecord(Records(1).front(), 0).size();
+  const size_t size =
+      TestFakeImage::EncodeUsnRecord(Records(1).front(), 0).size();
   return index * size;
 }
 
@@ -119,8 +121,9 @@ std::vector<Variant> Variants() {
 
 // The freed tree with the variant's journal.
 std::vector<BYTE> ImageOf(const Variant& variant) {
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedFileTree();
-  Tests::PutUsnJournal(image, variant.options);
+  std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
+  TestFakeImage::PutUsnJournal(image, variant.options);
   return image;
 }
 
@@ -132,10 +135,10 @@ constexpr size_t boot_sector_stream_bytes = 512;
 }  // namespace
 
 // Writes the saved fuzz inputs of the change journal, as the bad cluster inputs
-// are written: the byte stream that NtfsFuzz::ProbeOnce() reads from the image,
-// in read order and without addresses, with the bytes between the boot sector's
-// 4096-byte read and the reader's 512-byte step cut out. The volume is opened
-// recovering, since only then does it read the journal. Set
+// are written: the byte stream that Test::Fuzz::ProbeOnce() reads from the
+// image, in read order and without addresses, with the bytes between the boot
+// sector's 4096-byte read and the reader's 512-byte step cut out. The volume is
+// opened recovering, since only then does it read the journal. Set
 // NTFS_BROWSER_FUZZ_INPUT_DIR to the folder to write them in (the repository's
 // NTFSLibTests/fuzz/data) and run this hidden test case by its tag.
 TEST_CASE("write the usn journal fuzz inputs", "[.write-fuzz-inputs]") {
@@ -150,9 +153,10 @@ TEST_CASE("write the usn journal fuzz inputs", "[.write-fuzz-inputs]") {
     const std::filesystem::path path =
         std::filesystem::path(dir) / variant.name;
     {
-      NtfsFuzz::ProbeOnce(
-          std::make_unique<Tests::RecordingDiskReader>(
-              std::make_unique<Tests::MemoryDiskReader>(ImageOf(variant)),
+      NTFS_BROWSER_NAMESPACE::Test::Fuzz::ProbeOnce(
+          std::make_unique<TestDiskReaders::RecordingDiskReader>(
+              std::make_unique<TestDiskReaders::MemoryDiskReader>(
+                  ImageOf(variant)),
               path),
           recovering);
     }

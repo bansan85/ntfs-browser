@@ -23,9 +23,10 @@
 #include <ntfs-browser/test/fuzz/fuzz-core.h>
 #include <ntfs-browser/volume-options.h>
 
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Tests::FakeSlackName;
+using TestFakeImage::FakeSlackName;
 
 namespace {
 
@@ -50,16 +51,19 @@ FakeSlackName Old(std::wstring name) {
 
 // The freed tree with bytes written into the slack of the Docs directory.
 std::vector<BYTE> ImageWith(std::span<const BYTE> slack) {
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedFileTree();
-  Tests::PutRecordSlack(image, Tests::mft_tree_docs_idx, 8,
-                        slack.first(std::min(slack.size(), docs_slack_room)));
+  std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
+  TestFakeImage::PutRecordSlack(
+      image, TestFakeImage::mft_tree_docs_idx, 8,
+      slack.first(std::min(slack.size(), docs_slack_room)));
   return image;
 }
 
 // Candidates on top of each other: the same structure written at every even
 // offset, each copy cutting the one before it.
 std::vector<BYTE> DenseNames() {
-  const std::vector<BYTE> bytes = Tests::EncodeSlackName(Old(L"dense.txt"));
+  const std::vector<BYTE> bytes =
+      TestFakeImage::EncodeSlackName(Old(L"dense.txt"));
   std::vector<BYTE> slack(docs_slack_room);
   for (size_t offset = 0; offset + bytes.size() <= slack.size(); offset += 2) {
     std::ranges::copy(bytes,
@@ -72,8 +76,8 @@ std::vector<BYTE> DenseNames() {
 // name that fits.
 std::vector<BYTE> NameRunsPastTheRecord() {
   const std::vector<BYTE> bytes =
-      Tests::EncodeSlackName(Old(std::wstring(255, L'n')));
-  std::vector<BYTE> slack = Tests::EncodeSlackName(Old(L"keeper.txt"));
+      TestFakeImage::EncodeSlackName(Old(std::wstring(255, L'n')));
+  std::vector<BYTE> slack = TestFakeImage::EncodeSlackName(Old(L"keeper.txt"));
   slack.resize(docs_slack_room);
   const size_t start = slack.size() - 200;
   std::ranges::copy(std::span(bytes).first(200),
@@ -88,13 +92,13 @@ std::vector<BYTE> StaleTerminators() {
   const auto append = [&slack](std::span<const BYTE> bytes) {
     slack.insert(slack.end(), bytes.begin(), bytes.end());
   };
-  append(Tests::EncodeSlackName(Old(L"first-old.txt")));
+  append(TestFakeImage::EncodeSlackName(Old(L"first-old.txt")));
   append(terminator);
-  append(Tests::EncodeSlackName({.name = L"second-old.txt",
-                                 .parent_record = 0xFFFFFFFF,
-                                 .with_entry_header = false}));
+  append(TestFakeImage::EncodeSlackName({.name = L"second-old.txt",
+                                         .parent_record = 0xFFFFFFFF,
+                                         .with_entry_header = false}));
   append(terminator);
-  append(Tests::EncodeSlackName(Old(L"third-old.txt")));
+  append(TestFakeImage::EncodeSlackName(Old(L"third-old.txt")));
   append(terminator);
   slack.resize(std::min(slack.size(), docs_slack_room));
   return slack;
@@ -116,8 +120,8 @@ constexpr size_t boot_sector_stream_bytes = 512;
 }  // namespace
 
 // Writes the saved fuzz inputs of the record slack, as the journal inputs are
-// written: the byte stream that NtfsFuzz::ProbeOnce() reads from the image, in
-// read order and without addresses, with the bytes between the boot sector's
+// written: the byte stream that Test::Fuzz::ProbeOnce() reads from the image,
+// in read order and without addresses, with the bytes between the boot sector's
 // 4096-byte read and the reader's 512-byte step cut out. The volume is opened
 // recovering with deleted items shown, since only then does a scan carve the
 // slack. Set NTFS_BROWSER_FUZZ_INPUT_DIR to the folder to write them in (the
@@ -135,9 +139,11 @@ TEST_CASE("write the record slack fuzz inputs", "[.write-fuzz-inputs]") {
     const std::filesystem::path path =
         std::filesystem::path(dir) / variant.name;
     {
-      NtfsFuzz::ProbeOnce(
-          std::make_unique<Tests::RecordingDiskReader>(
-              std::make_unique<Tests::MemoryDiskReader>(variant.image), path),
+      NTFS_BROWSER_NAMESPACE::Test::Fuzz::ProbeOnce(
+          std::make_unique<TestDiskReaders::RecordingDiskReader>(
+              std::make_unique<TestDiskReaders::MemoryDiskReader>(
+                  variant.image),
+              path),
           recovering);
     }
     REQUIRE(std::filesystem::exists(path));

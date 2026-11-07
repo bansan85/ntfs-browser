@@ -33,7 +33,8 @@ namespace NtfsBenchTool {
 
 namespace {
 
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 
 // Version of the layout of the JSON this prints.
 constexpr std::uint64_t json_format = 1;
@@ -49,8 +50,8 @@ constexpr std::uint64_t ns_per_us = 1000;
 constexpr std::uint64_t bytes_per_mb = 1000000;
 
 // A hard disk: a long seek, one lane, the same speed alone and together.
-Tests::DiskModel HardDisk() {
-  Tests::DiskModel model;
+TestDiskReaders::DiskModel HardDisk() {
+  TestDiskReaders::DiskModel model;
   model.seek_ns = 8000000;
   model.per_read_ns = 100000;
   model.single_bytes_per_second = 116 * bytes_per_mb;
@@ -61,9 +62,11 @@ Tests::DiskModel HardDisk() {
 
 // The disk model of the command line: the kind's defaults, then each --seek-us,
 // --per-read-us, --single-mbps, --max-mbps, --lanes and --consume-ns-per-mib.
-Tests::DiskModel ModelFromArguments(const Arguments& args,
-                                    const std::string& kind, bool& malformed) {
-  Tests::DiskModel model = kind == "hdd" ? HardDisk() : Tests::DiskModel{};
+TestDiskReaders::DiskModel ModelFromArguments(const Arguments& args,
+                                              const std::string& kind,
+                                              bool& malformed) {
+  TestDiskReaders::DiskModel model =
+      kind == "hdd" ? HardDisk() : TestDiskReaders::DiskModel{};
   model.seek_ns =
       args.Unsigned("seek-us", model.seek_ns / ns_per_us, malformed) *
       ns_per_us;
@@ -106,7 +109,7 @@ void SilenceLibraryLog() {
 
 // Writes the counters of the simulated disk, as fields of the open object.
 void WriteThrottleStats(NtfsDevice::JsonWriter& json,
-                        const Tests::ThrottleStats& stats) {
+                        const TestDiskReaders::ThrottleStats& stats) {
   json.Field("disk_reads", stats.disk_reads);
   json.Field("disk_bytes", stats.disk_bytes);
   json.Field("served_reads", stats.served_reads);
@@ -122,7 +125,8 @@ int SimulateCommand(const Arguments& args) {
   const std::uint64_t records =
       args.Unsigned("records", default_records, malformed);
   const std::string kind = args.Value("model").value_or("ssd");
-  const Tests::DiskModel model = ModelFromArguments(args, kind, malformed);
+  const TestDiskReaders::DiskModel model =
+      ModelFromArguments(args, kind, malformed);
   if (malformed || (kind != "ssd" && kind != "hdd") ||
       records <
           static_cast<std::uint64_t>(NTFS_BROWSER_NAMESPACE::Mft::Idx::User) +
@@ -143,8 +147,8 @@ int SimulateCommand(const Arguments& args) {
 
   SilenceLibraryLog();
 
-  std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithListMftScan(records, fragment_clusters);
+  std::vector<BYTE> image = TestFakeImage::BuildFakeNtfsImageWithListMftScan(
+      records, fragment_clusters);
   // The image as a file: a volume the tools open without a disk.
   if (const std::optional<std::string> path = args.Value("write-image")) {
     if (!WriteImageFile(*path, image)) {
@@ -154,11 +158,12 @@ int SimulateCommand(const Arguments& args) {
     return 0;
   }
 
-  Tests::SimulatedClock clock;
-  auto memory = std::make_unique<Tests::MemoryDiskReader>(std::move(image));
-  auto throttled = std::make_unique<Tests::ThrottledDiskReader>(
+  TestDiskReaders::SimulatedClock clock;
+  auto memory =
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(std::move(image));
+  auto throttled = std::make_unique<TestDiskReaders::ThrottledDiskReader>(
       std::move(memory), model, clock, options.tuning.reader);
-  const Tests::ThrottledDiskReader* const disk = throttled.get();
+  const TestDiskReaders::ThrottledDiskReader* const disk = throttled.get();
   NTFS_BROWSER_NAMESPACE::NtfsVolume<
       NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>
       volume(std::move(throttled), options);
@@ -170,7 +175,7 @@ int SimulateCommand(const Arguments& args) {
   scan.threads = 1;
   const NTFS_BROWSER_NAMESPACE::Mft::MftTree tree(volume, scan);
 
-  const Tests::ThrottleStats& stats = disk->Stats();
+  const TestDiskReaders::ThrottleStats& stats = disk->Stats();
   NtfsDevice::JsonWriter json;
   json.BeginObject();
   json.Field("format", json_format);

@@ -26,12 +26,13 @@ namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 namespace TreeSupport = NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport;
 using Alloc::DataState;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using Support::stale_size;
-using Tests::FakeDataRun;
+using TestFakeImage::FakeDataRun;
 using TreeSupport::CheckNoEntryIsAnnotated;
 using TreeSupport::ScannedVolume;
 
@@ -45,7 +46,8 @@ const std::vector<FakeDataRun> stale_runs{
 // allocated_runs.
 std::vector<BYTE> Image(std::span<const FakeDataRun> allocated_runs) {
   return Support::WithBitmap(
-      Tests::BuildFakeNtfsImageWithFreedNonResidentFile(stale_size, stale_runs),
+      TestFakeImage::BuildFakeNtfsImageWithFreedNonResidentFile(stale_size,
+                                                                stale_runs),
       allocated_runs);
 }
 
@@ -65,10 +67,10 @@ Picked Pick(const Mft::MftTree& tree) {
     REQUIRE(entry != nullptr);
     return entry->data_state;
   };
-  return {.stale = state_of(Tests::mft_tree_stale_child_idx),
-          .freed_resident = state_of(Tests::mft_tree_deleted_file_idx),
-          .live_file = state_of(Tests::mft_tree_report_idx),
-          .directory = state_of(Tests::mft_tree_docs_idx),
+  return {.stale = state_of(TestFakeImage::mft_tree_stale_child_idx),
+          .freed_resident = state_of(TestFakeImage::mft_tree_deleted_file_idx),
+          .live_file = state_of(TestFakeImage::mft_tree_report_idx),
+          .directory = state_of(TestFakeImage::mft_tree_docs_idx),
           .mft = state_of(static_cast<ULONGLONG>(Mft::Idx::Mft))};
 }
 
@@ -146,7 +148,8 @@ template <Cache::Strategy S>
 void CheckAMissingBitmapDoesNotStopTheScan() {
   // No bitmap: record 6 is zero-filled.
   const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithFreedNonResidentFile(stale_size, stale_runs);
+      TestFakeImage::BuildFakeNtfsImageWithFreedNonResidentFile(stale_size,
+                                                                stale_runs);
   const ScannedVolume<S> annotated(image, Support::DeletedOptions(),
                                    {.annotate_data_state = true});
   const ScannedVolume<S> plain(image, Support::DeletedOptions(),

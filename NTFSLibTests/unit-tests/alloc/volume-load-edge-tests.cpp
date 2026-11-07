@@ -28,11 +28,13 @@ struct VolumeOptions;
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using Alloc::ClusterState;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Tests::FakeDataRun;
+using TestFakeImage::FakeDataRun;
 
 namespace {
 
@@ -61,7 +63,8 @@ TEMPLATE_TEST_CASE_SIG(
     "[alloc][volume]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
   const NtfsVolume<S> volume(
-      std::make_unique<Tests::MemoryDiskReader>(Tests::BuildFakeNtfsImage()),
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(
+          TestFakeImage::BuildFakeNtfsImage()),
       Support::DeletedOptions());
   REQUIRE(volume.IsVolumeOK());
 
@@ -75,8 +78,8 @@ TEMPLATE_TEST_CASE_SIG("a $Bitmap record without an unnamed $DATA is unusable",
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   // Record 6 is a directory there.
   const NtfsVolume<S> volume(
-      std::make_unique<Tests::MemoryDiskReader>(
-          Tests::BuildFakeNtfsImageWithAttributeListDirectory()),
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(
+          TestFakeImage::BuildFakeNtfsImageWithAttributeListDirectory()),
       Support::DeletedOptions());
   REQUIRE(volume.IsVolumeOK());
 
@@ -88,7 +91,7 @@ TEMPLATE_TEST_CASE_SIG("a bitmap read that throws leaves the clusters unknown",
                        "[alloc][volume]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   std::vector<BYTE> image = Support::WithBitmap(
-      Tests::BuildFakeNtfsImageWithFreedFileTree(), allocated_runs);
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(), allocated_runs);
   const ULONGLONG image_size = image.size();
   const auto volume = OpenScripted<S>(
       std::move(image), [image_size](Tests::ScriptedDiskReader& reader) {
@@ -103,18 +106,18 @@ TEMPLATE_TEST_CASE_SIG("a bitmap read that throws leaves the clusters unknown",
 
 TEST_CASE("a record read that throws leaves the bad cluster list unusable",
           "[alloc][volume]") {
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithMftTree();
+  std::vector<BYTE> image = TestFakeImage::BuildFakeNtfsImageWithMftTree();
   const ULONGLONG mft_offset =
       NtfsVolume<Cache::Strategy::NoCache>(
-          std::make_unique<Tests::MemoryDiskReader>(image))
+          std::make_unique<TestDiskReaders::MemoryDiskReader>(image))
           .GetMFTAddr();
   const ULONGLONG record_offset =
-      mft_offset + bad_clus_record * Tests::fake_file_record_size;
+      mft_offset + bad_clus_record * TestFakeImage::fake_file_record_size;
 
   const auto volume = OpenScripted<Cache::Strategy::NoCache>(
       std::move(image), [record_offset](Tests::ScriptedDiskReader& reader) {
         reader.FaultRange(record_offset,
-                          record_offset + Tests::fake_file_record_size,
+                          record_offset + TestFakeImage::fake_file_record_size,
                           Tests::ScriptedDiskReader::Fault::Throw);
       });
   REQUIRE(volume->IsVolumeOK());

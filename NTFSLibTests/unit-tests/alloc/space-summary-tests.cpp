@@ -14,23 +14,23 @@
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/volume-options.h>
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 template <Cache::Strategy S>
 class NtfsVolume;
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 using Alloc::ClusterState;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Tests::FakeBitmapOptions;
-using Tests::FakeBitmapShape;
-using Tests::FakeDataRun;
+using TestFakeImage::FakeBitmapOptions;
+using TestFakeImage::FakeBitmapShape;
+using TestFakeImage::FakeDataRun;
 
 namespace {
 
@@ -42,16 +42,18 @@ std::vector<BYTE> TreeWithBitmap() {
   const std::vector<FakeDataRun> allocated{
       FakeDataRun{.lcn = 40, .clusters = 2},
       FakeDataRun{.lcn = 50, .clusters = 1}};
-  return Support::WithBitmap(Tests::BuildFakeNtfsImageWithFreedFileTree(),
-                             allocated);
+  return Support::WithBitmap(
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(), allocated);
 }
 
 // The freed tree with a resident bitmap of exactly these bytes.
 std::vector<BYTE> TreeWithResidentBitmap(const std::vector<BYTE>& bytes) {
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedFileTree();
-  Tests::PutClusterBitmap(image, bytes,
-                          FakeBitmapOptions{.shape = FakeBitmapShape::Resident,
-                                            .pad_to_volume = false});
+  std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
+  TestFakeImage::PutClusterBitmap(
+      image, bytes,
+      FakeBitmapOptions{.shape = FakeBitmapShape::Resident,
+                        .pad_to_volume = false});
   return image;
 }
 
@@ -66,14 +68,14 @@ Alloc::SpaceSummary RequiredSummary(const NtfsVolume<S>& volume) {
 template <Cache::Strategy S>
 void CheckFreeSpaceIsTheKnownValue() {
   const std::vector<BYTE> image = TreeWithBitmap();
-  const ULONGLONG total = image.size() / Tests::fake_cluster_size;
+  const ULONGLONG total = image.size() / TestFakeImage::fake_cluster_size;
   const auto opened = Support::OpenVolume<S>(image);
 
   const Alloc::SpaceSummary summary = RequiredSummary(*opened.volume);
   CHECK(summary.total_clusters == total);
   CHECK(summary.free_clusters == total - allocated_in_fixture);
   CHECK(summary.free_bytes ==
-        (total - allocated_in_fixture) * Tests::fake_cluster_size);
+        (total - allocated_in_fixture) * TestFakeImage::fake_cluster_size);
   CHECK(summary.unknown_clusters == 0);
 }
 
@@ -100,14 +102,14 @@ void CheckAShortBitmapCountsWhatItCovers() {
   const Alloc::SpaceSummary summary = RequiredSummary(*opened.volume);
   CHECK(summary.total_clusters == 64);
   CHECK(summary.free_clusters == 31);
-  CHECK(summary.free_bytes == 31 * Tests::fake_cluster_size);
+  CHECK(summary.free_bytes == 31 * TestFakeImage::fake_cluster_size);
   CHECK(summary.unknown_clusters == 32);
 }
 
 template <Cache::Strategy S>
 void CheckAMissingBitmapHasNoSummary() {
-  const auto opened =
-      Support::OpenVolume<S>(Tests::BuildFakeNtfsImageWithFreedFileTree());
+  const auto opened = Support::OpenVolume<S>(
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree());
 
   CHECK_FALSE(opened.volume->GetSpaceSummary());
 }

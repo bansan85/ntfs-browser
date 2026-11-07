@@ -35,10 +35,11 @@ using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using NTFS_BROWSER_NAMESPACE::Tests::attr_name_exceeds_total_size_record_idx;
-using NTFS_BROWSER_NAMESPACE::Tests::
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+    attr_name_exceeds_total_size_record_idx;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::
     BuildFakeNtfsImageWithAttrNameExceedsTotalSize;
-using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
 
 namespace {
 

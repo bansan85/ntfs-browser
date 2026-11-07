@@ -35,6 +35,8 @@ namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
@@ -213,13 +215,14 @@ TEST_CASE("A log with more events than one chunk round trips",
 
 TEST_CASE("The log of a real session round trips", "[bench][read-log]") {
   const Tests::TempDir dir;
-  const std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithListMftScan(
-      3000, Tests::fragmented_mft_scan_fragment_clusters);
+  const std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithListMftScan(
+          3000, TestFakeImage::fragmented_mft_scan_fragment_clusters);
 
   Tests::BenchSessionGuard session;
   {
     const NtfsVolume<Cache::Strategy::NoCache> volume(
-        std::make_unique<Tests::MemoryDiskReader>(image),
+        std::make_unique<TestDiskReaders::MemoryDiskReader>(image),
         VolumeOptions{.include_deleted = true});
     REQUIRE(volume.IsVolumeOK());
     Mft::MftTree::ScanOptions scan;

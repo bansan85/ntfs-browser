@@ -35,7 +35,7 @@ using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-using NTFS_BROWSER_NAMESPACE::Tests::NonAsciiNameLayout;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::NonAsciiNameLayout;
 
 namespace {
 
@@ -44,10 +44,10 @@ namespace {
 template <Cache::Strategy S>
 std::optional<ULONGLONG> FindInRoot(NonAsciiNameLayout layout,
                                     bool with_up_case, std::wstring_view name) {
-  auto reader =
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithNonAsciiNames(
-              layout, with_up_case));
+  auto reader = std::make_unique<
+      NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+          BuildFakeNtfsImageWithNonAsciiNames(layout, with_up_case));
 
   // The named records are not built: only recover_errors lists these entries.
   const NtfsVolume<S> volume(std::move(reader),
@@ -85,9 +85,11 @@ TEST_CASE(
     "[file-record][filename][upcase][regression]") {
   ForEachLayoutAndStrategy([&]<Cache::Strategy S>(NonAsciiNameLayout layout) {
     const std::optional<ULONGLONG> found = FindInRoot<S>(
-        layout, false, NTFS_BROWSER_NAMESPACE::Tests::non_ascii_diaeresis_name);
+        layout, false,
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::non_ascii_diaeresis_name);
     REQUIRE(found.has_value());
-    CHECK(*found == NTFS_BROWSER_NAMESPACE::Tests::non_ascii_diaeresis_mft_ref);
+    CHECK(*found ==
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::non_ascii_diaeresis_mft_ref);
   });
 }
 
@@ -97,9 +99,11 @@ TEST_CASE(
     "[file-record][filename][upcase][regression]") {
   ForEachLayoutAndStrategy([&]<Cache::Strategy S>(NonAsciiNameLayout layout) {
     const std::optional<ULONGLONG> found = FindInRoot<S>(
-        layout, true, NTFS_BROWSER_NAMESPACE::Tests::non_ascii_diaeresis_name);
+        layout, true,
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::non_ascii_diaeresis_name);
     REQUIRE(found.has_value());
-    CHECK(*found == NTFS_BROWSER_NAMESPACE::Tests::non_ascii_diaeresis_mft_ref);
+    CHECK(*found ==
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::non_ascii_diaeresis_mft_ref);
   });
 }
 
@@ -109,9 +113,10 @@ TEST_CASE("FindSubEntry matches a non-ASCII name case-insensitively",
     ForEachLayoutAndStrategy([&]<Cache::Strategy S>(NonAsciiNameLayout layout) {
       const std::optional<ULONGLONG> found = FindInRoot<S>(
           layout, with_up_case,
-          NTFS_BROWSER_NAMESPACE::Tests::non_ascii_acute_upper_name);
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::non_ascii_acute_upper_name);
       REQUIRE(found.has_value());
-      CHECK(*found == NTFS_BROWSER_NAMESPACE::Tests::non_ascii_acute_mft_ref);
+      CHECK(*found ==
+            NTFS_BROWSER_NAMESPACE::Test::FakeImage::non_ascii_acute_mft_ref);
     });
   }
 }
@@ -120,14 +125,16 @@ TEST_CASE("FindSubEntry follows the volume's own $UpCase table",
           "[file-record][filename][upcase][regression]") {
   ForEachLayoutAndStrategy([&]<Cache::Strategy S>(NonAsciiNameLayout layout) {
     const std::optional<ULONGLONG> dotless = FindInRoot<S>(
-        layout, true, NTFS_BROWSER_NAMESPACE::Tests::non_ascii_dotless_name);
+        layout, true,
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::non_ascii_dotless_name);
     REQUIRE(dotless.has_value());
-    CHECK(*dotless == NTFS_BROWSER_NAMESPACE::Tests::non_ascii_dotless_mft_ref);
+    CHECK(*dotless ==
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::non_ascii_dotless_mft_ref);
 
     // The table leaves the dotless i unmapped: "I.txt" is another name.
-    CHECK_FALSE(FindInRoot<S>(
-                    layout, true,
-                    NTFS_BROWSER_NAMESPACE::Tests::non_ascii_dotted_upper_name)
+    CHECK_FALSE(FindInRoot<S>(layout, true,
+                              NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                                  non_ascii_dotted_upper_name)
                     .has_value());
   });
 }
@@ -139,8 +146,10 @@ TEST_CASE(
     // Without a $UpCase table, the built-in mapping folds the dotless i
     // to I, so the ordered search stops before it. The scan finds it.
     const std::optional<ULONGLONG> found = FindInRoot<S>(
-        layout, false, NTFS_BROWSER_NAMESPACE::Tests::non_ascii_dotless_name);
+        layout, false,
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::non_ascii_dotless_name);
     REQUIRE(found.has_value());
-    CHECK(*found == NTFS_BROWSER_NAMESPACE::Tests::non_ascii_dotless_mft_ref);
+    CHECK(*found ==
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::non_ascii_dotless_mft_ref);
   });
 }

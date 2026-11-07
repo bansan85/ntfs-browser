@@ -42,6 +42,8 @@ using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 
 namespace {
 
@@ -50,11 +52,12 @@ constexpr const char* fallback_message = "using its copy in $MFTMirr";
 
 // Start of the $MFTMirr copy in the fake image, in bytes.
 constexpr LONGLONG mirror_addr = static_cast<LONGLONG>(
-    Tests::fake_mft_mirror_lcn * Tests::fake_cluster_size);
+    TestFakeImage::fake_mft_mirror_lcn * TestFakeImage::fake_cluster_size);
 
 // Bytes the copy spans.
-constexpr LONGLONG mirror_bytes = static_cast<LONGLONG>(
-    Tests::fake_mft_mirror_records * Tests::fake_file_record_size);
+constexpr LONGLONG mirror_bytes =
+    static_cast<LONGLONG>(TestFakeImage::fake_mft_mirror_records *
+                          TestFakeImage::fake_file_record_size);
 
 // LCN of $MFT in the fake image: right after the boot sector's cluster.
 constexpr ULONGLONG fake_mft_lcn = 1;
@@ -82,7 +85,7 @@ class SpyDiskReader final : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   }
 
  private:
-  Tests::MemoryDiskReader inner_;
+  TestDiskReaders::MemoryDiskReader inner_;
   std::shared_ptr<std::vector<LONGLONG>> starts_;
 };
 
@@ -116,10 +119,10 @@ Opened<S> Open(std::vector<BYTE> image, bool recover) {
 }
 
 // BuildFakeNtfsImageWithMftMirror() with the given damage.
-std::vector<BYTE>
-    Image(std::uint32_t in_mft, std::uint32_t in_mirror = 0,
-          Tests::MirrorRecordDamage kind = Tests::MirrorRecordDamage::Magic) {
-  return Tests::BuildFakeNtfsImageWithMftMirror(
+std::vector<BYTE> Image(std::uint32_t in_mft, std::uint32_t in_mirror = 0,
+                        TestFakeImage::MirrorRecordDamage kind =
+                            TestFakeImage::MirrorRecordDamage::Magic) {
+  return TestFakeImage::BuildFakeNtfsImageWithMftMirror(
       {.in_mft = in_mft, .in_mirror = in_mirror, .kind = kind});
 }
 
@@ -163,8 +166,8 @@ TEMPLATE_TEST_CASE_SIG("an intact $MFT never reads $MFTMirr",
 TEMPLATE_TEST_CASE_SIG("a recovering volume falls back on $MFTMirr",
                        "[ntfs-volume][mft-mirror]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  for (const auto kind : {Tests::MirrorRecordDamage::Magic,
-                          Tests::MirrorRecordDamage::UpdateSequence}) {
+  for (const auto kind : {TestFakeImage::MirrorRecordDamage::Magic,
+                          TestFakeImage::MirrorRecordDamage::UpdateSequence}) {
     INFO("damage kind = " << static_cast<int>(kind));
 
     SECTION("$MFT's own record") {
@@ -196,8 +199,8 @@ TEMPLATE_TEST_CASE_SIG("a recovering volume falls back on $MFTMirr",
 TEMPLATE_TEST_CASE_SIG("a recovering volume needs a sound $MFTMirr copy",
                        "[ntfs-volume][mft-mirror]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  for (const auto kind : {Tests::MirrorRecordDamage::Magic,
-                          Tests::MirrorRecordDamage::UpdateSequence}) {
+  for (const auto kind : {TestFakeImage::MirrorRecordDamage::Magic,
+                          TestFakeImage::MirrorRecordDamage::UpdateSequence}) {
     INFO("damage kind = " << static_cast<int>(kind));
 
     SECTION("$MFT's record is lost in both") {
@@ -321,14 +324,15 @@ TEMPLATE_TEST_CASE_SIG("an image without a mirror opens as before",
     INFO("recover_errors = " << recover);
 
     SECTION("an intact volume") {
-      const Opened<S> opened = Open<S>(Tests::BuildFakeNtfsImage(), recover);
+      const Opened<S> opened =
+          Open<S>(TestFakeImage::BuildFakeNtfsImage(), recover);
 
       CHECK(opened.volume->IsVolumeOK());
     }
 
     SECTION("a lost $MFT record") {
-      const Opened<S> opened =
-          Open<S>(Tests::BuildFakeNtfsImageWithCorruptMftRecord(), recover);
+      const Opened<S> opened = Open<S>(
+          TestFakeImage::BuildFakeNtfsImageWithCorruptMftRecord(), recover);
 
       CHECK_FALSE(opened.volume->IsVolumeOK());
       CHECK_THAT(opened.log, !ContainsSubstring(fallback_message));
@@ -347,9 +351,10 @@ TEMPLATE_TEST_CASE_SIG(
   constexpr size_t volume_record = 3;
 
   std::vector<BYTE> image = Image(Bit(volume_record));
-  const size_t copy_offset = static_cast<size_t>(mirror_addr) +
-                             (volume_record * Tests::fake_file_record_size) +
-                             offset_of_us_field;
+  const size_t copy_offset =
+      static_cast<size_t>(mirror_addr) +
+      (volume_record * TestFakeImage::fake_file_record_size) +
+      offset_of_us_field;
   std::memcpy(&image.at(copy_offset), &forged_offset, sizeof(forged_offset));
 
   const Opened<S> opened = Open<S>(std::move(image), true);

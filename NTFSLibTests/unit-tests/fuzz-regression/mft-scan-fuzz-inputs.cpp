@@ -15,6 +15,7 @@
 #include "fuzz-input-writer.h"
 
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 
 namespace {
@@ -26,20 +27,21 @@ struct Variant {
 };
 
 // Byte offset of the $MFT in the fake volumes: their $MFT starts at cluster 1.
-constexpr size_t mft_offset = Tests::fake_cluster_size;
+constexpr size_t mft_offset = TestFakeImage::fake_cluster_size;
 
 // Bytes in a sector of a fake record, and the two bytes at the end of each one:
 // the update sequence check word.
-constexpr size_t sector_bytes = Tests::fake_bytes_per_sector;
+constexpr size_t sector_bytes = TestFakeImage::fake_bytes_per_sector;
 constexpr size_t check_word_bytes = 2;
 
 // A value that is not the update sequence number of any fake record.
 constexpr BYTE wrong_check_byte = 0xEE;
 
 // Records of the fixture that get a damaged sector.
-constexpr ULONGLONG first_sector_victim = Tests::mft_tree_docs_idx;
-constexpr ULONGLONG second_sector_victim = Tests::mft_tree_report_idx;
-constexpr ULONGLONG both_sectors_victim = Tests::mft_tree_deleted_file_idx;
+constexpr ULONGLONG first_sector_victim = TestFakeImage::mft_tree_docs_idx;
+constexpr ULONGLONG second_sector_victim = TestFakeImage::mft_tree_report_idx;
+constexpr ULONGLONG both_sectors_victim =
+    TestFakeImage::mft_tree_deleted_file_idx;
 
 // Records and clusters per fragment of the fragmented $MFT: enough records to
 // cycle through all the kinds the fixture makes, in several fragments.
@@ -48,7 +50,7 @@ constexpr ULONGLONG fragmented_fragment_clusters = 8;
 
 // Overwrites the check word of one sector of record idx.
 void BreakSector(std::vector<BYTE>& image, ULONGLONG idx, size_t sector) {
-  const size_t end = mft_offset + (idx * Tests::fake_file_record_size) +
+  const size_t end = mft_offset + (idx * TestFakeImage::fake_file_record_size) +
                      ((sector + 1) * sector_bytes);
   for (size_t i = 1; i <= check_word_bytes; ++i) {
     image.at(end - i) = wrong_check_byte;
@@ -59,7 +61,8 @@ void BreakSector(std::vector<BYTE>& image, ULONGLONG idx, size_t sector) {
 // on the other, and on both: a recovering volume salvages the first two and
 // rejects the third.
 std::vector<BYTE> BrokenSectors() {
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedFileTree();
+  std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
   BreakSector(image, first_sector_victim, 0);
   BreakSector(image, second_sector_victim, 1);
   BreakSector(image, both_sectors_victim, 0);
@@ -73,7 +76,7 @@ std::vector<Variant> Variants() {
   variants.push_back({"mft_scan_broken_sectors", BrokenSectors()});
   variants.push_back(
       {"mft_scan_fragmented",
-       Tests::BuildFakeNtfsImageWithFragmentedMftScan(
+       TestFakeImage::BuildFakeNtfsImageWithFragmentedMftScan(
            fragmented_record_count, fragmented_fragment_clusters)});
   return variants;
 }

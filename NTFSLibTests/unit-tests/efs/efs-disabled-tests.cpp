@@ -28,18 +28,19 @@ TEMPLATE_TEST_CASE_SIG(
     "[efs]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
   const std::vector<BYTE> onDisk(
-      NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size, 0x42);
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size, 0x42);
 
-  NTFS_BROWSER_NAMESPACE::Tests::FakeEncryptedFile file;
+  NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeEncryptedFile file;
   file.streams.push_back({.runs = {{30, 1}},
                           .cluster_bytes = onDisk,
                           .real_size = onDisk.size(),
                           .flagged_encrypted = true});
 
   NtfsVolume<S> volume(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithEncryptedFile(
-              file)));
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+              BuildFakeNtfsImageWithEncryptedFile(file)));
   REQUIRE(volume.IsVolumeOK());
   volume.SetEfsKeyProvider(nullptr);
 

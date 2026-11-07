@@ -24,10 +24,10 @@
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace ReadAhead = NTFS_BROWSER_NAMESPACE::Tests::ReadAhead;
 namespace ProbeWalk = NTFS_BROWSER_NAMESPACE::Tests::ProbeWalk;
-using Tests::FakeTreeNode;
+using TestFakeImage::FakeTreeNode;
 
 namespace {
 
@@ -48,8 +48,9 @@ FakeTreeNode File(std::wstring name, std::size_t parent, BYTE name_space = 1) {
 // held index is the root alone.
 std::vector<FakeTreeNode> SmallTree() {
   std::vector<FakeTreeNode> nodes;
-  nodes.push_back({.links = {{.name = L"dir", .parent = Tests::name_tree_root}},
-                   .directory = true});
+  nodes.push_back(
+      {.links = {{.name = L"dir", .parent = TestFakeImage::name_tree_root}},
+       .directory = true});
   for (std::size_t file = 0; file < small_files; file++) {
     nodes.push_back(
         File(std::wstring(1, static_cast<wchar_t>(L'a' + file)), 0));
@@ -62,7 +63,7 @@ std::vector<FakeTreeNode> SmallTree() {
 std::vector<FakeTreeNode> TwinTree() {
   std::vector<FakeTreeNode> nodes;
   nodes.push_back({.links = {{.name = L"twins",
-                              .parent = Tests::name_tree_root,
+                              .parent = TestFakeImage::name_tree_root,
                               .name_space = 0}},
                    .directory = true});
   nodes.push_back(File(L"Report.txt", 0, 0));
@@ -114,14 +115,14 @@ TEMPLATE_TEST_CASE_SIG(
     "[io][probe-order]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
   const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithNameTree(SmallTree());
+      TestFakeImage::BuildFakeNtfsImageWithNameTree(SmallTree());
   auto open = ProbeWalk::Open<S>(image);
   const Blocks blocks =
-      ProbeWalk::BlocksOf(*open.volume, Tests::name_tree_first_record);
+      ProbeWalk::BlocksOf(*open.volume, TestFakeImage::name_tree_first_record);
   REQUIRE(blocks.empty());
 
-  const ProbeWalk::DirectoryWalk walk =
-      ProbeWalk::WalkDirectory<S>(open, Tests::name_tree_first_record, {});
+  const ProbeWalk::DirectoryWalk walk = ProbeWalk::WalkDirectory<S>(
+      open, TestFakeImage::name_tree_first_record, {});
   // One node, its files in collation order: the nodes were written in it.
   REQUIRE(walk.groups.size() == 1);
   CHECK(walk.groups.front() == std::vector<ULONGLONG>{17, 18, 19, 20, 21});
@@ -135,10 +136,10 @@ TEMPLATE_TEST_CASE_SIG(
     "order the walk probes them",
     "[io][probe-order]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithNameTree(ReadAhead::BigDirectoryTree(1));
+  const std::vector<BYTE> image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
+      ReadAhead::BigDirectoryTree(1));
   auto open = ProbeWalk::Open<S>(image);
-  const ULONGLONG directory = Tests::name_tree_first_record;
+  const ULONGLONG directory = TestFakeImage::name_tree_first_record;
   const Blocks blocks = ProbeWalk::BlocksOf(*open.volume, directory);
   REQUIRE_FALSE(blocks.empty());
 
@@ -167,7 +168,7 @@ TEMPLATE_TEST_CASE_SIG("The held index follows the blocks of every level",
                        "[io][probe-order]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithIndexedMftScan(100);
+      TestFakeImage::BuildFakeNtfsImageWithIndexedMftScan(100);
   auto open = ProbeWalk::Open<S>(image);
   const ULONGLONG directory = static_cast<ULONGLONG>(Mft::Idx::Root);
   const Blocks blocks = ProbeWalk::BlocksOf(*open.volume, directory);
@@ -212,10 +213,10 @@ TEMPLATE_TEST_CASE_SIG(
     "without a word",
     "[io][probe-order]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithNameTree(ReadAhead::BigDirectoryTree(1));
+  const std::vector<BYTE> image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
+      ReadAhead::BigDirectoryTree(1));
   auto open = ProbeWalk::Open<S>(image);
-  const ULONGLONG directory = Tests::name_tree_first_record;
+  const ULONGLONG directory = TestFakeImage::name_tree_first_record;
   Blocks blocks = ProbeWalk::BlocksOf(*open.volume, directory);
   REQUIRE(blocks.size() > 2);
   const ProbeWalk::DirectoryWalk full =
@@ -237,7 +238,7 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::FullCache) {
   SECTION("aliases of the indexed scan") {
     const std::vector<BYTE> image =
-        Tests::BuildFakeNtfsImageWithIndexedMftScan(100);
+        TestFakeImage::BuildFakeNtfsImageWithIndexedMftScan(100);
     auto open = ProbeWalk::Open<S>(image);
     const ULONGLONG directory = static_cast<ULONGLONG>(Mft::Idx::Root);
     const Blocks blocks = ProbeWalk::BlocksOf(*open.volume, directory);
@@ -254,9 +255,9 @@ TEMPLATE_TEST_CASE_SIG(
 
   SECTION("names that are equal when upcased") {
     const std::vector<BYTE> image =
-        Tests::BuildFakeNtfsImageWithNameTree(TwinTree());
+        TestFakeImage::BuildFakeNtfsImageWithNameTree(TwinTree());
     auto open = ProbeWalk::Open<S>(image);
-    const ULONGLONG directory = Tests::name_tree_first_record;
+    const ULONGLONG directory = TestFakeImage::name_tree_first_record;
     const ProbeWalk::DirectoryWalk walk =
         ProbeWalk::WalkDirectory<S>(open, directory, {});
     // Report.txt, report.txt, Link.txt and LINK.TXT: four entries, three
@@ -275,17 +276,17 @@ TEMPLATE_TEST_CASE_SIG("The held index stops where the walk stops",
                        "[io][probe-order]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithDeepIndexBlockChain();
+      TestFakeImage::BuildFakeNtfsImageWithDeepIndexBlockChain();
   auto open = ProbeWalk::Open<S>(image);
   const ULONGLONG directory = static_cast<ULONGLONG>(Mft::Idx::Root);
   const Blocks blocks = ProbeWalk::BlocksOf(*open.volume, directory);
-  REQUIRE(blocks.size() >= Tests::index_block_chain_length);
+  REQUIRE(blocks.size() >= TestFakeImage::index_block_chain_length);
 
   const ProbeWalk::DirectoryWalk walk =
       ProbeWalk::WalkDirectory<S>(open, directory, {.held = &blocks});
   // The chain is longer than the walk's depth limit, so the leaf is out of
   // reach of both.
-  CHECK(walk.groups.size() < Tests::index_block_chain_length);
+  CHECK(walk.groups.size() < TestFakeImage::index_block_chain_length);
   CheckAgainstWalk(walk);
   CheckQuiet(walk);
 }

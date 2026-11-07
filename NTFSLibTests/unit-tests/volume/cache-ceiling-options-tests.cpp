@@ -38,9 +38,8 @@ TEST_CASE("VolumeOptions defaults the cache ceiling to 256 MiB",
 
 TEST_CASE("A volume reads its ceiling back through GetOptions",
           "[cache][options]") {
-  const std::vector<BYTE> image =
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithManyIndexBlocks(
-          walk_index_blocks);
+  const std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+      BuildFakeNtfsImageWithManyIndexBlocks(walk_index_blocks);
   const auto by_default = OpenWalkVolume<Cache::Strategy::FullCache>(
       image, NTFS_BROWSER_NAMESPACE::VolumeOptions{});
   const auto chosen = OpenWalkVolume<Cache::Strategy::FullCache>(
@@ -52,9 +51,8 @@ TEST_CASE("A volume reads its ceiling back through GetOptions",
 
 TEST_CASE("Two volumes each stay within their own ceiling",
           "[cache][options]") {
-  const std::vector<BYTE> image =
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithManyIndexBlocks(
-          walk_index_blocks);
+  const std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+      BuildFakeNtfsImageWithManyIndexBlocks(walk_index_blocks);
   const auto one_block_volume = OpenWalkVolume<Cache::Strategy::FullCache>(
       image, WalkOptions(small_ceiling));
   const auto four_block_volume = OpenWalkVolume<Cache::Strategy::FullCache>(
@@ -75,9 +73,8 @@ TEST_CASE("Two volumes each stay within their own ceiling",
 
 TEST_CASE("NoCache ignores the ceiling and reports an empty cache",
           "[cache][options]") {
-  const std::vector<BYTE> image =
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithManyIndexBlocks(
-          walk_index_blocks);
+  const std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+      BuildFakeNtfsImageWithManyIndexBlocks(walk_index_blocks);
   const auto volume = OpenWalkVolume<Cache::Strategy::NoCache>(
       image, WalkOptions(small_ceiling));
 
@@ -89,9 +86,8 @@ TEST_CASE("NoCache ignores the ceiling and reports an empty cache",
 
 TEST_CASE("An unlimited ceiling keeps everything the walks read",
           "[cache][options]") {
-  const std::vector<BYTE> image =
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithManyIndexBlocks(
-          walk_index_blocks);
+  const std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+      BuildFakeNtfsImageWithManyIndexBlocks(walk_index_blocks);
   const auto volume = OpenWalkVolume<Cache::Strategy::FullCache>(
       image, WalkOptions(Cache::unlimited_bytes));
 

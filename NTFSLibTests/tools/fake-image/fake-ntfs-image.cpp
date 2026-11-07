@@ -28,7 +28,7 @@
 #include "data/volume-information.h"
 #include "fake-ntfs-image-internal.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage {
 
 namespace {
 
@@ -38,7 +38,8 @@ namespace {
 FakeRecord MakeMftRecord() {
   FakeRecord record = MakeInUseFileRecord();
 
-  auto& attr = InitNonResidentAttr(record, attr_offset_value, Attr::Type::Data);
+  auto& attr = InitNonResidentAttr(record, attr_offset_value,
+                                   NTFS_BROWSER_NAMESPACE::Attr::Type::Data);
   attr.start_vcn = 0;
   attr.last_vcn = 0;
   attr.data_run_offset = static_cast<WORD>(sizeof(attr));
@@ -61,8 +62,9 @@ FakeRecord MakeMftRecord() {
 FakeRecord MakeVolumeRecordSized(WORD attr_size, WORD flags = 0) {
   FakeRecord record = MakeInUseFileRecord();
 
-  auto& attr = InitResidentAttr(record, attr_offset_value,
-                                Attr::Type::VolumeInformation);
+  auto& attr =
+      InitResidentAttr(record, attr_offset_value,
+                       NTFS_BROWSER_NAMESPACE::Attr::Type::VolumeInformation);
   attr.attr_size = attr_size;
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
 
@@ -95,7 +97,8 @@ FakeRecord MakeVolumeRecordWithName(std::wstring_view name) {
           &record.at(attr_offset_value));
   const DWORD name_offset = attr_offset_value + vol_info.header.total_size;
 
-  auto& attr = InitResidentAttr(record, name_offset, Attr::Type::VolumeName);
+  auto& attr = InitResidentAttr(record, name_offset,
+                                NTFS_BROWSER_NAMESPACE::Attr::Type::VolumeName);
   attr.header.id = 1;
   const std::vector<WORD> encoded_name = ToUtf16(name);
   attr.attr_size = gsl::narrow<DWORD>(encoded_name.size() * sizeof(WORD));
@@ -113,8 +116,9 @@ FakeRecord MakeVolumeRecordWithName(std::wstring_view name) {
 FakeRecord MakeStandardInformationRecordSized(WORD attr_size) {
   FakeRecord record = MakeInUseFileRecord();
 
-  auto& attr = InitResidentAttr(record, attr_offset_value,
-                                Attr::Type::StandardInformation);
+  auto& attr =
+      InitResidentAttr(record, attr_offset_value,
+                       NTFS_BROWSER_NAMESPACE::Attr::Type::StandardInformation);
   attr.attr_size = attr_size;
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
 
@@ -157,8 +161,9 @@ std::vector<BYTE> BuildFakeNtfsImage() {
 
   const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
   const size_t records_end =
-      mft_addr + static_cast<size_t>(fake_file_record_size) *
-                     (static_cast<size_t>(Mft::Idx::Root) + 1);
+      mft_addr +
+      static_cast<size_t>(fake_file_record_size) *
+          (static_cast<size_t>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root) + 1);
   // FullCache reads whole blocks. 64 KiB covers any block size a test sets.
   constexpr size_t full_cache_read_block_size = size_t{64} * 1024;
   const size_t image_size = std::max(records_end, full_cache_read_block_size);
@@ -167,8 +172,11 @@ std::vector<BYTE> BuildFakeNtfsImage() {
   bpb.total_sectors = image_size / bytes_per_sector;
   std::memcpy(image.data(), &bpb, sizeof(bpb));
 
-  PutMftRecord(image, static_cast<ULONGLONG>(Mft::Idx::Mft), MakeMftRecord());
-  PutMftRecord(image, static_cast<ULONGLONG>(Mft::Idx::Volume),
+  PutMftRecord(image,
+               static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Mft),
+               MakeMftRecord());
+  PutMftRecord(image,
+               static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Volume),
                MakeVolumeRecord());
   PutRootRecord(image, MakeRootRecord());
 
@@ -184,23 +192,25 @@ std::vector<BYTE> BuildFakeNtfsImageReplacingRecord(ULONGLONG idx,
 
 std::vector<BYTE> BuildFakeNtfsImageWithMinimalVolumeInformation() {
   return BuildFakeNtfsImageReplacingRecord(
-      static_cast<ULONGLONG>(Mft::Idx::Volume),
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Volume),
       MakeVolumeRecordSized(minimal_volume_information_size));
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithEmptyVolumeInformation() {
   return BuildFakeNtfsImageReplacingRecord(
-      static_cast<ULONGLONG>(Mft::Idx::Volume), MakeVolumeRecordSized(0));
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Volume),
+      MakeVolumeRecordSized(0));
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithVolumeFlags(WORD flags) {
   return BuildFakeNtfsImageReplacingRecord(
-      static_cast<ULONGLONG>(Mft::Idx::Volume), MakeVolumeRecord(flags));
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Volume),
+      MakeVolumeRecord(flags));
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithVolumeName() {
   return BuildFakeNtfsImageReplacingRecord(
-      static_cast<ULONGLONG>(Mft::Idx::Volume),
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Volume),
       MakeVolumeRecordWithName(fake_volume_name));
 }
 
@@ -214,7 +224,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithDeletedVolumeRecord() {
   });
 
   return BuildFakeNtfsImageReplacingRecord(
-      static_cast<ULONGLONG>(Mft::Idx::Volume), record);
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Volume), record);
 }
 
 std::vector<BYTE> BuildFakeNtfsImageWithLegacyStandardInformation() {
@@ -231,7 +241,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithEmptyStandardInformation() {
 
 std::vector<BYTE> BuildFakeNtfsImageWithLegacyStandardInformationOnRoot() {
   return BuildFakeNtfsImageReplacingRecord(
-      static_cast<ULONGLONG>(Mft::Idx::Root),
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root),
       MakeStandardInformationRecordSized(legacy_standard_information_size));
 }
 
@@ -242,8 +252,9 @@ std::vector<BYTE> BuildFakeNtfsImageWithCorruptRootRecord() {
   // fails while $Volume and $MFT stay valid.
   const DWORD mft_addr = static_cast<DWORD>(mft_lcn) * cluster_size;
   const size_t root_offset =
-      mft_addr + static_cast<size_t>(fake_file_record_size) *
-                     static_cast<size_t>(Mft::Idx::Root);
+      mft_addr +
+      static_cast<size_t>(fake_file_record_size) *
+          static_cast<size_t>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root);
   std::memset(&image.at(root_offset), 0, fake_file_record_size);
 
   return image;
@@ -267,4 +278,4 @@ std::filesystem::path WriteFakeNtfsImage(const std::vector<BYTE>& image) {
   return path;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage

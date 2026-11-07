@@ -28,7 +28,7 @@ using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
 
 namespace {
 
@@ -52,7 +52,7 @@ constexpr ULONGLONG fixed_address_records =
 // $MFT's declared size: more records than its extents map.
 constexpr ULONGLONG declared_mft_size =
     40 * static_cast<ULONGLONG>(
-             NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size);
+             NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_file_record_size);
 
 // Sets $MFT's base DATA real_size, which GetRecordsCount() caps at.
 void SetMftRealSize(std::vector<BYTE>& image, ULONGLONG size) {
@@ -76,7 +76,7 @@ TEMPLATE_TEST_CASE_SIG(
     "[characterization]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
   SECTION("entry of another attribute type") {
-    std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::
+    std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
         BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList();
     SetMftRealSize(image, declared_mft_size);
     const size_t entry = ResidentBody(
@@ -88,11 +88,12 @@ TEMPLATE_TEST_CASE_SIG(
     REQUIRE(volume.IsVolumeOK());
     CHECK(volume.GetRecordsCount() == fixed_address_records);
     CHECK_FALSE(CanReadRecord(
-        volume, NTFS_BROWSER_NAMESPACE::Tests::mft_data_split_target_idx));
+        volume,
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_data_split_target_idx));
   }
 
   SECTION("named DATA entry") {
-    std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::
+    std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
         BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList();
     SetMftRealSize(image, declared_mft_size);
     const size_t entry = ResidentBody(
@@ -103,11 +104,12 @@ TEMPLATE_TEST_CASE_SIG(
     REQUIRE(volume.IsVolumeOK());
     CHECK(volume.GetRecordsCount() == fixed_address_records);
     CHECK_FALSE(CanReadRecord(
-        volume, NTFS_BROWSER_NAMESPACE::Tests::mft_data_split_target_idx));
+        volume,
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_data_split_target_idx));
   }
 
   SECTION("entry naming $MFT itself") {
-    std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::
+    std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
         BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList();
     SetMftRealSize(image, declared_mft_size);
     const size_t entry = ResidentBody(
@@ -119,7 +121,8 @@ TEMPLATE_TEST_CASE_SIG(
     REQUIRE(volume.IsVolumeOK());
     CHECK(volume.GetRecordsCount() == fixed_address_records);
     CHECK_FALSE(CanReadRecord(
-        volume, NTFS_BROWSER_NAMESPACE::Tests::mft_data_split_target_idx));
+        volume,
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_data_split_target_idx));
   }
 }
 
@@ -127,17 +130,19 @@ TEMPLATE_TEST_CASE_SIG(
     "$MFT drops a DATA continuation whose record does not walk its attributes",
     "[characterization]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::
+  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
       BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList();
   SetMftRealSize(image, declared_mft_size);
   // A DATA header claiming more bytes than the record holds: the walk runs
   // out before an end marker.
   Store<DWORD>(
       image,
-      FirstAttr(image, NTFS_BROWSER_NAMESPACE::Tests::mft_data_split_ext_idx,
+      FirstAttr(image,
+                NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_data_split_ext_idx,
                 Attr::Type::Data) +
           attr_total_size_field,
-      static_cast<DWORD>(NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size));
+      static_cast<DWORD>(
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_file_record_size));
   (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
   const NtfsVolume<S> volume(
       std::make_unique<MemoryDiskReader>(std::move(image)));
@@ -146,11 +151,13 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
   CHECK(volume.GetRecordsCount() == fixed_address_records);
   CHECK_FALSE(CanReadRecord(
-      volume, NTFS_BROWSER_NAMESPACE::Tests::mft_data_split_target_idx));
-  CHECK_THAT(captured,
-             ContainsSubstring(
-                 "$MFT DATA continuation in record " +
-                 std::to_string(
-                     NTFS_BROWSER_NAMESPACE::Tests::mft_data_split_ext_idx) +
-                 " could not be resolved"));
+      volume,
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_data_split_target_idx));
+  CHECK_THAT(
+      captured,
+      ContainsSubstring(
+          "$MFT DATA continuation in record " +
+          std::to_string(
+              NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_data_split_ext_idx) +
+          " could not be resolved"));
 }

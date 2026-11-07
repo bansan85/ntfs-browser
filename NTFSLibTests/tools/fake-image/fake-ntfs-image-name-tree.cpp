@@ -31,7 +31,7 @@
 #include "fake-ntfs-image-internal.h"
 #include "upcase/upcase.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage {
 
 namespace {
 
@@ -171,7 +171,8 @@ std::vector<DirectoryPlan> CollectEntries(std::span<const FakeTreeNode> nodes,
 
   // The collation of the volume, then the order of the code units: the order
   // names that are equal once upcased keep, as NTFS keeps them.
-  const UpCase::Table& table = UpCase::Table::BuiltIn();
+  const NTFS_BROWSER_NAMESPACE::UpCase::Table& table =
+      NTFS_BROWSER_NAMESPACE::UpCase::Table::BuiltIn();
   if (options.collate) {
     for (DirectoryPlan& plan : plans) {
       std::ranges::stable_sort(
@@ -343,7 +344,8 @@ FakeRecord MakeNodeRecord(const FakeTreeNode& node, const DirectoryPlan& plan) {
         node.directory);
   }
   if (!node.directory && !node.runs.empty()) {
-    offset += WriteNonResidentAttr(record, offset, Attr::Type::Data,
+    offset += WriteNonResidentAttr(record, offset,
+                                   NTFS_BROWSER_NAMESPACE::Attr::Type::Data,
                                    {.comp_unit_size = 0,
                                     .real_size = node.stream_size,
                                     .runs = node.runs});
@@ -400,12 +402,12 @@ FakeRecord MakeNameTreeMftRecord(ULONGLONG record_count) {
   raw_runs.resize(1 + sizeof(count) + sizeof(first_lcn) + 1, 0);
   std::memcpy(&raw_runs.at(1), &count, sizeof(count));
   std::memcpy(&raw_runs.at(1 + sizeof(count)), &first_lcn, sizeof(first_lcn));
-  offset +=
-      WriteNonResidentAttr(record, offset, Attr::Type::Data,
-                           {.comp_unit_size = 0,
-                            .real_size = record_count * fake_file_record_size,
-                            .runs = {{.lcn = mft_lcn, .clusters = count}},
-                            .overrides = {.raw_runs = raw_runs}});
+  offset += WriteNonResidentAttr(
+      record, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::Data,
+      {.comp_unit_size = 0,
+       .real_size = record_count * fake_file_record_size,
+       .runs = {{.lcn = mft_lcn, .clusters = count}},
+       .overrides = {.raw_runs = raw_runs}});
   FinishTreeRecord(record, offset);
   return record;
 }
@@ -444,7 +446,8 @@ std::vector<BYTE>
   std::vector<BYTE> image = BuildFakeNtfsImage();
   PadToFullCacheRead(image,
                      mft_address + (record_count * fake_file_record_size));
-  PutMftRecord(image, static_cast<ULONGLONG>(Mft::Idx::Mft),
+  PutMftRecord(image,
+               static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Mft),
                MakeNameTreeMftRecord(record_count));
 
   // The root has the name every volume gives it, ".".
@@ -453,7 +456,9 @@ std::vector<BYTE>
   EditFileRecordHeader(root, [](FileRecordHeader& header) {
     header.seq_no = root_sequence_number;
   });
-  PutMftRecord(image, static_cast<ULONGLONG>(Mft::Idx::Root), root);
+  PutMftRecord(image,
+               static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root),
+               root);
 
   for (std::size_t node = 0; node < nodes.size(); node++) {
     PutMftRecord(image, name_tree_first_record + node,
@@ -496,4 +501,4 @@ std::vector<FakeTreeNode>
   return nodes;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage

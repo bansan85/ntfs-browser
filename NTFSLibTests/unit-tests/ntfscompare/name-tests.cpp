@@ -38,10 +38,10 @@
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Fs = std::filesystem;
 using NTFS_BROWSER_NAMESPACE::Mft::MftTree;
-using NTFS_BROWSER_NAMESPACE::Tests::FakeTreeNode;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeTreeNode;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::MakeNameChain;
 using NTFS_BROWSER_NAMESPACE::Tests::FillerName;
 using NTFS_BROWSER_NAMESPACE::Tests::LongTempDir;
-using NTFS_BROWSER_NAMESPACE::Tests::MakeNameChain;
 using NTFS_BROWSER_NAMESPACE::Tests::OpenNameTreeVolume;
 using NtfsCompare::CompareAgainstReference;
 using NtfsCompare::CompareLibraryMethods;

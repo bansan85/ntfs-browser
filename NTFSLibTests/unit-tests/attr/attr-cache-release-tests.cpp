@@ -37,7 +37,8 @@
 
 namespace {
 
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using CompressedBuilder = std::vector<BYTE> (*)();
 
 // Bytes of one FullCache block, and so the smallest ceiling that keeps one.
@@ -53,7 +54,7 @@ std::vector<BYTE> ReadWholeCompressed(const std::vector<BYTE>& image,
                                       std::uint64_t ceiling) {
   const NTFS_BROWSER_NAMESPACE::NtfsVolume<
       NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>
-      volume(std::make_unique<Tests::MemoryDiskReader>(image),
+      volume(std::make_unique<TestDiskReaders::MemoryDiskReader>(image),
              NTFS_BROWSER_NAMESPACE::VolumeOptions{.max_cache_bytes = ceiling});
   REQUIRE(volume.IsVolumeOK());
 
@@ -102,10 +103,10 @@ TEST_CASE(
     "released",
     "[cache][compression]") {
   const auto builders = std::to_array<CompressedBuilder>(
-      {&Tests::BuildFakeNtfsImageWithCompressedFile,
-       &Tests::BuildFakeNtfsImageWithStoredCompressionUnit,
-       &Tests::BuildFakeNtfsImageWithFragmentedCompressedFile,
-       &Tests::BuildFakeNtfsImageWithTrailingPartialCompressionUnit});
+      {&TestFakeImage::BuildFakeNtfsImageWithCompressedFile,
+       &TestFakeImage::BuildFakeNtfsImageWithStoredCompressionUnit,
+       &TestFakeImage::BuildFakeNtfsImageWithFragmentedCompressedFile,
+       &TestFakeImage::BuildFakeNtfsImageWithTrailingPartialCompressionUnit});
 
   for (const CompressedBuilder builder : builders) {
     const std::vector<BYTE> image = builder();
@@ -149,7 +150,8 @@ constexpr std::uint64_t efs_release_block = 65536;
 // that decrypts it. The image is padded to whole blocks, so that FullCache
 // caches the block past the file instead of falling back to a direct read.
 Fixture MakeSpanningFixture(
-    const std::vector<NTFS_BROWSER_NAMESPACE::Tests::FakeDataRun>& runs) {
+    const std::vector<NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeDataRun>&
+        runs) {
   Fixture fixture;
   fixture.plaintext =
       NTFS_BROWSER_NAMESPACE::Tests::PlaintextPattern(spanning_size);
@@ -162,7 +164,7 @@ Fixture MakeSpanningFixture(
       user.thumbprint, user.wrapped_fek,
       NTFS_BROWSER_NAMESPACE::Tests::MakeFekBlob(Algorithm::Aes256, key));
 
-  NTFS_BROWSER_NAMESPACE::Tests::FakeEncryptedFile file;
+  NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeEncryptedFile file;
   file.efs_stream =
       NTFS_BROWSER_NAMESPACE::Tests::MakeEfsStream(std::span(&user, 1));
   file.streams.push_back(
@@ -170,8 +172,8 @@ Fixture MakeSpanningFixture(
        .cluster_bytes = NTFS_BROWSER_NAMESPACE::Tests::EfsEncrypt(
            Algorithm::Aes256, key, fixture.plaintext),
        .real_size = spanning_size});
-  fixture.image =
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithEncryptedFile(file);
+  fixture.image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+      BuildFakeNtfsImageWithEncryptedFile(file);
   fixture.image.resize(4 * efs_release_block);
   return fixture;
 }

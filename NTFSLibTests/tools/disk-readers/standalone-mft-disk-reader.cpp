@@ -28,7 +28,7 @@
 #include "data/header-non-resident.h"
 #include "data/ntfs-bpb.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders {
 
 namespace {
 
@@ -116,25 +116,29 @@ BYTE EncodeBpbSize(DWORD count, DWORD limit) {
 // Undoes the update sequence: the last two bytes of each 512-byte block hold
 // the sequence number on disk, and the real bytes sit in the array. Returns why
 // the record is unusable, or nothing.
-std::optional<std::string_view>
-    UndoUpdateSequence(std::vector<BYTE>& record,
-                       const Data::FileRecordHeader& header) {
+std::optional<std::string_view> UndoUpdateSequence(
+    std::vector<BYTE>& record,
+    const NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader& header) {
   const size_t array_end =
       size_t{header.offset_of_us} + size_t{header.size_of_us} * sizeof(WORD);
   if (header.size_of_us == 0 || array_end > record.size() ||
-      Data::FileRecordHeader::UpdateSequenceBlockCount(record.size(),
-                                                       header.size_of_us) !=
-          record.size() / Data::FileRecordHeader::update_sequence_stride) {
+      NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader::UpdateSequenceBlockCount(
+          record.size(), header.size_of_us) !=
+          record.size() / NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader::
+                              update_sequence_stride) {
     return "record 0 has an unusable update sequence array";
   }
   WORD sequence_number = 0;
   std::memcpy(&sequence_number, &record.at(header.offset_of_us),
               sizeof(sequence_number));
   for (size_t block = 1;
-       block <= record.size() / Data::FileRecordHeader::update_sequence_stride;
+       block <= record.size() / NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader::
+                                    update_sequence_stride;
        block++) {
     const size_t end_of_block =
-        block * Data::FileRecordHeader::update_sequence_stride - sizeof(WORD);
+        block * NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader::
+                    update_sequence_stride -
+        sizeof(WORD);
     WORD on_disk = 0;
     std::memcpy(&on_disk, &record.at(end_of_block), sizeof(on_disk));
     if (on_disk != sequence_number) {
@@ -150,16 +154,20 @@ std::optional<std::string_view>
 // Puts the update sequence back on a record UndoUpdateSequence() accepted: the
 // real last bytes of each block return to the array, and the sequence number
 // to the block.
-void RedoUpdateSequence(std::vector<BYTE>& record,
-                        const Data::FileRecordHeader& header) {
+void RedoUpdateSequence(
+    std::vector<BYTE>& record,
+    const NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader& header) {
   WORD sequence_number = 0;
   std::memcpy(&sequence_number, &record.at(header.offset_of_us),
               sizeof(sequence_number));
   for (size_t block = 1;
-       block <= record.size() / Data::FileRecordHeader::update_sequence_stride;
+       block <= record.size() / NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader::
+                                    update_sequence_stride;
        block++) {
     const size_t end_of_block =
-        block * Data::FileRecordHeader::update_sequence_stride - sizeof(WORD);
+        block * NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader::
+                    update_sequence_stride -
+        sizeof(WORD);
     std::memcpy(&record.at(header.offset_of_us + block * sizeof(WORD)),
                 &record.at(end_of_block), sizeof(WORD));
     std::memcpy(&record.at(end_of_block), &sequence_number, sizeof(WORD));
@@ -202,7 +210,7 @@ bool StandaloneMftDiskReader::Open(std::wstring_view path) {
     return Fail("cannot open the file");
   }
 
-  Data::FileRecordHeader header{};
+  NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader header{};
   std::vector<BYTE> record;
   if (!ReadRecordZero(header, record)) {
     return false;
@@ -227,24 +235,29 @@ bool StandaloneMftDiskReader::Open(std::wstring_view path) {
 
 // Reads record 0 from the start of the file: first its header, which declares
 // the record size, then the whole record, update sequence still on it.
-bool StandaloneMftDiskReader::ReadRecordZero(Data::FileRecordHeader& header,
-                                             std::vector<BYTE>& record) {
-  if (file_size_ < Data::FileRecordHeader::min_file_record_header_size) {
+bool StandaloneMftDiskReader::ReadRecordZero(
+    NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader& header,
+    std::vector<BYTE>& record) {
+  if (file_size_ < NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader::
+                       min_file_record_header_size) {
     return Fail("the file is smaller than a record header");
   }
   file_.read(reinterpret_cast<char*>(&header),
-             Data::FileRecordHeader::min_file_record_header_size);
+             NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader::
+                 min_file_record_header_size);
   if (!file_) {
     return Fail("cannot read the header of record 0");
   }
-  if (header.magic != Data::FileRecordHeader::file_record_magic) {
+  if (header.magic !=
+      NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader::file_record_magic) {
     return Fail("record 0 does not start with FILE");
   }
 
   // The record size is the allocated size record 0 declares for itself.
   const DWORD record_size = header.alloc_size;
   if (record_size < sector_size ||
-      record_size > Data::FileRecordHeader::max_file_record_size ||
+      record_size > NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader::
+                        max_file_record_size ||
       !std::has_single_bit(record_size)) {
     return Fail("record 0 declares the invalid record size " +
                 std::to_string(record_size));
@@ -290,16 +303,18 @@ bool StandaloneMftDiskReader::MapDataRuns(std::vector<BYTE>& record) {
 // its run list starts inside the attribute.
 std::optional<StandaloneMftDiskReader::DataAttr>
     StandaloneMftDiskReader::FindUnnamedData(const std::vector<BYTE>& record) {
-  Data::FileRecordHeader record_header{};
+  NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader record_header{};
   std::memcpy(&record_header, record.data(),
-              Data::FileRecordHeader::min_file_record_header_size);
+              NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader::
+                  min_file_record_header_size);
 
   size_t pos = record_header.offset_of_attr;
   std::optional<DataAttr> data;
-  while (pos + sizeof(Attr::HeaderCommon) <= record.size()) {
-    Attr::HeaderCommon common{};
+  while (pos + sizeof(NTFS_BROWSER_NAMESPACE::Attr::HeaderCommon) <=
+         record.size()) {
+    NTFS_BROWSER_NAMESPACE::Attr::HeaderCommon common{};
     std::memcpy(&common, &record[pos], sizeof(common));
-    if (common.type == Attr::Type::All) {
+    if (common.type == NTFS_BROWSER_NAMESPACE::Attr::Type::All) {
       break;
     }
     if (common.total_size < sizeof(common) ||
@@ -307,13 +322,14 @@ std::optional<StandaloneMftDiskReader::DataAttr>
       Fail("an attribute of record 0 overruns the record");
       return std::nullopt;
     }
-    if (common.type == Attr::Type::Data && common.non_resident != 0 &&
-        common.name_length == 0) {
-      if (common.total_size < sizeof(Data::HeaderNonResident)) {
+    if (common.type == NTFS_BROWSER_NAMESPACE::Attr::Type::Data &&
+        common.non_resident != 0 && common.name_length == 0) {
+      if (common.total_size <
+          sizeof(NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident)) {
         Fail("the $DATA header of record 0 is cut");
         return std::nullopt;
       }
-      Data::HeaderNonResident found{};
+      NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident found{};
       std::memcpy(&found, &record[pos], sizeof(found));
       if (found.start_vcn == 0) {
         data = DataAttr{
@@ -327,7 +343,8 @@ std::optional<StandaloneMftDiskReader::DataAttr>
     Fail("record 0 has no non-resident unnamed $DATA at VCN 0");
     return std::nullopt;
   }
-  if (data->header.data_run_offset < sizeof(Data::HeaderNonResident) ||
+  if (data->header.data_run_offset <
+          sizeof(NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident) ||
       data->pos + data->header.data_run_offset >= data->end) {
     Fail("the run list of record 0 starts outside its attribute");
     return std::nullopt;
@@ -396,7 +413,9 @@ void StandaloneMftDiskReader::RepairDeclaredExtent(std::vector<BYTE>& record,
   }
   const ULONGLONG last_vcn = total_clusters - 1;
   std::memcpy(
-      &record.at(data.pos + offsetof(Data::HeaderNonResident, last_vcn)),
+      &record.at(
+          data.pos +
+          offsetof(NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident, last_vcn)),
       &last_vcn, sizeof(last_vcn));
   data.header.last_vcn = last_vcn;
   // Not empty from here on: Open() swaps the update sequence back in.
@@ -406,7 +425,8 @@ void StandaloneMftDiskReader::RepairDeclaredExtent(std::vector<BYTE>& record,
 // The cluster size is what makes the allocated size of data a whole cluster
 // count. Returns it, or nothing when it is not a plausible size.
 std::optional<ULONGLONG> StandaloneMftDiskReader::DeriveClusterSize(
-    const Data::HeaderNonResident& data, ULONGLONG total_clusters) {
+    const NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident& data,
+    ULONGLONG total_clusters) {
   if (data.alloc_size == 0 || data.alloc_size % total_clusters != 0) {
     Fail("the allocated size of $DATA is not a whole cluster count");
     return std::nullopt;
@@ -453,11 +473,12 @@ bool StandaloneMftDiskReader::BuildRuns(const std::vector<RawRun>& raw_runs,
 // Writes the boot sector the volume reads at byte 0: the geometry found in
 // record 0, $MFT at the first run, and no $MFTMirr.
 void StandaloneMftDiskReader::BuildBootSector() {
-  Data::NtfsBpb bpb{};
+  NTFS_BROWSER_NAMESPACE::Data::NtfsBpb bpb{};
   bpb.jmp[0] = 0xEB;
   bpb.jmp[1] = 0x52;
   bpb.jmp[2] = 0x90;
-  std::memcpy(std::data(bpb.signature), Data::ntfs_signature.data(),
+  std::memcpy(std::data(bpb.signature),
+              NTFS_BROWSER_NAMESPACE::Data::ntfs_signature.data(),
               sizeof(bpb.signature));
   bpb.bytes_per_sector = gsl::narrow<WORD>(sector_size);
   bpb.sectors_per_cluster = EncodeBpbSize(cluster_size_ / sector_size,
@@ -479,8 +500,8 @@ void StandaloneMftDiskReader::BuildBootSector() {
                                      ? index_block_bytes / cluster_size_
                                      : EncodeBpbSize(index_block_bytes, 0);
   std::memcpy(std::data(bpb.volume_sn), &serial_value, sizeof(serial_value));
-  bpb.x_aa = Data::bpb_marker_first;
-  bpb.x_55 = Data::bpb_marker_second;
+  bpb.x_aa = NTFS_BROWSER_NAMESPACE::Data::bpb_marker_first;
+  bpb.x_55 = NTFS_BROWSER_NAMESPACE::Data::bpb_marker_second;
 
   boot_.assign(gsl::narrow<size_t>(boot_area_bytes_), 0);
   std::memcpy(boot_.data(), &bpb, sizeof(bpb));
@@ -578,4 +599,4 @@ ULONGLONG StandaloneMftDiskReader::FileSize() const noexcept {
   return file_size_;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders

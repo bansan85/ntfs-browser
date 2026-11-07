@@ -19,12 +19,13 @@
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
-using Tests::FakeDataRun;
-using Tests::FakeFreedStream;
+using TestFakeImage::FakeDataRun;
+using TestFakeImage::FakeFreedStream;
 
 namespace {
 
@@ -53,12 +54,12 @@ template <Cache::Strategy S>
 std::optional<Alloc::StreamExtents> ExtentsOf(std::vector<BYTE> image,
                                               bool recover) {
   const NtfsVolume<S> volume(
-      std::make_unique<Tests::MemoryDiskReader>(std::move(image)),
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(std::move(image)),
       VolumeOptions{.include_deleted = true, .recover_errors = recover});
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(Tests::mft_tree_stale_child_idx));
+  REQUIRE(record.ParseFileRecord(TestFakeImage::mft_tree_stale_child_idx));
   [[maybe_unused]] const bool parsed = record.ParseAttrs();
 
   const auto* stream = record.FindStream({});
@@ -69,20 +70,22 @@ std::optional<Alloc::StreamExtents> ExtentsOf(std::vector<BYTE> image,
 }
 
 std::vector<BYTE> ImageWith(const FakeFreedStream& stream) {
-  std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedFileTree();
-  Tests::PutFreedNonResidentRecord(image, Tests::mft_tree_stale_child_idx,
-                                   stream);
+  std::vector<BYTE> image =
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
+  TestFakeImage::PutFreedNonResidentRecord(
+      image, TestFakeImage::mft_tree_stale_child_idx, stream);
   return image;
 }
 
 template <Cache::Strategy S>
 void CheckResidentOwnsNoCluster() {
-  const NtfsVolume<S> volume(std::make_unique<Tests::MemoryDiskReader>(
-                                 Tests::BuildFakeNtfsImageWithFreedFileTree()),
-                             VolumeOptions{.include_deleted = true});
+  const NtfsVolume<S> volume(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(
+          TestFakeImage::BuildFakeNtfsImageWithFreedFileTree()),
+      VolumeOptions{.include_deleted = true});
   REQUIRE(volume.IsVolumeOK());
   FileRecord<S> record(volume);
-  REQUIRE(record.ParseFileRecord(Tests::mft_tree_deleted_file_idx));
+  REQUIRE(record.ParseFileRecord(TestFakeImage::mft_tree_deleted_file_idx));
   REQUIRE(record.ParseAttrs());
 
   const auto* stream = record.FindStream({});
@@ -95,7 +98,7 @@ void CheckResidentOwnsNoCluster() {
 template <Cache::Strategy S>
 void CheckSparseRunsAreSkipped() {
   const auto extents =
-      ExtentsOf<S>(ImageWith({.real_size = 9 * Tests::fake_cluster_size,
+      ExtentsOf<S>(ImageWith({.real_size = 9 * TestFakeImage::fake_cluster_size,
                               .runs = {FakeDataRun{.lcn = 10, .clusters = 3},
                                        FakeDataRun{.clusters = 4},
                                        FakeDataRun{.lcn = 20, .clusters = 2}}}),
@@ -113,7 +116,7 @@ template <Cache::Strategy S>
 void CheckShortRunListIsIncomplete() {
   // Declared: 6 clusters. The list that parses maps 5.
   const std::vector<BYTE> image =
-      ImageWith({.real_size = 6 * Tests::fake_cluster_size,
+      ImageWith({.real_size = 6 * TestFakeImage::fake_cluster_size,
                  .runs = {FakeDataRun{.lcn = 10, .clusters = 3},
                           FakeDataRun{.lcn = 20, .clusters = 2},
                           FakeDataRun{.lcn = 30, .clusters = 1}},
@@ -134,7 +137,7 @@ void CheckShortRunListIsIncomplete() {
 template <Cache::Strategy S>
 void CheckEmptyRunIsDamaged() {
   const auto extents = ExtentsOf<S>(
-      ImageWith({.real_size = 2 * Tests::fake_cluster_size,
+      ImageWith({.real_size = 2 * TestFakeImage::fake_cluster_size,
                  .runs = {FakeDataRun{.lcn = 10, .clusters = 2}},
                  .raw_runs = empty_first_run,
                  .last_vcn = std::numeric_limits<ULONGLONG>::max()}),
@@ -148,7 +151,7 @@ void CheckEmptyRunIsDamaged() {
 template <Cache::Strategy S>
 void CheckOverflowingRunIsDamaged() {
   const auto extents =
-      ExtentsOf<S>(ImageWith({.real_size = Tests::fake_cluster_size,
+      ExtentsOf<S>(ImageWith({.real_size = TestFakeImage::fake_cluster_size,
                               .runs = {FakeDataRun{.lcn = 10, .clusters = 1}},
                               .raw_runs = overflowing_run,
                               .last_vcn = past_half_range}),

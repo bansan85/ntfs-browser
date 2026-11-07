@@ -10,7 +10,7 @@
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders {
 
 // Forwards every call to another IDiskReader and keeps a list of them. A test
 // reads it to count the reads a feature makes, to find which ranges they
@@ -48,7 +48,8 @@ class CountingDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   [[nodiscard]] std::optional<ULONGLONG> Size() const override;
 
   // Passes the question on, and records nothing.
-  [[nodiscard]] Tuning::MediaKind GetMediaKind() const override;
+  [[nodiscard]] NTFS_BROWSER_NAMESPACE::Tuning::MediaKind
+      GetMediaKind() const override;
 
   // Record the hints, and pass them on to the wrapped reader.
   void Prefetch(ULONGLONG offset, ULONGLONG length) const override;
@@ -57,7 +58,8 @@ class CountingDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   void PrefetchStanding(ULONGLONG offset, ULONGLONG length) const override;
   void CancelStanding(ULONGLONG offset, ULONGLONG length) const override;
   // Passes the pattern on, and records nothing.
-  void SetReadPattern(Tuning::Pattern pattern) const override;
+  void SetReadPattern(
+      NTFS_BROWSER_NAMESPACE::Tuning::Pattern pattern) const override;
 
   // Every call so far, in order.
   [[nodiscard]] const std::vector<Call>& Calls() const noexcept;
@@ -84,4 +86,4 @@ class CountingDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   ULONGLONG fail_last_{0};
 };
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders

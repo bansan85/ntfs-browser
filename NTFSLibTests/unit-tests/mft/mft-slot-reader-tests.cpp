@@ -45,7 +45,8 @@ namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 
 namespace {
 
@@ -90,7 +91,7 @@ class CountingDiskReader final : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   }
 
  private:
-  Tests::MemoryDiskReader inner_;
+  TestDiskReaders::MemoryDiskReader inner_;
   std::shared_ptr<ReadCounters> counters_;
 };
 
@@ -100,11 +101,11 @@ std::unique_ptr<NtfsVolume<S>>
                    const std::shared_ptr<ReadCounters>& counters,
                    const VolumeOptions& options = {},
                    ULONGLONG fragment_clusters =
-                       Tests::fragmented_mft_scan_fragment_clusters) {
+                       TestFakeImage::fragmented_mft_scan_fragment_clusters) {
   auto volume = std::make_unique<NtfsVolume<S>>(
       std::make_unique<CountingDiskReader>(
-          Tests::BuildFakeNtfsImageWithFragmentedMftScan(record_count,
-                                                         fragment_clusters),
+          TestFakeImage::BuildFakeNtfsImageWithFragmentedMftScan(
+              record_count, fragment_clusters),
           counters),
       options);
   REQUIRE(volume->IsVolumeOK());
@@ -219,9 +220,10 @@ TEMPLATE_TEST_CASE_SIG(
 
   // The cluster of slot 120, in the middle of a block of 64 slots.
   constexpr ULONGLONG unreadable = 120;
-  counters->fail_begin =
-      static_cast<LONGLONG>(Tests::FragmentedMftScanSlotOffset(unreadable));
-  counters->fail_end = counters->fail_begin + Tests::fake_file_record_size;
+  counters->fail_begin = static_cast<LONGLONG>(
+      TestFakeImage::FragmentedMftScanSlotOffset(unreadable));
+  counters->fail_end =
+      counters->fail_begin + TestFakeImage::fake_file_record_size;
 
   Io::FileRecord<S> expected(*volume);
   Io::FileRecord<S> actual(*volume);
@@ -277,7 +279,8 @@ TEMPLATE_TEST_CASE_SIG("SlotReader reads only the slots Expect() allows",
     if constexpr (S == Cache::Strategy::NoCache) {
       // Slots 105 to 109 all lie in fragment 1: one read of five records.
       CHECK(counters->reads - reads_before == 1);
-      CHECK(counters->bytes - bytes_before == 5 * Tests::fake_file_record_size);
+      CHECK(counters->bytes - bytes_before ==
+            5 * TestFakeImage::fake_file_record_size);
     }
     CHECK(served == ReferenceSnapshot(expected, 105));
   }
@@ -384,14 +387,15 @@ TEMPLATE_TEST_CASE_SIG(
     "[mft][slot-reader]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
   // A volume with no boot sector has no record size to divide by.
-  const NtfsVolume<S> volume(std::make_unique<Tests::MemoryDiskReader>(
-      std::vector<BYTE>(size_t{64} * 1024, 0)));
+  const NtfsVolume<S> volume(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(
+          std::vector<BYTE>(size_t{64} * 1024, 0)));
   REQUIRE_FALSE(volume.IsVolumeOK());
 
   Mft::SlotReader<S> reader(volume);
   Io::FileRecord<S> record(volume);
 
-  CHECK_FALSE(reader.ParseFileRecord(record, Tests::mft_tree_docs_idx));
+  CHECK_FALSE(reader.ParseFileRecord(record, TestFakeImage::mft_tree_docs_idx));
 }
 
 TEMPLATE_TEST_CASE_SIG(
@@ -401,7 +405,7 @@ TEMPLATE_TEST_CASE_SIG(
   const auto counters = std::make_shared<ReadCounters>();
   const auto volume = OpenScanVolume<S>(scan_record_count, counters);
   const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithFragmentedMftScan(scan_record_count);
+      TestFakeImage::BuildFakeNtfsImageWithFragmentedMftScan(scan_record_count);
   // Blocks of 16 slots.
   Mft::SlotReader<S> reader(*volume, size_t{16} * 1024);
   Io::FileRecord<S> record(*volume);
@@ -410,11 +414,11 @@ TEMPLATE_TEST_CASE_SIG(
   constexpr ULONGLONG served = 100;
   static_cast<void>(reader.ParseFileRecord(record, served));
   const std::span<const BYTE> held = reader.HeldSlot(served);
-  const auto offset =
-      static_cast<std::ptrdiff_t>(Tests::FragmentedMftScanSlotOffset(served));
-  CHECK(std::ranges::equal(
-      held, std::span<const BYTE>{image}.subspan(
-                static_cast<size_t>(offset), Tests::fake_file_record_size)));
+  const auto offset = static_cast<std::ptrdiff_t>(
+      TestFakeImage::FragmentedMftScanSlotOffset(served));
+  CHECK(std::ranges::equal(held, std::span<const BYTE>{image}.subspan(
+                                     static_cast<size_t>(offset),
+                                     TestFakeImage::fake_file_record_size)));
 
   // Past the window, the slot is not held until a window holds it.
   CHECK(reader.HeldSlot(served + 16).empty());
@@ -425,23 +429,24 @@ TEMPLATE_TEST_CASE_SIG(
 
 namespace {
 
-using HintKind = Tests::CountingDiskReader::Kind;
-using HintCall = Tests::CountingDiskReader::Call;
+using HintKind = TestDiskReaders::CountingDiskReader::Kind;
+using HintCall = TestDiskReaders::CountingDiskReader::Call;
 
 // A volume over the fixture whose reader records every call, the prefetch
 // hints included.
 template <Cache::Strategy S>
 struct HintedVolume {
   std::unique_ptr<NtfsVolume<S>> volume;
-  Tests::CountingDiskReader* reader;
+  TestDiskReaders::CountingDiskReader* reader;
 };
 
 template <Cache::Strategy S>
 HintedVolume<S> OpenHintedVolume() {
-  auto reader = std::make_unique<Tests::CountingDiskReader>(
-      std::make_unique<Tests::MemoryDiskReader>(
-          Tests::BuildFakeNtfsImageWithFragmentedMftScan(scan_record_count)));
-  Tests::CountingDiskReader* const counting = reader.get();
+  auto reader = std::make_unique<TestDiskReaders::CountingDiskReader>(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(
+          TestFakeImage::BuildFakeNtfsImageWithFragmentedMftScan(
+              scan_record_count)));
+  TestDiskReaders::CountingDiskReader* const counting = reader.get();
   auto volume = std::make_unique<NtfsVolume<S>>(std::move(reader));
   REQUIRE(volume->IsVolumeOK());
   return {std::move(volume), counting};
@@ -468,10 +473,10 @@ bool EveryReadAnnouncedBefore(const std::vector<HintCall>& calls) {
 
 // Whether a read or a hint of calls touches the record of slot.
 bool TouchesSlot(const std::vector<HintCall>& calls, ULONGLONG slot) {
-  const ULONGLONG first = Tests::FragmentedMftScanSlotOffset(slot);
+  const ULONGLONG first = TestFakeImage::FragmentedMftScanSlotOffset(slot);
   return std::ranges::any_of(calls, [first](const HintCall& call) {
     return (call.kind == HintKind::Read || call.kind == HintKind::Prefetch) &&
-           call.offset < first + Tests::fake_file_record_size &&
+           call.offset < first + TestFakeImage::fake_file_record_size &&
            first < call.offset + call.length;
   });
 }
@@ -526,13 +531,13 @@ TEST_CASE(
   CHECK(opened.reader->ReadCount() == 1);
   CHECK(std::ranges::any_of(calls, [](const HintCall& call) {
     return call.kind == HintKind::Read &&
-           call.offset == Tests::FragmentedMftScanSlotOffset(36) &&
+           call.offset == TestFakeImage::FragmentedMftScanSlotOffset(36) &&
            call.length == size_t{16} * 1024;
   }));
   // The short last window is announced too, and nothing past the range.
   CHECK(std::ranges::any_of(calls, [](const HintCall& call) {
     return call.kind == HintKind::Prefetch &&
-           call.offset == Tests::FragmentedMftScanSlotOffset(84) &&
+           call.offset == TestFakeImage::FragmentedMftScanSlotOffset(84) &&
            call.length == size_t{6} * 1024;
   }));
   CHECK_FALSE(TouchesSlot(calls, 90));
@@ -592,10 +597,10 @@ TEST_CASE("NtfsVolume::PrefetchMftSlots announces one range per fragment",
   const std::vector<HintCall>& calls = opened.reader->Calls();
   REQUIRE(calls.size() == 2);
   CHECK(calls.at(0).kind == HintKind::Prefetch);
-  CHECK(calls.at(0).offset == Tests::FragmentedMftScanSlotOffset(90));
+  CHECK(calls.at(0).offset == TestFakeImage::FragmentedMftScanSlotOffset(90));
   CHECK(calls.at(0).length == size_t{10} * 1024);
   CHECK(calls.at(1).kind == HintKind::Prefetch);
-  CHECK(calls.at(1).offset == Tests::FragmentedMftScanSlotOffset(100));
+  CHECK(calls.at(1).offset == TestFakeImage::FragmentedMftScanSlotOffset(100));
   CHECK(calls.at(1).length == size_t{10} * 1024);
 
   // The records below Mft::Idx::User sit at a fixed address: no hint.
@@ -664,8 +669,8 @@ TEST_CASE(
 
   const std::vector<HintCall>& calls = opened.reader->Calls();
   REQUIRE(calls.size() == 4);
-  const ULONGLONG first = Tests::FragmentedMftScanSlotOffset(90);
-  const ULONGLONG second = Tests::FragmentedMftScanSlotOffset(100);
+  const ULONGLONG first = TestFakeImage::FragmentedMftScanSlotOffset(90);
+  const ULONGLONG second = TestFakeImage::FragmentedMftScanSlotOffset(100);
   const ULONGLONG length = size_t{10} * 1024;
   CHECK(calls.at(0).kind == HintKind::PrefetchStanding);
   CHECK(calls.at(0).offset == first);
@@ -690,7 +695,7 @@ TEMPLATE_TEST_CASE_SIG(
   const auto counters = std::make_shared<ReadCounters>();
   const auto volume = OpenScanVolume<S>(scan_record_count, counters);
   const std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithFragmentedMftScan(scan_record_count);
+      TestFakeImage::BuildFakeNtfsImageWithFragmentedMftScan(scan_record_count);
   // Blocks of 16 slots.
   Mft::SlotReader<S> reader(*volume, size_t{16} * 1024);
 
@@ -701,17 +706,19 @@ TEMPLATE_TEST_CASE_SIG(
   CHECK(window->first <= asked);
   CHECK(asked < window->last);
   CHECK(window->bytes.size() ==
-        (window->last - window->first) * Tests::fake_file_record_size);
+        (window->last - window->first) * TestFakeImage::fake_file_record_size);
   // The window starts at the slot it says, and holds the bytes of the image.
-  const auto offset =
-      static_cast<size_t>(Tests::FragmentedMftScanSlotOffset(window->first));
-  CHECK(std::ranges::equal(window->bytes.first(Tests::fake_file_record_size),
-                           std::span<const BYTE>{image}.subspan(
-                               offset, Tests::fake_file_record_size)));
+  const auto offset = static_cast<size_t>(
+      TestFakeImage::FragmentedMftScanSlotOffset(window->first));
+  CHECK(std::ranges::equal(
+      window->bytes.first(TestFakeImage::fake_file_record_size),
+      std::span<const BYTE>{image}.subspan(
+          offset, TestFakeImage::fake_file_record_size)));
   // HeldSlot() serves the same bytes.
   CHECK(reader.HeldSlot(asked).data() ==
         window->bytes
-            .subspan((asked - window->first) * Tests::fake_file_record_size)
+            .subspan((asked - window->first) *
+                     TestFakeImage::fake_file_record_size)
             .data());
 }
 
@@ -777,9 +784,9 @@ TEST_CASE("SlotReader::ServeWindow() does not read again a window that failed",
   const auto volume = OpenScanVolume<S>(scan_record_count, counters);
   Mft::SlotReader<S> reader(*volume, size_t{16} * 1024);
   const auto first =
-      static_cast<LONGLONG>(Tests::FragmentedMftScanSlotOffset(40));
+      static_cast<LONGLONG>(TestFakeImage::FragmentedMftScanSlotOffset(40));
   counters->fail_begin = first;
-  counters->fail_end = first + Tests::fake_file_record_size;
+  counters->fail_end = first + TestFakeImage::fake_file_record_size;
 
   CHECK_FALSE(reader.ServeWindow(40));
   const size_t after_failure = counters->reads;

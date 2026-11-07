@@ -19,20 +19,21 @@
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/volume/volume-tree-support.h>
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 
 template <Cache::Strategy S>
 class NtfsVolume;
 
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
-using Tests::MemoryDiskReader;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
+using TestDiskReaders::MemoryDiskReader;
 
 namespace {
 
@@ -64,22 +65,24 @@ constexpr ULONGLONG fixed_address_records =
     static_cast<ULONGLONG>(Mft::Idx::User);
 
 // $MFT's declared size: more records than its extents map.
-constexpr ULONGLONG declared_mft_size = 40 * Tests::fake_file_record_size;
+constexpr ULONGLONG declared_mft_size =
+    40 * TestFakeImage::fake_file_record_size;
 
 // Records the split fixture maps: the base extent's VCN 0 and the
 // continuation's VCN mft_data_split_target_idx.
-constexpr ULONGLONG split_mapped_records = Tests::mft_data_split_target_idx + 1;
+constexpr ULONGLONG split_mapped_records =
+    TestFakeImage::mft_data_split_target_idx + 1;
 
 // Records the two-extents fixture maps: its second extent reaches VCN 32.
 constexpr ULONGLONG two_extents_mapped_records =
-    Tests::mft_two_extents_second_vcn + 1;
+    TestFakeImage::mft_two_extents_second_vcn + 1;
 
 // Declared record count below the two-extents fixture's mapped range.
 constexpr ULONGLONG truncated_records = 20;
 
 // Record the chain fixture's last continuation reaches, past every naively
 // reachable extent.
-constexpr ULONGLONG chain_target_idx = Tests::mft_chain_ext_a_start_vcn;
+constexpr ULONGLONG chain_target_idx = TestFakeImage::mft_chain_ext_a_start_vcn;
 
 // Sets $MFT's base DATA real_size, which GetRecordsCount() caps at.
 void SetMftRealSize(std::vector<BYTE>& image, ULONGLONG size) {
@@ -92,7 +95,7 @@ void SetMftRealSize(std::vector<BYTE>& image, ULONGLONG size) {
 // than its extents map.
 std::vector<BYTE> SplitImage() {
   std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList();
+      TestFakeImage::BuildFakeNtfsImageWithMftDataSplitAcrossAttributeList();
   SetMftRealSize(image, declared_mft_size);
   return image;
 }
@@ -101,7 +104,7 @@ std::vector<BYTE> SplitImage() {
 // real_size bytes long.
 std::vector<BYTE> TwoExtentsImage(ULONGLONG real_size = declared_mft_size) {
   std::vector<BYTE> image =
-      Tests::BuildFakeNtfsImageWithMftDataTwoExtentsInOneRecord();
+      TestFakeImage::BuildFakeNtfsImageWithMftDataTwoExtentsInOneRecord();
   SetMftRealSize(image, real_size);
   return image;
 }
@@ -129,18 +132,19 @@ void CheckSplitContinuationRefused(std::vector<BYTE> image) {
   const auto volume = Mount<S>(std::move(image));
 
   CHECK(volume->GetRecordsCount() == fixed_address_records);
-  CHECK_FALSE(CanReadRecord(*volume, Tests::mft_data_split_target_idx));
+  CHECK_FALSE(CanReadRecord(*volume, TestFakeImage::mft_data_split_target_idx));
 }
 
 // The DATA attribute of the split fixture's continuation record.
 size_t SplitContinuationAttr(const std::vector<BYTE>& image) {
-  return FirstAttr(image, Tests::mft_data_split_ext_idx, Attr::Type::Data);
+  return FirstAttr(image, TestFakeImage::mft_data_split_ext_idx,
+                   Attr::Type::Data);
 }
 
 // The two DATA extents of the two-extents fixture's continuation record.
 std::vector<size_t> TwoExtentsAttrs(const std::vector<BYTE>& image) {
-  std::vector<size_t> extents =
-      AttrOffsets(image, Tests::mft_two_extents_ext_idx, Attr::Type::Data);
+  std::vector<size_t> extents = AttrOffsets(
+      image, TestFakeImage::mft_two_extents_ext_idx, Attr::Type::Data);
   REQUIRE(extents.size() == 2);
   return extents;
 }
@@ -154,9 +158,9 @@ void SetVcnRange(std::vector<BYTE>& image, size_t attr, ULONGLONG lowest,
 
 // Zeroes the one cluster at lcn.
 void ZeroCluster(std::vector<BYTE>& image, DWORD lcn) {
-  const auto begin = static_cast<std::ptrdiff_t>(static_cast<size_t>(lcn) *
-                                                 Tests::fake_cluster_size);
-  std::fill_n(image.begin() + begin, Tests::fake_cluster_size, BYTE{0});
+  const auto begin = static_cast<std::ptrdiff_t>(
+      static_cast<size_t>(lcn) * TestFakeImage::fake_cluster_size);
+  std::fill_n(image.begin() + begin, TestFakeImage::fake_cluster_size, BYTE{0});
 }
 
 }  // namespace
@@ -165,13 +169,13 @@ TEMPLATE_TEST_CASE_SIG("$MFT counts only the records its extents map",
                        "[mft-extent-map]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   SECTION("base extent alone, declared size inside it") {
-    const auto volume = Mount<S>(Tests::BuildFakeNtfsImage());
+    const auto volume = Mount<S>(TestFakeImage::BuildFakeNtfsImage());
 
-    CHECK(volume->GetRecordsCount() == Tests::sentinel_record_count);
+    CHECK(volume->GetRecordsCount() == TestFakeImage::sentinel_record_count);
   }
 
   SECTION("base extent alone, declared size past the fixed records") {
-    std::vector<BYTE> image = Tests::BuildFakeNtfsImage();
+    std::vector<BYTE> image = TestFakeImage::BuildFakeNtfsImage();
     SetMftRealSize(image, declared_mft_size);
     const auto volume = Mount<S>(std::move(image));
 
@@ -182,20 +186,20 @@ TEMPLATE_TEST_CASE_SIG("$MFT counts only the records its extents map",
     const auto volume = Mount<S>(SplitImage());
 
     CHECK(volume->GetRecordsCount() == split_mapped_records);
-    CHECK(CanReadRecord(*volume, Tests::mft_data_split_target_idx));
+    CHECK(CanReadRecord(*volume, TestFakeImage::mft_data_split_target_idx));
   }
 
   SECTION("two extents in one record count through the last one") {
     const auto volume = Mount<S>(TwoExtentsImage());
 
     CHECK(volume->GetRecordsCount() == two_extents_mapped_records);
-    CHECK(CanReadRecord(*volume, Tests::mft_two_extents_first_vcn));
-    CHECK(CanReadRecord(*volume, Tests::mft_two_extents_second_vcn));
+    CHECK(CanReadRecord(*volume, TestFakeImage::mft_two_extents_first_vcn));
+    CHECK(CanReadRecord(*volume, TestFakeImage::mft_two_extents_second_vcn));
   }
 
   SECTION("a declared size below the mapped range caps the count") {
-    const auto volume = Mount<S>(
-        TwoExtentsImage(truncated_records * Tests::fake_file_record_size));
+    const auto volume = Mount<S>(TwoExtentsImage(
+        truncated_records * TestFakeImage::fake_file_record_size));
 
     CHECK(volume->GetRecordsCount() == truncated_records);
   }
@@ -234,11 +238,11 @@ TEMPLATE_TEST_CASE_SIG("$MFT rejects a DATA continuation it cannot map",
 
   SECTION("base last VCN that overflows a byte offset") {
     const auto volume =
-        Mount<S>(Tests::BuildFakeNtfsImageWithMftDataLastVcnOverflow());
+        Mount<S>(TestFakeImage::BuildFakeNtfsImageWithMftDataLastVcnOverflow());
 
     CHECK(volume->GetRecordsCount() == 1);
-    CHECK_FALSE(
-        CanReadRecord(*volume, Tests::mft_last_vcn_overflow_target_idx));
+    CHECK_FALSE(CanReadRecord(*volume,
+                              TestFakeImage::mft_last_vcn_overflow_target_idx));
   }
 
   SECTION("continuation overlapping the extent before it") {
@@ -246,10 +250,10 @@ TEMPLATE_TEST_CASE_SIG("$MFT rejects a DATA continuation it cannot map",
     SetVcnRange(image, TwoExtentsAttrs(image)[1], overlapping_start_vcn,
                 overlapping_start_vcn);
     // If the overlapping extent were accepted, VCN 16 would read this cluster.
-    ZeroCluster(image, Tests::mft_two_extents_second_lcn);
+    ZeroCluster(image, TestFakeImage::mft_two_extents_second_lcn);
     const auto volume = Mount<S>(std::move(image));
 
-    CHECK(CanReadRecord(*volume, Tests::mft_two_extents_first_vcn));
+    CHECK(CanReadRecord(*volume, TestFakeImage::mft_two_extents_first_vcn));
   }
 
   SECTION("continuation overlapping the extent after it") {
@@ -257,13 +261,14 @@ TEMPLATE_TEST_CASE_SIG("$MFT rejects a DATA continuation it cannot map",
     const std::vector<size_t> extents = TwoExtentsAttrs(image);
     // The record's first extent is added first, at VCN 32. The second one
     // then reaches VCN 40, past it, and is refused.
-    SetVcnRange(image, extents[0], Tests::mft_two_extents_second_vcn,
-                Tests::mft_two_extents_second_vcn);
+    SetVcnRange(image, extents[0], TestFakeImage::mft_two_extents_second_vcn,
+                TestFakeImage::mft_two_extents_second_vcn);
     Store<ULONGLONG>(image, extents[1] + attr_highest_vcn_field,
-                     Tests::mft_two_extents_second_vcn + 8);
+                     TestFakeImage::mft_two_extents_second_vcn + 8);
     const auto volume = Mount<S>(std::move(image));
 
-    CHECK_FALSE(CanReadRecord(*volume, Tests::mft_two_extents_first_vcn));
+    CHECK_FALSE(
+        CanReadRecord(*volume, TestFakeImage::mft_two_extents_first_vcn));
   }
 }
 
@@ -272,15 +277,15 @@ TEMPLATE_TEST_CASE_SIG("$MFT reads records through chained continuations",
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   SECTION("a continuation reached through another one") {
     const auto volume =
-        Mount<S>(Tests::BuildFakeNtfsImageWithMftDataExtentChain());
+        Mount<S>(TestFakeImage::BuildFakeNtfsImageWithMftDataExtentChain());
 
     CHECK(CanReadRecord(*volume, chain_target_idx));
   }
 
   SECTION("an unresolvable continuation beside a resolvable one") {
-    const auto volume =
-        Mount<S>(Tests::BuildFakeNtfsImageWithUnresolvableMftDataExtent());
+    const auto volume = Mount<S>(
+        TestFakeImage::BuildFakeNtfsImageWithUnresolvableMftDataExtent());
 
-    CHECK(CanReadRecord(*volume, Tests::mft_unresolvable_good_record));
+    CHECK(CanReadRecord(*volume, TestFakeImage::mft_unresolvable_good_record));
   }
 }

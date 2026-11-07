@@ -26,9 +26,8 @@ constexpr int repeated_walks = 20;
 
 TEST_CASE("FullCache repeated walk stays under the ceiling",
           "[cache][walk][regression]") {
-  const std::vector<BYTE> image =
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithManyIndexBlocks(
-          walk_index_blocks);
+  const std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+      BuildFakeNtfsImageWithManyIndexBlocks(walk_index_blocks);
   const auto volume = OpenWalkVolume<Cache::Strategy::FullCache>(
       image, WalkOptions(walk_tiny_ceiling));
   const std::vector<std::wstring> expected = ExpectedWalkNames();
@@ -42,9 +41,8 @@ TEST_CASE("FullCache repeated walk stays under the ceiling",
 
 TEST_CASE("FullCache repeated walk grows past the ceiling without one",
           "[cache][walk][regression]") {
-  const std::vector<BYTE> image =
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithManyIndexBlocks(
-          walk_index_blocks);
+  const std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+      BuildFakeNtfsImageWithManyIndexBlocks(walk_index_blocks);
   const auto volume = OpenWalkVolume<Cache::Strategy::FullCache>(
       image, WalkOptions(Cache::unlimited_bytes));
   const std::vector<std::wstring> expected = ExpectedWalkNames();

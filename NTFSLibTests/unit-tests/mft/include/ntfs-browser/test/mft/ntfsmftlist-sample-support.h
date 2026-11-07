@@ -28,10 +28,11 @@ inline SampleRun RunMftList(const std::vector<std::wstring>& args) {
 struct TempTreeImage final {
   std::filesystem::path path;
 
-  TempTreeImage() : TempTreeImage(BuildFakeNtfsImageWithMftTree()) {}
+  TempTreeImage()
+      : TempTreeImage(Test::FakeImage::BuildFakeNtfsImageWithMftTree()) {}
 
   explicit TempTreeImage(const std::vector<BYTE>& image)
-      : path(WriteFakeNtfsImage(image)) {}
+      : path(Test::FakeImage::WriteFakeNtfsImage(image)) {}
 
   ~TempTreeImage() {
     std::error_code ignored;

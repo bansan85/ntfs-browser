@@ -29,13 +29,13 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Mft::MftTree;
-using NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithNameTree;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithNameTree;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeTreeLink;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeTreeNode;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::MakeNameChain;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::name_tree_root;
 using NTFS_BROWSER_NAMESPACE::Tests::ExoticNames;
-using NTFS_BROWSER_NAMESPACE::Tests::FakeTreeLink;
-using NTFS_BROWSER_NAMESPACE::Tests::FakeTreeNode;
 using NTFS_BROWSER_NAMESPACE::Tests::FillerName;
-using NTFS_BROWSER_NAMESPACE::Tests::MakeNameChain;
-using NTFS_BROWSER_NAMESPACE::Tests::name_tree_root;
 using NTFS_BROWSER_NAMESPACE::Tests::NameTreeRecord;
 using NTFS_BROWSER_NAMESPACE::Tests::OpenNameTreeVolume;
 
@@ -295,7 +295,7 @@ TEST_CASE(
       depth, [](std::size_t) { return std::wstring(L"d"); }, L"leaf.txt"));
   // The journal names ghost.bin in the deepest directory, which no record
   // accounts for.
-  NTFS_BROWSER_NAMESPACE::Tests::PutUsnJournal(
+  NTFS_BROWSER_NAMESPACE::Test::FakeImage::PutUsnJournal(
       image, {.records = {{.name = L"ghost.bin",
                            .file_record = NameTreeRecord(depth + 5),
                            .file_sequence = 2,
@@ -303,7 +303,8 @@ TEST_CASE(
                            .parent_sequence = 1,
                            .reason = 0x80000200}}});
   const NTFS_BROWSER_NAMESPACE::NtfsVolume<Cache::Strategy::NoCache> volume(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
           std::move(image)),
       VolumeOptions{.include_deleted = true, .recover_errors = true});
   REQUIRE(volume.IsVolumeOK());

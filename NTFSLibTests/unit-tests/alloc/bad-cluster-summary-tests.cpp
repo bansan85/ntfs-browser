@@ -22,11 +22,11 @@
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
-using Tests::FakeBitmapOptions;
-using Tests::FakeBitmapShape;
-using Tests::FakeDataRun;
+using TestFakeImage::FakeBitmapOptions;
+using TestFakeImage::FakeBitmapShape;
+using TestFakeImage::FakeDataRun;
 
 namespace {
 
@@ -45,7 +45,7 @@ const std::vector<Alloc::Extent> bad_clear{{.lcn = 60, .clusters = 1}};
 std::vector<BYTE> Image(std::span<const Alloc::Extent> bad,
                         std::span<const Alloc::Extent> marked) {
   std::vector<BYTE> image =
-      Support::WithBitmap(Tests::BuildFakeNtfsImageWithFreedFileTree(),
+      Support::WithBitmap(TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(),
                           Support::WithBadRuns(allocated_runs, marked));
   if (!bad.empty()) {
     image = Support::WithBadClusters(std::move(image), bad);
@@ -71,7 +71,7 @@ void CheckBadClustersAreReportedApart() {
 
   CHECK(with_list->total_clusters == plain->total_clusters);
   CHECK(with_list->bad_clusters == 3);
-  CHECK(with_list->bad_bytes == 3 * Tests::fake_cluster_size);
+  CHECK(with_list->bad_bytes == 3 * TestFakeImage::fake_cluster_size);
   // 45 and 46 were allocated in the plain image's own bitmap as well, and are
   // not free in either. 60 was free there and is bad here.
   CHECK(with_list->unknown_clusters == plain->unknown_clusters);
@@ -104,9 +104,10 @@ void CheckAShortBitmapDoesNotHideABadCluster() {
   // A bitmap of 4 bytes covers clusters 0 to 31 of a volume of 64 or more.
   const std::vector<Alloc::Extent> past{{.lcn = 45, .clusters = 2}};
   const auto build = [&](std::span<const Alloc::Extent> bad) {
-    std::vector<BYTE> image = Tests::BuildFakeNtfsImageWithFreedFileTree();
+    std::vector<BYTE> image =
+        TestFakeImage::BuildFakeNtfsImageWithFreedFileTree();
     const std::vector<BYTE> bits(4, 0);
-    Tests::PutClusterBitmap(image, bits, {.pad_to_volume = false});
+    TestFakeImage::PutClusterBitmap(image, bits, {.pad_to_volume = false});
     if (!bad.empty()) {
       image = Support::WithBadClusters(std::move(image), bad);
     }
@@ -127,7 +128,7 @@ template <Cache::Strategy S>
 void CheckAnUnusableBitmapGivesNoReport() {
   // Record 6 is zero-filled in the freed tree: there is no bitmap.
   const std::vector<BYTE> image = Support::WithBadClusters(
-      Tests::BuildFakeNtfsImageWithFreedFileTree(), bad_marked);
+      TestFakeImage::BuildFakeNtfsImageWithFreedFileTree(), bad_marked);
   const auto opened = Support::OpenVolume<S>(image);
 
   CHECK_FALSE(opened.volume->GetSpaceSummary());

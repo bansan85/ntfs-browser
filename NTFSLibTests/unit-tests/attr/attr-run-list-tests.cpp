@@ -35,7 +35,7 @@ using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-using NTFS_BROWSER_NAMESPACE::Tests::FakeRunHost;
+using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeRunHost;
 
 namespace {
 
@@ -52,7 +52,7 @@ size_t MftBaseRecordOffset(const std::vector<BYTE>& image) {
   NTFS_BROWSER_NAMESPACE::Data::NtfsBpb bpb{};
   std::memcpy(&bpb, image.data(), sizeof(bpb));
   return static_cast<size_t>(bpb.lcn_mft) *
-         NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size;
+         NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size;
 }
 
 // Rewrites the second extent's run as sparse: one cluster with no LCN.
@@ -86,44 +86,47 @@ TEMPLATE_TEST_CASE_SIG(
     "A sparse run in a merged $MFT extent yields no records from that extent",
     "[attr-run-list][characterization]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::
+  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
       BuildFakeNtfsImageWithMftDataTwoExtentsInOneRecord();
   {
     const NtfsVolume<S> volume(
-        std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+        std::make_unique<
+            NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
             image));
     REQUIRE(volume.IsVolumeOK());
     FileRecord<S> record(volume);
     CHECK(record.ParseFileRecord(
-        NTFS_BROWSER_NAMESPACE::Tests::mft_two_extents_second_vcn));
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_two_extents_second_vcn));
   }
 
   MakeSecondExtentSparse(image);
   (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
   const NtfsVolume<S> volume(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(image));
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(image));
   REQUIRE(volume.IsVolumeOK());
   CHECK_THAT(NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog(),
              Catch::Matchers::ContainsSubstring("Sparse Data"));
 
   FileRecord<S> first(volume);
   CHECK(first.ParseFileRecord(
-      NTFS_BROWSER_NAMESPACE::Tests::mft_two_extents_first_vcn));
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_two_extents_first_vcn));
   FileRecord<S> second(volume);
   CHECK_FALSE(second.ParseFileRecord(
-      NTFS_BROWSER_NAMESPACE::Tests::mft_two_extents_second_vcn));
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_two_extents_second_vcn));
 }
 
 TEMPLATE_TEST_CASE_SIG(
     "A sparse tail does not count towards the $MFT's mapped records",
     "[attr-run-list][characterization]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Tests::
+  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
       BuildFakeNtfsImageWithMftDataTwoExtentsInOneRecord();
   ClaimMftSize(image, claimed_mft_size);
   {
     const NtfsVolume<S> volume(
-        std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+        std::make_unique<
+            NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
             image));
     REQUIRE(volume.IsVolumeOK());
     // Mapped through VCN 32 (33 clusters of 1 KiB), one record per 1 KiB.
@@ -132,7 +135,8 @@ TEMPLATE_TEST_CASE_SIG(
 
   MakeSecondExtentSparse(image);
   const NtfsVolume<S> volume(
-      std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(image));
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(image));
   REQUIRE(volume.IsVolumeOK());
   // The sparse extent now stops at VCN 32, one record short.
   CHECK(volume.GetRecordsCount() == 32);
@@ -143,22 +147,24 @@ TEMPLATE_TEST_CASE_SIG(
     "[attr-run-list][characterization]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   const auto overflow = [] {
-    return NTFS_BROWSER_NAMESPACE::Tests::
+    return NTFS_BROWSER_NAMESPACE::Test::FakeImage::
         BuildFakeNtfsImageWithOverflowingLcnSum(FakeRunHost::Data);
   };
   const auto negative = [] {
-    return NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithNegativeLcn(
-        FakeRunHost::Data);
+    return NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+        BuildFakeNtfsImageWithNegativeLcn(FakeRunHost::Data);
   };
   const auto bad_bound = [] {
-    return NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithBadDataRun();
+    return NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+        BuildFakeNtfsImageWithBadDataRun();
   };
 
   // Parses the root record's $DATA and returns the messages logged meanwhile.
   const auto parse_log = [](std::vector<BYTE> image, VolumeOptions options) {
     (void)NTFS_BROWSER_NAMESPACE::Tests::TakeCapturedLog();
     const NtfsVolume<S> volume(
-        std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
+        std::make_unique<
+            NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
             std::move(image)),
         options);
     REQUIRE(volume.IsVolumeOK());
@@ -201,9 +207,10 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   SECTION("strict: the whole attribute is rejected") {
     const NtfsVolume<S> volume(
-        std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-            NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithNegativeLcn(
-                FakeRunHost::Data)));
+        std::make_unique<
+            NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+            NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                BuildFakeNtfsImageWithNegativeLcn(FakeRunHost::Data)));
     REQUIRE(volume.IsVolumeOK());
 
     FileRecord<S> record(volume);
@@ -214,9 +221,10 @@ TEMPLATE_TEST_CASE_SIG(
 
   SECTION("recovering: the attribute is kept, with no run mapped") {
     const NtfsVolume<S> volume(
-        std::make_unique<NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader>(
-            NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithNegativeLcn(
-                FakeRunHost::Data)),
+        std::make_unique<
+            NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+            NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                BuildFakeNtfsImageWithNegativeLcn(FakeRunHost::Data)),
         VolumeOptions{.recover_errors = true});
     REQUIRE(volume.IsVolumeOK());
 
@@ -228,7 +236,8 @@ TEMPLATE_TEST_CASE_SIG(
     REQUIRE(data_attrs.size() == 1);
 
     // The only run failed to decode, so cluster 0 is unmapped.
-    std::vector<BYTE> buffer(NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
+    std::vector<BYTE> buffer(
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size);
     // The REQUIRE above checks the size of dataAttrs.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK_FALSE(data_attrs[0]->ReadData(0, buffer).has_value());

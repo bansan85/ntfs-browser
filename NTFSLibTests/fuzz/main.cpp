@@ -32,8 +32,8 @@
 #include <ntfs-browser/volume-options.h>
 
 using namespace NTFS_BROWSER_NAMESPACE;
-using NTFS_BROWSER_NAMESPACE::Tests::MakeGeneratorProducer;
-using NTFS_BROWSER_NAMESPACE::Tests::SequentialDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MakeGeneratorProducer;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::SequentialDiskReader;
 
 namespace {
 
@@ -165,7 +165,7 @@ constexpr std::array<VolumeOptions, 2> volume_option_modes{
 // both the strict and recovering code paths are exercised.
 void FuzzOnce(unsigned seed) {
   for (const VolumeOptions& options : volume_option_modes) {
-    NtfsVolume<Cache::Strategy::NoCache> volume(
+    NtfsVolume<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache> volume(
         std::make_unique<SequentialDiskReader>(MakeRandomProducer(seed)),
         options);
     if (!volume.IsVolumeOK()) {
@@ -173,8 +173,10 @@ void FuzzOnce(unsigned seed) {
     }
 
     NTFS_BROWSER_NAMESPACE::Io::FileRecord fr(volume);
-    fr.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
-    if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root))) {
+    fr.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                   NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+    if (!fr.ParseFileRecord(
+            static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root))) {
       // file_record_ is guaranteed empty here, exercising IsDeleted()/
       // IsDirectory()'s guard against it.
       (void)fr.IsDeleted();
@@ -238,7 +240,7 @@ void InstallFailureHandlers() {
 // The parsed command line: the --log settings, and the operands that remain
 // once those are removed. argv[0] is not an operand.
 struct Arguments {
-  Log::Config log_config;
+  NTFS_BROWSER_NAMESPACE::Log::Config log_config;
   std::vector<wchar_t*> operands;
 };
 
@@ -246,11 +248,13 @@ struct Arguments {
 std::optional<Arguments> ParseArguments(int argc, wchar_t* argv[]) {
   Arguments args;
   for (int i = 1; i < argc; i++) {
-    if (std::wstring_view(argv[i]).starts_with(Log::option_prefix_w)) {
-      if (!Log::ParseOption(argv[i], args.log_config)) {
+    if (std::wstring_view(argv[i]).starts_with(
+            NTFS_BROWSER_NAMESPACE::Log::option_prefix_w)) {
+      if (!NTFS_BROWSER_NAMESPACE::Log::ParseOption(argv[i], args.log_config)) {
         fprintf(stderr, "usage: %ls [--log=...] [iterations | --seed <seed>]\n",
                 argv[0]);
-        fprintf(stderr, "  %s\n", std::string(Log::option_usage).c_str());
+        fprintf(stderr, "  %s\n",
+                std::string(NTFS_BROWSER_NAMESPACE::Log::option_usage).c_str());
         return std::nullopt;
       }
       continue;
@@ -324,7 +328,7 @@ int wmain(int argc, wchar_t* argv[]) {
   if (!args) {
     return 1;
   }
-  if (!Log::Configure(args->log_config)) {
+  if (!NTFS_BROWSER_NAMESPACE::Log::Configure(args->log_config)) {
     fprintf(stderr, "Cannot open log file %ls\n",
             args->log_config.file_path.c_str());
   }

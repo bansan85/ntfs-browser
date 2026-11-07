@@ -17,9 +17,10 @@
 #include "fuzz-input-writer.h"
 
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
-using Tests::FakeNameTreeOptions;
-using Tests::FakeTreeNode;
+using TestFakeImage::FakeNameTreeOptions;
+using TestFakeImage::FakeTreeNode;
 
 namespace {
 
@@ -52,8 +53,8 @@ std::vector<FakeTreeNode> Twins() {
 // upcased.
 std::vector<Variant> Variants() {
   std::vector<Variant> variants;
-  variants.push_back(
-      {"case_twin_root", Tests::BuildFakeNtfsImageWithNameTree(Twins())});
+  variants.push_back({"case_twin_root",
+                      TestFakeImage::BuildFakeNtfsImageWithNameTree(Twins())});
 
   // Fillers that sort before the twins push them from block to block: the
   // separators of the root then fall on each of them in turn.
@@ -65,14 +66,14 @@ std::vector<Variant> Variants() {
           std::to_wstring(index)));
     }
     variants.push_back({"case_twin_blocks_" + std::to_string(fillers),
-                        Tests::BuildFakeNtfsImageWithNameTree(nodes)});
+                        TestFakeImage::BuildFakeNtfsImageWithNameTree(nodes)});
   }
 
   // The index still names a freed Report.txt, which sorts before the live
   // report.txt.
   variants.push_back(
       {"case_twin_stale_exact",
-       Tests::BuildFakeNtfsImageWithNameTree(std::vector<FakeTreeNode>{
+       TestFakeImage::BuildFakeNtfsImageWithNameTree(std::vector<FakeTreeNode>{
            {.links = {{.name = L"Report.txt", .name_space = 0}},
             .in_use = false,
             .keep_entries = true},
@@ -82,7 +83,7 @@ std::vector<Variant> Variants() {
   // scan that follows takes the exact spelling.
   variants.push_back(
       {"case_twin_unordered",
-       Tests::BuildFakeNtfsImageWithNameTree(
+       TestFakeImage::BuildFakeNtfsImageWithNameTree(
            std::vector<FakeTreeNode>{PosixFile(L"zzz"), PosixFile(L"README"),
                                      PosixFile(L"readme")},
            FakeNameTreeOptions{.collate = false})});
@@ -90,7 +91,7 @@ std::vector<Variant> Variants() {
   // One file with the hard links x and X.
   variants.push_back(
       {"case_twin_hard_links",
-       Tests::BuildFakeNtfsImageWithNameTree(std::vector<FakeTreeNode>{
+       TestFakeImage::BuildFakeNtfsImageWithNameTree(std::vector<FakeTreeNode>{
            {.links = {{.name = L"x", .name_space = 0},
                       {.name = L"X", .name_space = 0}}}})});
   return variants;

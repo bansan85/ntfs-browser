@@ -29,7 +29,7 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
-using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
 using NTFS_BROWSER_NAMESPACE::Tests::ScratchRecord;
 
 namespace {
@@ -62,8 +62,9 @@ Alloc::StreamExtents ExtentsOf(std::vector<BYTE> runs, ULONGLONG clusters,
   runs.push_back(0);
   ScratchRecord scratch;
   scratch
-      .NonResident(Attr::Type::Data, runs, clusters,
-                   clusters * NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size)
+      .NonResident(
+          Attr::Type::Data, runs, clusters,
+          clusters * NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size)
       .End();
   const NtfsVolume<S> volume(
       std::make_unique<MemoryDiskReader>(scratch.ImageIn()),

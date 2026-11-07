@@ -46,7 +46,7 @@ namespace {
 
 // Fake images put $MFT at LCN 1, so record 0 starts one cluster into the image.
 constexpr size_t fake_mft_offset =
-    NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size;
+    NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size;
 
 // Byte offset of the first attribute field in a file record header.
 constexpr size_t record_first_attr_field = 0x14;
@@ -103,7 +103,7 @@ void WriteAt(std::vector<BYTE>& image, size_t offset, T value) {
 size_t RecordOffset(ULONGLONG idx) {
   return fake_mft_offset +
          static_cast<size_t>(
-             NTFS_BROWSER_NAMESPACE::Tests::fake_file_record_size) *
+             NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_file_record_size) *
              static_cast<size_t>(idx);
 }
 
@@ -189,10 +189,11 @@ void WriteValidIndexBlock(std::vector<BYTE>& image, size_t block) {
 // Forged-index-block image with a valid block behind the directory's sub-node
 // entry.
 std::vector<BYTE> ImageWithValidIndexBlock() {
-  std::vector<BYTE> image =
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithForgedIndexBlock();
+  std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+      BuildFakeNtfsImageWithForgedIndexBlock();
   const size_t block =
-      index_block_lcn * NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size;
+      index_block_lcn *
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size;
   WriteValidIndexBlock(image, block);
   return image;
 }
@@ -206,12 +207,14 @@ size_t RootSubNodeVcnSlot(const std::vector<BYTE>& image, ULONGLONG idx) {
 
 // Byte offset of the index block in a forged-index-block image.
 size_t IndexBlockOffset() {
-  return index_block_lcn * NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size;
+  return index_block_lcn *
+         NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size;
 }
 
 // Byte offset of the non-resident $INDEX_ALLOCATION of the forged directory.
 size_t ForgedAllocAttr(const std::vector<BYTE>& image) {
-  return FindAttr(image, NTFS_BROWSER_NAMESPACE::Tests::index_alloc_dir_idx,
+  return FindAttr(image,
+                  NTFS_BROWSER_NAMESPACE::Test::FakeImage::index_alloc_dir_idx,
                   Attr::Type::IndexAllocation);
 }
 
@@ -234,13 +237,13 @@ void CheckStrictRejectsRecoveringAccepts(const std::vector<BYTE>& image,
 
 // The fake image with the $INDEX_ROOT variants.
 std::vector<BYTE> IndexRootImage() {
-  return NTFS_BROWSER_NAMESPACE::Tests::
+  return NTFS_BROWSER_NAMESPACE::Test::FakeImage::
       BuildFakeNtfsImageWithIndexRootVariants();
 }
 
 // The fake image with a forged $INDEX_ALLOCATION directory.
 std::vector<BYTE> ForgedBlockImage() {
-  return NTFS_BROWSER_NAMESPACE::Tests::
+  return NTFS_BROWSER_NAMESPACE::Test::FakeImage::
       BuildFakeNtfsImageWithForgedIndexBlock();
 }
 
@@ -248,11 +251,12 @@ std::vector<BYTE> ForgedBlockImage() {
 template <Cache::Strategy S>
 void CheckBlockEntryHidden(std::vector<BYTE> image) {
   auto parsed = OpenRecord<S>(
-      std::move(image), NTFS_BROWSER_NAMESPACE::Tests::index_alloc_dir_idx);
+      std::move(image),
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::index_alloc_dir_idx);
   REQUIRE(parsed.record->ParseAttrs());
   CHECK_FALSE(parsed.record
-                  ->FindSubEntry(
-                      NTFS_BROWSER_NAMESPACE::Tests::index_root_variant_a_name)
+                  ->FindSubEntry(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                                     index_root_variant_a_name)
                   .has_value());
 }
 
@@ -281,7 +285,7 @@ TEMPLATE_TEST_CASE_SIG(
     ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
   const ULONGLONG idx =
-      NTFS_BROWSER_NAMESPACE::Tests::index_root_variant_a_dir_idx;
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::index_root_variant_a_dir_idx;
 
   SECTION("entry_offset points past the attribute") {
     CheckRootDamage<S>(idx, [&](std::vector<BYTE>& image) {
@@ -344,11 +348,10 @@ TEMPLATE_TEST_CASE_SIG(
 
     auto parsed = OpenRecord<S>(image, idx);
     CHECK(parsed.record->ParseAttrs());
-    CHECK_FALSE(
-        parsed.record
-            ->FindSubEntry(
-                NTFS_BROWSER_NAMESPACE::Tests::index_root_variant_a_name)
-            .has_value());
+    CHECK_FALSE(parsed.record
+                    ->FindSubEntry(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                                       index_root_variant_a_name)
+                    .has_value());
   }
 }
 
@@ -356,7 +359,8 @@ TEMPLATE_TEST_CASE_SIG(
     "A malformed $INDEX_ALLOCATION block is rejected or salvaged", "[cov-nri]",
     ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  const ULONGLONG idx = NTFS_BROWSER_NAMESPACE::Tests::index_alloc_dir_idx;
+  const ULONGLONG idx =
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::index_alloc_dir_idx;
 
   SECTION("a sub-node VCN that overflows the byte offset") {
     CheckBlockDamage<S>([&](std::vector<BYTE>& image) {
@@ -435,7 +439,8 @@ TEMPLATE_TEST_CASE_SIG(
       WriteAt<ULONGLONG>(
           image,
           ForgedAllocAttr(image) + offsetof(Data::HeaderNonResident, real_size),
-          test_block_size + NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
+          test_block_size +
+              NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size);
     });
   }
 }
@@ -444,7 +449,8 @@ TEMPLATE_TEST_CASE_SIG(
     "A malformed $INDEX_ALLOCATION data run is rejected or salvaged",
     "[cov-nri]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
-  const ULONGLONG idx = NTFS_BROWSER_NAMESPACE::Tests::index_alloc_dir_idx;
+  const ULONGLONG idx =
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::index_alloc_dir_idx;
 
   SECTION("a run header whose length field exceeds 8 bytes") {
     auto image = ForgedBlockImage();
@@ -485,8 +491,9 @@ TEMPLATE_TEST_CASE_SIG(
     "[cov-nri]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
     Cache::Strategy::FullCache) {
   auto parsed = OpenRecord<S>(
-      NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithForgedIndexBlock(),
-      NTFS_BROWSER_NAMESPACE::Tests::index_alloc_dir_idx);
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+          BuildFakeNtfsImageWithForgedIndexBlock(),
+      NTFS_BROWSER_NAMESPACE::Test::FakeImage::index_alloc_dir_idx);
   REQUIRE(parsed.record->ParseAttrs());
   const auto& alloc = parsed.record->GetAttr(Attr::Type::IndexAllocation);
   REQUIRE(alloc.size() == 1);
@@ -516,7 +523,8 @@ TEMPLATE_TEST_CASE_SIG(
                        declared_size);
 
     auto parsed = OpenRecord<S>(
-        std::move(image), NTFS_BROWSER_NAMESPACE::Tests::index_alloc_dir_idx);
+        std::move(image),
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::index_alloc_dir_idx);
     REQUIRE(parsed.record->ParseAttrs());
     const auto& alloc = parsed.record->GetAttr(Attr::Type::IndexAllocation);
     REQUIRE(alloc.size() == 1);
@@ -529,14 +537,15 @@ TEMPLATE_TEST_CASE_SIG(
   // $DATA stream before any unit is read.
 #ifdef NTFS_BROWSER_ENABLE_DECOMPRESSION
   SECTION("a compressed unit") {
-    std::vector<BYTE> image =
-        NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithCompressedFile();
+    std::vector<BYTE> image = NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+        BuildFakeNtfsImageWithCompressedFile();
     constexpr ULONGLONG root_record_idx = 5;
     const size_t attr = FindAttr(image, root_record_idx, Attr::Type::Data);
     const auto last_vcn = ReadAt<ULONGLONG>(
         image, attr + offsetof(Data::HeaderNonResident, last_vcn));
     const ULONGLONG declared_size =
-        (last_vcn + 2) * NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size;
+        (last_vcn + 2) *
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size;
     WriteAt<ULONGLONG>(image,
                        attr + offsetof(Data::HeaderNonResident, real_size),
                        declared_size);
@@ -549,12 +558,14 @@ TEMPLATE_TEST_CASE_SIG(
     const auto& data = parsed.record->GetAttr(Attr::Type::Data);
     REQUIRE(data.size() == 1);
 
-    std::vector<BYTE> buffer(NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size);
+    std::vector<BYTE> buffer(
+        NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size);
     CHECK_FALSE(
         data[0]
-            ->ReadData((last_vcn + 1) *
-                           NTFS_BROWSER_NAMESPACE::Tests::fake_cluster_size,
-                       buffer)
+            ->ReadData(
+                (last_vcn + 1) *
+                    NTFS_BROWSER_NAMESPACE::Test::FakeImage::fake_cluster_size,
+                buffer)
             .has_value());
   }
 #endif

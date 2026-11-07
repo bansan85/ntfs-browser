@@ -18,7 +18,7 @@ namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 using NTFS_BROWSER_NAMESPACE::Mft::MftTree;
-using NTFS_BROWSER_NAMESPACE::Tests::MemoryDiskReader;
+using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
 
 namespace {
 
@@ -34,7 +34,8 @@ template <Cache::Strategy S>
 std::unique_ptr<NtfsVolume<S>> OpenTreeVolume(std::uint64_t max_cache_bytes) {
   auto volume = std::make_unique<NtfsVolume<S>>(
       std::make_unique<MemoryDiskReader>(
-          NTFS_BROWSER_NAMESPACE::Tests::BuildFakeNtfsImageWithMftTree()),
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+              BuildFakeNtfsImageWithMftTree()),
       VolumeOptions{.include_deleted = true,
                     .max_cache_bytes = max_cache_bytes});
   REQUIRE(volume->IsVolumeOK());

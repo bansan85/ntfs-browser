@@ -33,6 +33,7 @@ namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace DirSample = NTFS_BROWSER_NAMESPACE::Tests::DirSample;
 namespace MftListSample = NTFS_BROWSER_NAMESPACE::Tests::MftListSample;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using Catch::Matchers::ContainsSubstring;
 using NtfsDevice::JsonValue;
@@ -95,8 +96,8 @@ std::wstring Option(std::wstring_view name, const std::filesystem::path& path) {
 }
 
 std::vector<BYTE> ListImage() {
-  return Tests::BuildFakeNtfsImageWithListMftScan(list_record_count,
-                                                  list_fragment_clusters);
+  return TestFakeImage::BuildFakeNtfsImageWithListMftScan(
+      list_record_count, list_fragment_clusters);
 }
 
 // text with every spelling of path replaced by a placeholder: NtfsDir prints
@@ -191,7 +192,7 @@ TEST_CASE("NtfsMftList on its capture image lists what it listed on the image",
   const bool big = GENERATE(false, true);
   INFO("deleted " << deleted << ", list image " << big);
   const std::vector<BYTE> original =
-      big ? ListImage() : Tests::BuildFakeNtfsImageWithMftTree();
+      big ? ListImage() : TestFakeImage::BuildFakeNtfsImageWithMftTree();
   const MftListSample::TempTreeImage image(original);
   const Tests::TempDir dir;
   const std::filesystem::path capture = dir.Path() / "capture.img";
@@ -232,8 +233,9 @@ TEST_CASE("NtfsDir on its capture image lists what it listed on the image",
           "[device-access][capture][sample]") {
   const bool deleted = GENERATE(false, true);
   INFO("deleted " << deleted);
-  const std::vector<BYTE> original = Tests::BuildFakeNtfsImageWithReportName(
-      L"report.txt", Tests::dump_broken_alter_time);
+  const std::vector<BYTE> original =
+      TestFakeImage::BuildFakeNtfsImageWithReportName(
+          L"report.txt", TestFakeImage::dump_broken_alter_time);
   const DirSample::TempImage image(original);
   const Tests::TempDir dir;
   const std::filesystem::path capture = dir.Path() / "capture.img";

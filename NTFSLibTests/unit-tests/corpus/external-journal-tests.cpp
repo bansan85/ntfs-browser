@@ -36,6 +36,7 @@ namespace {
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Usn = NTFS_BROWSER_NAMESPACE::Usn;
 namespace RealJournal = NTFS_BROWSER_NAMESPACE::Tests::RealJournal;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
@@ -49,7 +50,7 @@ using Tests::RequireCorpusFile;
 using Tests::UsnSupport::RecoverOptions;
 
 // Bytes of a cluster of the fake volume: the unit of a sparse head.
-constexpr ULONGLONG cluster_bytes = Tests::fake_cluster_size;
+constexpr ULONGLONG cluster_bytes = TestFakeImage::fake_cluster_size;
 
 // Ticks (100 ns) in one microsecond.
 constexpr std::uint64_t ticks_per_microsecond = 10;

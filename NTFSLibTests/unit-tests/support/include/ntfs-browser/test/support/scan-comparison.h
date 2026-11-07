@@ -8,13 +8,13 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
 
-namespace NtfsBrowser {
+namespace NTFS_BROWSER_NAMESPACE {
 namespace Mft {
 
 class MftTree;
 
 }  // namespace Mft
-}  // namespace NtfsBrowser
+}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Tests {
 
@@ -24,7 +24,7 @@ namespace NTFS_BROWSER_NAMESPACE::Tests {
 struct ScanResult {
   std::string tree;
   std::string log;
-  std::vector<CountingDiskReader::Call> calls;
+  std::vector<Test::DiskReaders::CountingDiskReader::Call> calls;
   // Slots the scan took from the threads that parsed them.
   size_t parsed_by_threads{0};
   // Waiting base records of the second pass, taken from the threads too.
@@ -58,14 +58,14 @@ void CheckSameScan(const ScanResult& one, const ScanResult& many);
 [[nodiscard]] ScanResult
     CaptureScan(const NTFS_BROWSER_NAMESPACE::NtfsVolume<
                     NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>& volume,
-                const CountingDiskReader* reader, unsigned threads,
-                size_t progress_stops_at = 0);
+                const Test::DiskReaders::CountingDiskReader* reader,
+                unsigned threads, size_t progress_stops_at = 0);
 
 // Same for a FullCache volume.
 [[nodiscard]] ScanResult
     CaptureScan(const NTFS_BROWSER_NAMESPACE::NtfsVolume<
                     NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>& volume,
-                const CountingDiskReader* reader, unsigned threads,
-                size_t progress_stops_at = 0);
+                const Test::DiskReaders::CountingDiskReader* reader,
+                unsigned threads, size_t progress_stops_at = 0);
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Tests

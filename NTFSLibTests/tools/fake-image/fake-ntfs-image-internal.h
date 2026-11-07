@@ -42,12 +42,10 @@ struct FileRecordHeader;
 }  // namespace Data
 }  // namespace NTFS_BROWSER_NAMESPACE
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage {
 
-namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 using NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader;
 using NTFS_BROWSER_NAMESPACE::Data::index_block_magic;
-namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 
 // Reuses fake-ntfs-image.h's geometry, so fixture constants declared there
 // (eg. compression_unit_size) can be sized in real clusters.
@@ -127,12 +125,13 @@ inline constexpr WORD root_sequence_number = 5;
 // The file reference entries use to name the root directory (#5) as their
 // parent, carrying root_sequence_number.
 inline constexpr ULONGLONG root_file_reference = MakeFileReference(
-    static_cast<ULONGLONG>(Mft::Idx::Root), root_sequence_number);
+    static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root),
+    root_sequence_number);
 
 // The root directory's record number alone, with sequence 0: what a parent
 // field holds when a fixture does not care about the generation.
 inline constexpr ULONGLONG bare_root_reference =
-    static_cast<ULONGLONG>(Mft::Idx::Root);
+    static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root);
 
 // Byte address of $MFT's first record: $MFT sits at mft_lcn.
 inline constexpr DWORD mft_address = static_cast<DWORD>(mft_lcn) * cluster_size;
@@ -189,12 +188,14 @@ void PadToFullCacheRead(std::vector<BYTE>& image, size_t end);
 // Starts a resident attribute of type at record[offset]: the common header
 // fields, and the value right after the header. The caller sets its sizes.
 NTFS_BROWSER_NAMESPACE::Data::HeaderResident&
-    InitResidentAttr(FakeRecord& record, DWORD offset, Attr::Type type);
+    InitResidentAttr(FakeRecord& record, DWORD offset,
+                     NTFS_BROWSER_NAMESPACE::Attr::Type type);
 
 // Starts a non-resident attribute of type at record[offset]: the common header
 // fields. The caller sets its VCN range, sizes and run list.
 NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident&
-    InitNonResidentAttr(FakeRecord& record, DWORD offset, Attr::Type type);
+    InitNonResidentAttr(FakeRecord& record, DWORD offset,
+                        NTFS_BROWSER_NAMESPACE::Attr::Type type);
 
 // Writes a run list of one run of clusters clusters at lcn, with the 4-byte
 // LCN encoding, then the terminator, at the start of data_run. Returns the
@@ -310,7 +311,8 @@ DWORD WriteFileNameIndexRootAttr(FakeRecord& record, DWORD offset,
 // Writes one non-resident attribute of type at record[offset] and returns its
 // declared total_size. A non-zero comp_unit_size adds the trailing 8-byte
 // CompressedSize field.
-DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset, Attr::Type type,
+DWORD WriteNonResidentAttr(FakeRecord& record, DWORD offset,
+                           NTFS_BROWSER_NAMESPACE::Attr::Type type,
                            const FakeNonResidentAttr& attr);
 
 // File record (root, #5): resident $STANDARD_INFORMATION("permission") plus
@@ -488,4 +490,4 @@ FakeRecord MakeMftTreeRecord(
 void WriteTrailingDefect(FakeRecord& record, DWORD offset,
                          FakeTrailingDefect defect);
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage

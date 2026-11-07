@@ -23,7 +23,7 @@
 #include "data/header-resident.h"
 #include "fake-ntfs-image-internal.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Tests {
+namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage {
 
 namespace {
 
@@ -41,7 +41,7 @@ FakeRecord MakeUndersizedResidentAttrRecord() {
   // Not InitResidentAttr(): the value offset is never written, so it stays 0.
   auto& attr = *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::HeaderResident*>(
       &record.at(attr_offset_value));
-  attr.header.type = Attr::Type::ReparsePoint;
+  attr.header.type = NTFS_BROWSER_NAMESPACE::Attr::Type::ReparsePoint;
   attr.header.non_resident = 0;
   attr.header.name_length = 0;
   attr.header.flags = 0;
@@ -62,7 +62,8 @@ FakeRecord MakeAttrNameExceedsTotalSizeRecord() {
 
   constexpr DWORD body_size = 4;
 
-  auto& attr = InitResidentAttr(record, attr_offset_value, Attr::Type::Data);
+  auto& attr = InitResidentAttr(record, attr_offset_value,
+                                NTFS_BROWSER_NAMESPACE::Attr::Type::Data);
   attr.attr_size = body_size;
   attr.header.total_size = AlignAttrSize(sizeof(attr) + body_size);
 
@@ -94,7 +95,8 @@ FakeRecord MakeAttrNameExceedsTotalSizeRecord() {
 FakeRecord MakeSmallResidentDataRecord() {
   FakeRecord record = MakeInUseFileRecord();
 
-  auto& attr = InitResidentAttr(record, attr_offset_value, Attr::Type::Data);
+  auto& attr = InitResidentAttr(record, attr_offset_value,
+                                NTFS_BROWSER_NAMESPACE::Attr::Type::Data);
   attr.attr_size = gsl::narrow<DWORD>(small_resident_data_content.size());
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
 
@@ -113,7 +115,8 @@ FakeRecord MakeSmallResidentDataRecord() {
 FakeRecord MakeNamedDataStreamRecord() {
   FakeRecord record = MakeInUseFileRecord();
 
-  auto& attr = InitResidentAttr(record, attr_offset_value, Attr::Type::Data);
+  auto& attr = InitResidentAttr(record, attr_offset_value,
+                                NTFS_BROWSER_NAMESPACE::Attr::Type::Data);
   const std::vector<WORD> encoded_name = ToUtf16(named_data_stream_name);
   attr.header.name_length = named_data_stream_name_length;
   attr.header.name_offset = static_cast<WORD>(sizeof(attr));
@@ -158,7 +161,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithAttrOffsetOutOfBounds() {
 
   // offset_of_attr is per-record, unlike the BPB fields patched above.
   EditFileRecordHeader(
-      MftRecordBytes(image, static_cast<ULONGLONG>(Mft::Idx::Root)),
+      MftRecordBytes(image, static_cast<ULONGLONG>(
+                                NTFS_BROWSER_NAMESPACE::Mft::Idx::Root)),
       [](FileRecordHeader& header) {
         header.offset_of_attr = attr_offset_out_of_bounds;
       });
@@ -189,7 +193,8 @@ std::vector<BYTE> BuildFakeNtfsImageWithMinimalNonResidentData() {
 
   FakeRecord record = MakeInUseFileRecord();
 
-  auto& attr = InitNonResidentAttr(record, attr_offset_value, Attr::Type::Data);
+  auto& attr = InitNonResidentAttr(record, attr_offset_value,
+                                   NTFS_BROWSER_NAMESPACE::Attr::Type::Data);
   attr.start_vcn = 0;
   attr.last_vcn = 0;
   attr.comp_unit_size = 0;
@@ -246,7 +251,7 @@ constexpr DWORD lifetime_list_lcn = 52;
 // One nameless $ATTRIBUTE_LIST entry, as WriteListEntry() writes it.
 struct FakeListEntry {
   // Attribute type the entry names.
-  Attr::Type type;
+  NTFS_BROWSER_NAMESPACE::Attr::Type type;
   // Record the entry points to.
   ULONGLONG record;
   // record_size to declare. Zero is the forged value.
@@ -277,14 +282,15 @@ DWORD WriteLifetimeResidentList(FakeRecord& record, DWORD offset,
                                 size_t entry_count,
                                 std::optional<size_t> zero_size_index = {},
                                 WORD entry_sequence = 0) {
-  auto& attr = InitResidentAttr(record, offset, Attr::Type::AttributeList);
+  auto& attr = InitResidentAttr(
+      record, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::AttributeList);
   attr.attr_size = gsl::narrow<DWORD>(list_entry_size * entry_count);
   attr.header.total_size = AlignAttrSize(sizeof(attr) + attr.attr_size);
 
   for (size_t i = 0; i < entry_count; i++) {
     WriteListEntry(
         &record.at(offset + attr.attr_offset + (i * list_entry_size)),
-        {.type = Attr::Type::Data,
+        {.type = NTFS_BROWSER_NAMESPACE::Attr::Type::Data,
          .record = attr_list_lifetime_ext_idx,
          .record_size =
              (zero_size_index == i) ? static_cast<WORD>(0) : list_entry_size,
@@ -340,16 +346,17 @@ std::vector<BYTE> BuildFakeNtfsImageWithSplitAttributeListAttribute() {
   FakeRecord base = MakeInUseFileRecord();
   DWORD offset = attr_offset_value;
   // VCN 0-0: empty.
-  offset +=
-      WriteNonResidentAttr(base, offset, Attr::Type::AttributeList,
-                           {.comp_unit_size = 0, .real_size = 0, .runs = {}});
+  offset += WriteNonResidentAttr(
+      base, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::AttributeList,
+      {.comp_unit_size = 0, .real_size = 0, .runs = {}});
   // VCN 1-1: one entry, stored in its own cluster.
   const std::vector<FakeDataRun> runs{{lifetime_list_lcn, 1}};
-  offset += WriteNonResidentAttr(base, offset, Attr::Type::AttributeList,
-                                 {.comp_unit_size = 0,
-                                  .real_size = list_entry_size,
-                                  .runs = runs,
-                                  .overrides = {.start_vcn = 1}});
+  offset += WriteNonResidentAttr(
+      base, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::AttributeList,
+      {.comp_unit_size = 0,
+       .real_size = list_entry_size,
+       .runs = runs,
+       .overrides = {.start_vcn = 1}});
   WriteEndOfAttributesMarker(base, offset);
 
   PutMftRecord(image, attr_list_lifetime_base_idx, base);
@@ -357,9 +364,10 @@ std::vector<BYTE> BuildFakeNtfsImageWithSplitAttributeListAttribute() {
                MakeLifetimeResidentDataExtensionRecord());
 
   std::vector<BYTE> entry(list_entry_size, 0);
-  WriteListEntry(entry.data(), {.type = Attr::Type::Data,
-                                .record = attr_list_lifetime_ext_idx,
-                                .record_size = list_entry_size});
+  WriteListEntry(entry.data(),
+                 {.type = NTFS_BROWSER_NAMESPACE::Attr::Type::Data,
+                  .record = attr_list_lifetime_ext_idx,
+                  .record_size = list_entry_size});
   LayRunBytes(image, runs, entry);
   return image;
 }
@@ -374,7 +382,9 @@ std::vector<BYTE> BuildFakeNtfsImageWithMultiClusterAttributeList() {
     for (size_t i = 0; i < multi_cluster_list_entries; i++) {
       WriteListEntry(
           &bytes.at(i * list_entry_size),
-          {.type = i == 0 ? Attr::Type::Data : Attr::Type::StandardInformation,
+          {.type =
+               i == 0 ? NTFS_BROWSER_NAMESPACE::Attr::Type::Data
+                      : NTFS_BROWSER_NAMESPACE::Attr::Type::StandardInformation,
            .record = i == 0 ? attr_list_lifetime_ext_idx
                             : attr_list_lifetime_base_idx,
            .record_size = list_entry_size});
@@ -387,7 +397,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithMultiClusterAttributeList() {
   FakeRecord base = MakeInUseFileRecord();
   DWORD offset = attr_offset_value;
   offset += WriteNonResidentAttr(
-      base, offset, Attr::Type::AttributeList,
+      base, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::AttributeList,
       {.comp_unit_size = 0, .real_size = list.size(), .runs = runs});
   WriteEndOfAttributesMarker(base, offset);
 
@@ -409,14 +419,15 @@ std::vector<BYTE> BuildFakeNtfsImageWithSplitDataAndTrailingDefect(
   DWORD offset = attr_offset_value;
   offset += WriteLifetimeResidentList(base, offset, 1);
   offset += WriteNonResidentAttr(
-      base, offset, Attr::Type::Data,
+      base, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::Data,
       {.comp_unit_size = 0, .real_size = cluster_size, .runs = base_runs});
   WriteTrailingDefect(base, offset, defect);
 
   FakeRecord ext = MakeInUseFileRecord();
   SetRecordLink(ext, 0, attr_list_lifetime_base_idx);
   DWORD ext_offset = attr_offset_value;
-  ext_offset += WriteNonResidentAttr(ext, ext_offset, Attr::Type::Data,
+  ext_offset += WriteNonResidentAttr(ext, ext_offset,
+                                     NTFS_BROWSER_NAMESPACE::Attr::Type::Data,
                                      {.comp_unit_size = 0,
                                       .real_size = 0,
                                       .runs = ext_runs,
@@ -504,4 +515,4 @@ std::vector<BYTE> BuildFakeNtfsImageWithNegativeLcn(FakeRunHost host) {
   return BuildImageWithRawRuns(host, std::move(runs), 1);
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Tests
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage

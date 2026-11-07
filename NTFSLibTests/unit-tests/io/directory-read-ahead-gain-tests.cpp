@@ -18,7 +18,8 @@
 #include "directory-read-ahead-support.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace ReadAhead = NTFS_BROWSER_NAMESPACE::Tests::ReadAhead;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
@@ -49,13 +50,13 @@ TEMPLATE_TEST_CASE_SIG(
     "The read ahead announces the blocks of a recursive listing",
     "[io][directory-read-ahead]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image =
-      Tests::BuildFakeNtfsImageWithNameTree(ReadAhead::BigDirectoryTree(6));
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
+      ReadAhead::BigDirectoryTree(6));
 
-  const ReadAhead::TimedRun off =
-      ReadAhead::ListOnSimulatedDisk<S>(image, {}, 0, 0, {Tests::DiskModel{}});
+  const ReadAhead::TimedRun off = ReadAhead::ListOnSimulatedDisk<S>(
+      image, {}, 0, 0, {TestDiskReaders::DiskModel{}});
   const ReadAhead::TimedRun on = ReadAhead::ListOnSimulatedDisk<S>(
-      image, {}, window, large_budget, {Tests::DiskModel{}});
+      image, {}, window, large_budget, {TestDiskReaders::DiskModel{}});
 
   CHECK(on.run.text == off.run.text);
   CHECK(on.disk.unannounced_reads < off.disk.unannounced_reads);
@@ -67,9 +68,9 @@ TEMPLATE_TEST_CASE_SIG(
     "a hard disk",
     "[io][directory-read-ahead]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::GroupedTree(groups, directories_per_group));
-  const Tests::DiskModel hard_disk = ReadAhead::HardDiskModel();
+  const TestDiskReaders::DiskModel hard_disk = ReadAhead::HardDiskModel();
 
   const ReadAhead::TimedRun off =
       ReadAhead::ListOnSimulatedDisk<S>(image, {}, 0, 0, {hard_disk});
@@ -89,9 +90,9 @@ TEMPLATE_TEST_CASE_SIG(
     "The read ahead does not slow a recursive listing on a solid state disk",
     "[io][directory-read-ahead]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::GroupedTree(groups, directories_per_group));
-  const Tests::DiskModel solid_state;
+  const TestDiskReaders::DiskModel solid_state;
 
   const ReadAhead::TimedRun off =
       ReadAhead::ListOnSimulatedDisk<S>(image, {}, 0, 0, {solid_state});
@@ -108,9 +109,9 @@ TEMPLATE_TEST_CASE_SIG(
     "The standing lane shortens a recursive listing on a solid state disk",
     "[io][directory-read-ahead][standing-lane]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::SpacedTree(spaced_directories, spaced_files, spaced_ballast));
-  const Tests::DiskModel solid_state;
+  const TestDiskReaders::DiskModel solid_state;
   VolumeOptions without_lane;
   without_lane.tuning.walk.read_ahead_runs = 0;
 
@@ -131,9 +132,9 @@ TEMPLATE_TEST_CASE_SIG(
     "disk",
     "[io][directory-read-ahead][standing-lane]", ((Cache::Strategy S), S),
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
-  const auto image = Tests::BuildFakeNtfsImageWithNameTree(
+  const auto image = TestFakeImage::BuildFakeNtfsImageWithNameTree(
       ReadAhead::GroupedTree(groups, directories_per_group));
-  const Tests::DiskModel hard_disk = ReadAhead::HardDiskModel();
+  const TestDiskReaders::DiskModel hard_disk = ReadAhead::HardDiskModel();
   VolumeOptions without_lane;
   without_lane.tuning.walk.read_ahead_runs = 0;
 

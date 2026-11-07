@@ -25,20 +25,21 @@ namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace AllocSupport = NTFS_BROWSER_NAMESPACE::Tests::AllocSupport;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Support = NTFS_BROWSER_NAMESPACE::Tests::AccountSupport;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace TreeSupport = NTFS_BROWSER_NAMESPACE::Tests::MftTreeSupport;
 using Alloc::ClusterCondition;
 using Alloc::DataCheckMode;
 using Support::CountOf;
 using Support::Freed;
 using Support::Stream;
-using Tests::FakeAccountFile;
-using Tests::FakeDataRun;
+using TestFakeImage::FakeAccountFile;
+using TestFakeImage::FakeDataRun;
 
 namespace {
 
 constexpr ULONGLONG subject = 22;
-constexpr ULONGLONG cluster = Tests::fake_cluster_size;
+constexpr ULONGLONG cluster = TestFakeImage::fake_cluster_size;
 constexpr ULONGLONG first_cluster = 40;
 
 // Writes bytes at the start of cluster lcn of image.
@@ -152,7 +153,7 @@ TEST_CASE("the content check skips an encrypted stream, and what is not intact",
           "[alloc][cluster][check]") {
   Support::ForEachStrategy([](auto strategy) {
     Support::Volume volume = Subject();
-    Tests::FakeAccountStream encrypted =
+    TestFakeImage::FakeAccountStream encrypted =
         Stream({{first_cluster, 4}}, 4 * cluster);
     encrypted.encrypted = true;
     volume.Put(subject, Freed(100, encrypted));
@@ -191,13 +192,13 @@ TEST_CASE("the content check reads in order, announced, and nothing else",
 
   // The hint comes before the read it announces.
   bool announced = false;
-  for (const Tests::CountingDiskReader::Call& call :
+  for (const TestDiskReaders::CountingDiskReader::Call& call :
        full.opened.counter->Calls()) {
-    if (call.kind == Tests::CountingDiskReader::Kind::Prefetch &&
+    if (call.kind == TestDiskReaders::CountingDiskReader::Kind::Prefetch &&
         call.offset == data_first) {
       announced = true;
     }
-    if (call.kind == Tests::CountingDiskReader::Kind::Read &&
+    if (call.kind == TestDiskReaders::CountingDiskReader::Kind::Read &&
         call.offset == data_first) {
       CHECK(announced);
     }

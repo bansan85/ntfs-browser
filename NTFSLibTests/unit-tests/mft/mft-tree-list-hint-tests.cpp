@@ -26,14 +26,15 @@
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
-namespace Tests = NTFS_BROWSER_NAMESPACE::Tests;
+namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
+namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;
 
 namespace {
 
-using Call = Tests::CountingDiskReader::Call;
-using Kind = Tests::CountingDiskReader::Kind;
+using Call = TestDiskReaders::CountingDiskReader::Call;
+using Kind = TestDiskReaders::CountingDiskReader::Kind;
 
 // Slots of the fixture: 3000 hold about 200 files with a list in a cluster of
 // its own.
@@ -44,11 +45,11 @@ constexpr ULONGLONG list_fragment_clusters = 250;
 
 // The calls of a scan of the list fixture.
 std::vector<Call> ScanCalls(const VolumeOptions& options, unsigned threads) {
-  auto reader = std::make_unique<Tests::CountingDiskReader>(
-      std::make_unique<Tests::MemoryDiskReader>(
-          Tests::BuildFakeNtfsImageWithListMftScan(list_record_count,
-                                                   list_fragment_clusters)));
-  const Tests::CountingDiskReader* const counting = reader.get();
+  auto reader = std::make_unique<TestDiskReaders::CountingDiskReader>(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(
+          TestFakeImage::BuildFakeNtfsImageWithListMftScan(
+              list_record_count, list_fragment_clusters)));
+  const TestDiskReaders::CountingDiskReader* const counting = reader.get();
   NtfsVolume<Cache::Strategy::NoCache> volume(std::move(reader), options);
   REQUIRE(volume.IsVolumeOK());
   Mft::MftTree::ScanOptions scan;
@@ -74,7 +75,8 @@ class IntervalOverride {
 
 // Whether call lies in the clusters of the non-resident lists.
 bool InLists(const Call& call) {
-  return call.offset >= Tests::list_scan_lists_lcn * Tests::fake_cluster_size;
+  return call.offset >=
+         TestFakeImage::list_scan_lists_lcn * TestFakeImage::fake_cluster_size;
 }
 
 // How many announcements of the non-resident lists calls hold.
