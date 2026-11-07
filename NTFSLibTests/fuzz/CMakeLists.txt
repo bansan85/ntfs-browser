@@ -65,3 +65,5 @@ if(WIN32 AND BUILD_SHARED_LIBS)
     COMMAND_EXPAND_LISTS
   )
 endif()
+
+add_subdirectory("generator")
