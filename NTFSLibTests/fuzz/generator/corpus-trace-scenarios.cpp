@@ -57,7 +57,8 @@ const std::vector<TraceSource>& Sources() {
       {"nps-ntfs1-raw", nps_corpus, CorpusProbes::NpsRaw},
       {"nps-ntfs1-compressed", nps_corpus, CorpusProbes::NpsCompressed,
        Feature::Decompression},
-      {"nps-ntfs1-scan-threads", nps_corpus, CorpusProbes::NpsScanThreads},
+      {"nps-ntfs1-scan-threads", nps_corpus, CorpusProbes::NpsScanThreads,
+       Feature::Decompression},
   };
   return sources;
 }

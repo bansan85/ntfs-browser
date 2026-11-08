@@ -75,8 +75,9 @@ class CorpusProbes {
 
   // The scan of the NPS ntfs1 image with threads, deleted items shown and
   // errors recovered. The test scans four times and opens the image each time,
-  // and the file keeps the reads of the last scan: so does this probe. The
-  // trace is nps-ntfs1-scan-threads.
+  // and the file keeps the reads of the last scan: so does this probe. A
+  // build without LZNT1 reads fewer bytes in this scan. The trace is
+  // nps-ntfs1-scan-threads.
   static void NpsScanThreads(const Opener& open);
 
  private:
