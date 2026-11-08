@@ -49,6 +49,8 @@ const std::vector<TraceSource>& Sources() {
       {"ntfs-ptrn", samples_corpus, CorpusProbes::Ptrn},
       {"ntfs-si-vs-fn", samples_corpus, CorpusProbes::SiVsFn},
       {"ntfs", samples_corpus, CorpusProbes::TwoFileTimes},
+      {"ntfs-ramslack", samples_corpus, CorpusProbes::RamSlack},
+      {"ntfs-2m", samples_corpus, CorpusProbes::TwoMegabyteClusters},
   };
   return sources;
 }

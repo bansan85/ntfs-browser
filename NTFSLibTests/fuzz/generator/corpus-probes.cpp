@@ -33,6 +33,12 @@ constexpr ULONGLONG kw_fragmented_size = 2600;
 constexpr ULONGLONG kw_deleted_record = 34;
 constexpr ULONGLONG kw_slack_record = 36;
 
+// Where /1.txt of ntfs-ramslack.raw keeps its RAM slack and its cluster slack,
+// from the ReadMe of the image, and the bytes the test reads there.
+constexpr LONGLONG ram_slack_address = 213303;
+constexpr LONGLONG cluster_slack_address = 213504;
+constexpr ULONGLONG slack_probe_bytes = 4;
+
 // The records of $MFT's own run list in ntfs_extremely_fragmented_mft.raw: its
 // base record and its extension records.
 constexpr std::initializer_list<ULONGLONG> fragmented_mft_records = {
@@ -283,6 +289,32 @@ void CorpusProbes::Ptrn(const Opener& open) {
   Require(root.FindSubEntry(L"2.txt").has_value(), "2.txt is missing");
 
   ReadRepairStreams(volume);
+}
+
+void CorpusProbes::RamSlack(const Opener& open) {
+  const Volume volume(open({}));
+  Require(volume.IsVolumeOK(), "the volume is not ok");
+
+  Record root(volume);
+  OpenRootDir(root);
+  Require(root.FindSubEntry(L"1.txt").has_value(), "1.txt is missing");
+
+  for (const LONGLONG address : {ram_slack_address, cluster_slack_address}) {
+    LARGE_INTEGER slack_addr{.QuadPart = address};
+    Require(volume.Read(slack_addr, slack_probe_bytes).has_value(),
+            "the slack is not readable");
+  }
+
+  ReadRepairStreams(volume);
+}
+
+void CorpusProbes::TwoMegabyteClusters(const Opener& open) {
+  const Volume volume(open({}));
+  Require(volume.IsVolumeOK(), "the volume is not ok");
+
+  Record root(volume);
+  OpenRootDir(root);
+  root.TraverseSubEntries([](const IndexEntryView&, void*) {}, nullptr);
 }
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen

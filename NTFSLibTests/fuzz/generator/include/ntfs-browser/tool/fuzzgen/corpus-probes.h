@@ -57,6 +57,14 @@ class CorpusProbes {
   // /2.txt of ntfs-ptrn.raw, then the $Repair streams. The trace is ntfs-ptrn.
   static void Ptrn(const Opener& open);
 
+  // /1.txt of ntfs-ramslack.raw, its RAM slack and cluster slack, then the
+  // $Repair streams. The trace is ntfs-ramslack.
+  static void RamSlack(const Opener& open);
+
+  // The root directory of ntfs-2m.raw, which has 2 MiB clusters. The trace is
+  // ntfs-2m.
+  static void TwoMegabyteClusters(const Opener& open);
+
  private:
   using Volume = NTFS_BROWSER_NAMESPACE::NtfsVolume<
       NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>;
