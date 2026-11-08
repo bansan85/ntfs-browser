@@ -12,4 +12,5 @@ target_sources(
     "rejection-cost-tests.cpp"
     "spdlog-adapter-tests.cpp"
     "volume-options-log-tests.cpp"
+    "worker-log-tests.cpp"
 )
