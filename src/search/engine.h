@@ -45,6 +45,8 @@
 //                            data state. ResolveEngine() uses it for Auto, and
 //                            Scan sets deleted_data_state from it.
 //   EntryBuffer              Owns the text that the views of an Entry point at.
+//   SetEngineFactoryForTests Tests swap the engines for a scripted one, to
+//                            control the worker thread of a scan.
 //   SplitTarget/OpenVolume   The target string, opened without test code.
 //
 // Entry conventions that every engine MUST keep, so that the engines agree:
