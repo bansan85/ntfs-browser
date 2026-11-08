@@ -1,7 +1,7 @@
 #pragma once
 
-// Scan: lists the files of a folder or of a whole NTFS volume, as the NtfsDir
-// and NtfsMftList samples do, and hands them to the caller in batches. The
+// Scan: lists the files of a folder or of a whole NTFS volume, as NtfsDir
+// and NtfsScanBench do, and hands them to the caller in batches. The
 // scan reads raw disk structures, not the file system API, so it also finds
 // deleted files and works on an image file.
 //

@@ -1,5 +1,5 @@
 add_executable(
-  NtfsMftList
+  NtfsScanBench
   WIN32
   "arguments.h"
   "arguments.cpp"
@@ -10,20 +10,20 @@ add_executable(
 # The listing is written by a thread of its own.
 find_package(Threads REQUIRED)
 target_link_libraries(
-  NtfsMftList
+  NtfsScanBench
   PRIVATE ${PROJECT_NAME} NtfsDeviceAccess Threads::Threads
 )
-set_target_properties(NtfsMftList PROPERTIES WIN32_EXECUTABLE 0)
+set_target_properties(NtfsScanBench PROPERTIES WIN32_EXECUTABLE 0)
 if(WIN32)
-  target_sources(NtfsMftList PRIVATE "${NTFS_BROWSER_LONG_PATH_MANIFEST}")
+  target_sources(NtfsScanBench PRIVATE "${NTFS_BROWSER_LONG_PATH_MANIFEST}")
 endif()
 if(WIN32 AND BUILD_SHARED_LIBS)
   add_custom_command(
-    TARGET NtfsMftList
+    TARGET NtfsScanBench
     POST_BUILD
     COMMAND
-      ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:NtfsMftList>
-      $<TARGET_FILE_DIR:NtfsMftList>
+      ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:NtfsScanBench>
+      $<TARGET_FILE_DIR:NtfsScanBench>
     COMMAND_EXPAND_LISTS
   )
 endif()

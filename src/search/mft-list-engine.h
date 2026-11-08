@@ -11,7 +11,7 @@
 
 namespace NTFS_BROWSER_NAMESPACE::Search {
 
-// The NtfsMftList walk: reads every record of the $MFT in record order, builds
+// The MftTree walk: reads every record of the $MFT in record order, builds
 // the tree of names from the parent reference of each $FILE_NAME, and gives
 // the sink one entry for each name of each record.
 //

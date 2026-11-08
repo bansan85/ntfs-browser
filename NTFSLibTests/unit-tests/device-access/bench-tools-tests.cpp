@@ -23,7 +23,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/device-access/temp-dir.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-#include <ntfs-browser/test/mft/ntfsmftlist-sample-support.h>
+#include <ntfs-browser/test/mft/ntfsscanbench-sample-support.h>
 #include <ntfs-browser/test/support/sample-run.h>
 #include <ntfs-browser/tool/device-access/json.h>
 #include <ntfs-browser/tuning/knobs.h>
@@ -176,7 +176,7 @@ void CheckStandingLaneIsIdle(const JsonValue& run_json,
 
 }  // namespace
 
-TEST_CASE("NtfsMftList on its capture image lists what it listed on the image",
+TEST_CASE("NtfsScanBench on its capture image lists what it listed on the image",
           "[device-access][capture][sample]") {
   const bool deleted = GENERATE(false, true);
   const bool big = GENERATE(false, true);
@@ -198,11 +198,11 @@ TEST_CASE("NtfsMftList on its capture image lists what it listed on the image",
     return all;
   };
 
-  const SampleRun plain = TestMft::RunMftList(args(image.path));
+  const SampleRun plain = TestMft::RunScanBench(args(image.path));
   REQUIRE(plain.exit_code == 0);
   REQUIRE_FALSE(plain.out.empty());
   const SampleRun captured =
-      TestMft::RunMftList(args(image.path, {Option(L"--capture", capture)}));
+      TestMft::RunScanBench(args(image.path, {Option(L"--capture", capture)}));
   CHECK(captured.exit_code == 0);
   CHECK(captured.out == plain.out);
   CHECK(captured.err == plain.err);
@@ -213,20 +213,20 @@ TEST_CASE("NtfsMftList on its capture image lists what it listed on the image",
 
   // The capture is an image of the ranges the run used: listing it gives the
   // same listing.
-  const SampleRun again = TestMft::RunMftList(args(capture));
+  const SampleRun again = TestMft::RunScanBench(args(capture));
   CHECK(again.exit_code == 0);
   CHECK(again.out == plain.out);
   CHECK(again.err == plain.err);
 }
 
-TEST_CASE("NtfsMftList --benchmark writes a summary that parses",
+TEST_CASE("NtfsScanBench --benchmark writes a summary that parses",
           "[device-access][benchmark][sample]") {
   const TestMft::TempTreeImage image(ListImage());
   const TestDeviceAccess::TempDir dir;
   const std::filesystem::path summary = dir.Path() / "summary.json";
 
-  const SampleRun plain = TestMft::RunMftList({image.path.wstring()});
-  const SampleRun run = TestMft::RunMftList(
+  const SampleRun plain = TestMft::RunScanBench({image.path.wstring()});
+  const SampleRun run = TestMft::RunScanBench(
       {Option(L"--benchmark", summary), image.path.wstring()});
 
   // The benchmark leaves the listing alone, and says where its summary is.
@@ -237,7 +237,7 @@ TEST_CASE("NtfsMftList --benchmark writes a summary that parses",
 
   const JsonValue root = LoadSummary(summary);
   CHECK(Count(Member(root, "format")) == 1);
-  CHECK(Member(root, "tool").text == "NtfsMftList");
+  CHECK(Member(root, "tool").text == "NtfsScanBench");
   CHECK(Member(root, "target").text == image.path.string());
   CHECK(Member(root, "stop_after").text.empty());
   CHECK(Member(root, "arguments").kind == JsonValue::Kind::Array);
@@ -288,7 +288,7 @@ TEST_CASE("NtfsMftList --benchmark writes a summary that parses",
   CHECK(Member(run_json, "main_thread_ns").kind == JsonValue::Kind::Object);
 }
 
-TEST_CASE("NtfsMftList --media sets the media kind its summary reports",
+TEST_CASE("NtfsScanBench --media sets the media kind its summary reports",
           "[device-access][benchmark][sample]") {
   const TestMft::TempTreeImage image(ListImage());
   const TestDeviceAccess::TempDir dir;
@@ -296,7 +296,7 @@ TEST_CASE("NtfsMftList --media sets the media kind its summary reports",
   const auto kind_of = [&](const std::wstring& media) {
     const std::filesystem::path summary = dir.Path() / "summary.json";
     std::filesystem::remove(summary);
-    const SampleRun run = TestMft::RunMftList(
+    const SampleRun run = TestMft::RunScanBench(
         {Option(L"--benchmark", summary), media, image.path.wstring()});
     REQUIRE(run.exit_code == 0);
     return Member(Member(LoadSummary(summary), "run"), "media_kind").text;
@@ -307,12 +307,12 @@ TEST_CASE("NtfsMftList --media sets the media kind its summary reports",
   CHECK(kind_of(L"--media=unknown") == "unknown");
 }
 
-TEST_CASE("NtfsMftList refuses a --media it does not know",
+TEST_CASE("NtfsScanBench refuses a --media it does not know",
           "[device-access][benchmark][sample]") {
   const TestMft::TempTreeImage image(ListImage());
 
   const SampleRun run =
-      TestMft::RunMftList({L"--media=floppy", image.path.wstring()});
+      TestMft::RunScanBench({L"--media=floppy", image.path.wstring()});
 
   CHECK(run.exit_code != 0);
   CHECK_THAT(run.err, ContainsSubstring("--media"));
@@ -324,7 +324,7 @@ TEST_CASE("The read log next to a summary is the log of its run",
   const TestDeviceAccess::TempDir dir;
   const std::filesystem::path summary = dir.Path() / "summary.json";
 
-  const SampleRun run = TestMft::RunMftList(
+  const SampleRun run = TestMft::RunScanBench(
       {Option(L"--benchmark", summary), image.path.wstring()});
   REQUIRE(run.exit_code == 0);
 
@@ -347,14 +347,14 @@ TEST_CASE("The read log next to a summary is the log of its run",
   CHECK(logged_reads == Count(Member(reads, "requested")));
 }
 
-TEST_CASE("NtfsMftList --stop-after ends the run after the phase",
+TEST_CASE("NtfsScanBench --stop-after ends the run after the phase",
           "[device-access][benchmark][sample]") {
   const TestMft::TempTreeImage image(ListImage());
   const TestDeviceAccess::TempDir dir;
   const std::filesystem::path summary = dir.Path() / "summary.json";
 
   const SampleRun run =
-      TestMft::RunMftList({Option(L"--benchmark", summary),
+      TestMft::RunScanBench({Option(L"--benchmark", summary),
                            L"--stop-after=pass1", image.path.wstring()});
 
   // No tree and no listing, and the summary says where the run stopped.

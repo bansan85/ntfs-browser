@@ -50,7 +50,7 @@
 #include "arguments.h"
 #include "display-paths.h"
 
-namespace ExampleNtfsMftList = NTFS_BROWSER_NAMESPACE::Example::NtfsMftList;
+namespace ExampleNtfsScanBench = NTFS_BROWSER_NAMESPACE::Example::NtfsScanBench;
 namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
 
 #ifdef _WIN32
@@ -62,9 +62,9 @@ namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
 #endif
 
 using namespace NTFS_BROWSER_NAMESPACE;
-using ExampleNtfsMftList::Arguments;
-using ExampleNtfsMftList::CountHardLinks;
-using ExampleNtfsMftList::DisplayPaths;
+using ExampleNtfsScanBench::Arguments;
+using ExampleNtfsScanBench::CountHardLinks;
+using ExampleNtfsScanBench::DisplayPaths;
 using ToolDeviceAccess::Output;
 
 namespace {
@@ -378,7 +378,7 @@ void PrintEntries(Output& out, const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
 
   // The text of the chunks in flight, each on a cache line of its own: a thread
   // changes the size of its text with every piece it appends.
-  struct alignas(ExampleNtfsMftList::cache_line_bytes) ChunkText {
+  struct alignas(ExampleNtfsScanBench::cache_line_bytes) ChunkText {
     ToolDeviceAccess::LineBuffer text;
   };
 
@@ -578,7 +578,7 @@ int ListVolume(const Arguments& args) {
             "The profile has no section for this disk: defaults used\n");
   }
   ToolDeviceAccess::BenchSession session(
-      {"NtfsMftList", args.command_line, ToUtf8(args.target)}, args.bench,
+      {"NtfsScanBench", args.command_line, ToUtf8(args.target)}, args.bench,
       applied, volume_options);
 
   const std::unique_ptr<NtfsVolume<Cache::Strategy::NoCache>> volume =
@@ -627,8 +627,8 @@ int ListVolume(const Arguments& args) {
 // exit code.
 int Run(int argc, wchar_t* argv[]) {
   Arguments args;
-  if (!ExampleNtfsMftList::ParseArguments(argc, argv, args)) {
-    ExampleNtfsMftList::Usage();
+  if (!ExampleNtfsScanBench::ParseArguments(argc, argv, args)) {
+    ExampleNtfsScanBench::Usage();
     return -1;
   }
   return ListVolume(args);

@@ -14,7 +14,7 @@
 
 using namespace NTFS_BROWSER_NAMESPACE;
 
-namespace NTFS_BROWSER_NAMESPACE::Example::NtfsMftList {
+namespace NTFS_BROWSER_NAMESPACE::Example::NtfsScanBench {
 
 namespace {
 
@@ -144,7 +144,7 @@ bool ParseArguments(int argc, wchar_t* argv[], Arguments& args) {
 
 void Usage() {
   printf(
-      "Usage: ntfsmftlist [--log=...] [--deleted] [--recover] [--threads=N] "
+      "Usage: ntfsscanbench [--log=...] [--deleted] [--recover] [--threads=N] "
       "[--clusters[=map]] [--verify-data[=sample|full]] <volume>\n");
   printf("  %s\n", std::string(Log::option_usage).c_str());
   printf("%s", std::string(Tool::DeviceAccess::BenchUsage()).c_str());
@@ -196,14 +196,14 @@ void Usage() {
   printf("  hard links, path. A path whose parent chain breaks reads\n");
   printf("  <lost #N>\\..., N being the record where it breaks.\n");
 #ifdef _WIN32
-  printf("eg. ntfsmftlist c:\n");
-  printf("eg. ntfsmftlist --deleted d:\\images\\disk.img\n");
-  printf("eg. ntfsmftlist --deleted --recover d:\\images\\disk.img\n");
+  printf("eg. ntfsscanbench c:\n");
+  printf("eg. ntfsscanbench --deleted d:\\images\\disk.img\n");
+  printf("eg. ntfsscanbench --deleted --recover d:\\images\\disk.img\n");
 #else
-  printf("eg. ntfsmftlist /dev/sda1\n");
-  printf("eg. ntfsmftlist --deleted ./disk.img\n");
-  printf("eg. ntfsmftlist --deleted --recover ./disk.img\n");
+  printf("eg. ntfsscanbench /dev/sda1\n");
+  printf("eg. ntfsscanbench --deleted ./disk.img\n");
+  printf("eg. ntfsscanbench --deleted --recover ./disk.img\n");
 #endif
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Example::NtfsMftList
+}  // namespace NTFS_BROWSER_NAMESPACE::Example::NtfsScanBench

@@ -9,7 +9,7 @@
 #include <ntfs-browser/tool/device-access/bench-options.h>
 #include <ntfs-browser/volume-options.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Example::NtfsMftList {
+namespace NTFS_BROWSER_NAMESPACE::Example::NtfsScanBench {
 
 // What the command line asks for.
 struct Arguments {
@@ -36,4 +36,4 @@ bool ParseArguments(int argc, wchar_t* argv[], Arguments& args);
 // Prints command-line usage help.
 void Usage();
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Example::NtfsMftList
+}  // namespace NTFS_BROWSER_NAMESPACE::Example::NtfsScanBench

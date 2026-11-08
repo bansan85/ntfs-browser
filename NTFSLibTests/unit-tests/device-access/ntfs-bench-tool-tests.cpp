@@ -25,7 +25,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/device-access/temp-dir.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-#include <ntfs-browser/test/mft/ntfsmftlist-sample-support.h>
+#include <ntfs-browser/test/mft/ntfsscanbench-sample-support.h>
 #include <ntfs-browser/test/support/sample-run.h>
 #include <ntfs-browser/tool/device-access/json.h>
 #include <ntfs-browser/tuning/knobs.h>
@@ -113,7 +113,7 @@ std::filesystem::path WriteZeros(const TestDeviceAccess::TempDir& dir,
   return dir.Write(name, std::string(bytes, '\0'));
 }
 
-// A run of NtfsMftList on an image, with its summary and read log, and the
+// A run of NtfsScanBench on an image, with its summary and read log, and the
 // image the log was made from.
 struct RecordedRun {
   TestDeviceAccess::TempDir dir;
@@ -127,7 +127,7 @@ struct RecordedRun {
             list_record_count, list_fragment_clusters)),
         summary_path(dir.Path() / "summary.json"),
         log_path(dir.Path() / "summary.json.readlog") {
-    const SampleRun run = TestMft::RunMftList(
+    const SampleRun run = TestMft::RunScanBench(
         {Option(L"--benchmark", summary_path), image.path.wstring()});
     REQUIRE(run.exit_code == 0);
     REQUIRE(std::filesystem::exists(log_path));
@@ -248,7 +248,7 @@ TEST_CASE("NtfsBench simulate --write-image writes a volume the tools open",
   CHECK(written.out.empty());
   REQUIRE(std::filesystem::exists(image));
   CHECK(std::filesystem::file_size(image) > 0);
-  const SampleRun listed = TestMft::RunMftList({image.wstring()});
+  const SampleRun listed = TestMft::RunScanBench({image.wstring()});
   CHECK(listed.exit_code == 0);
   CHECK_FALSE(listed.out.empty());
 }

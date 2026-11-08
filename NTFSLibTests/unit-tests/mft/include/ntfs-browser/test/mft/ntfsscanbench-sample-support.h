@@ -13,13 +13,13 @@
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/support/sample-run.h>
 
-// What the tests of NtfsMftList share: how to run it, and the image it lists.
+// What the tests of NtfsScanBench share: how to run it, and the image it lists.
 namespace NTFS_BROWSER_NAMESPACE::Test::Mft {
 
-// Runs NtfsMftList with args, its stdout and stderr captured apart.
+// Runs NtfsScanBench with args, its stdout and stderr captured apart.
 inline Test::Support::SampleRun
-    RunMftList(const std::vector<std::wstring>& args) {
-  const std::filesystem::path exe(NTFS_MFT_LIST_EXE);
+    RunScanBench(const std::vector<std::wstring>& args) {
+  const std::filesystem::path exe(NTFS_SCAN_BENCH_EXE);
   REQUIRE(std::filesystem::exists(exe));
   return Test::Support::RunSample(exe, args);
 }

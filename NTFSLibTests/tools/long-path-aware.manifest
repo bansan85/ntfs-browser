@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <!--
-  Embedded in the console tools (NtfsDir, NtfsMftList, NtfsCompare).
+  Embedded in the console tools (NtfsDir, NtfsScanBench, NtfsCompare).
   longPathAware lets the process pass a path of more than 260 characters to
   Win32 as it is, when the LongPathsEnabled registry switch is on. It is not
   what makes long paths work: the library and the tools prefix a path with

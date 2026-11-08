@@ -18,10 +18,10 @@ target_sources(
     "mft-tree-tests.cpp"
     "name-tree-path-tests.cpp"
     "mft-tree-threads-tests.cpp"
-    "ntfsmftlist-format-tests.cpp"
-    "ntfsmftlist-name-tests.cpp"
-    "include/ntfs-browser/test/mft/ntfsmftlist-sample-support.h"
-    "ntfsmftlist-sample-tests.cpp"
+    "ntfsscanbench-format-tests.cpp"
+    "ntfsscanbench-name-tests.cpp"
+    "include/ntfs-browser/test/mft/ntfsscanbench-sample-support.h"
+    "ntfsscanbench-sample-tests.cpp"
     "include/ntfs-browser/test/mft/mft-tree-state-support.h"
 )
 
@@ -30,9 +30,9 @@ target_include_directories(
   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
-# NtfsMftList runs on Windows and Linux (examples/CMakeLists.txt).
-add_dependencies(NtfsBrowserTests NtfsMftList)
+# NtfsScanBench runs on Windows and Linux (examples/CMakeLists.txt).
+add_dependencies(NtfsBrowserTests NtfsScanBench)
 target_compile_definitions(
   NtfsBrowserTests
-  PRIVATE NTFS_MFT_LIST_EXE="$<TARGET_FILE:NtfsMftList>"
+  PRIVATE NTFS_SCAN_BENCH_EXE="$<TARGET_FILE:NtfsScanBench>"
 )

@@ -13,7 +13,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/alloc/cluster-account-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-#include <ntfs-browser/test/mft/ntfsmftlist-sample-support.h>
+#include <ntfs-browser/test/mft/ntfsscanbench-sample-support.h>
 #include <ntfs-browser/test/support/long-path-support.h>
 #include <ntfs-browser/test/support/name-support.h>
 #include <ntfs-browser/test/support/sample-run.h>
@@ -27,7 +27,7 @@ using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithNameTree;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeDataRun;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeTreeNode;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::MakeNameChain;
-using NTFS_BROWSER_NAMESPACE::Test::Mft::RunMftList;
+using NTFS_BROWSER_NAMESPACE::Test::Mft::RunScanBench;
 using NTFS_BROWSER_NAMESPACE::Test::Mft::TempTreeImage;
 using NTFS_BROWSER_NAMESPACE::Test::Support::ExoticNames;
 using NTFS_BROWSER_NAMESPACE::Test::Support::FillerName;
@@ -74,7 +74,7 @@ std::size_t Count(const std::string& text, const std::string& part) {
 
 }  // namespace
 
-TEST_CASE("NtfsMftList prints the path of every kind of exotic name",
+TEST_CASE("NtfsScanBench prints the path of every kind of exotic name",
           "[mft][sample][name]") {
   std::vector<FakeTreeNode> nodes{
       {.links = {{.name = L"Exotic"}}, .directory = true}};
@@ -83,7 +83,7 @@ TEST_CASE("NtfsMftList prints the path of every kind of exotic name",
   }
   const TempTreeImage image(BuildFakeNtfsImageWithNameTree(nodes));
 
-  const SampleRun run = RunMftList({image.path.wstring()});
+  const SampleRun run = RunScanBench({image.path.wstring()});
 
   CHECK(run.exit_code == 0);
   for (const auto& exotic : ExoticNames()) {
@@ -92,7 +92,7 @@ TEST_CASE("NtfsMftList prints the path of every kind of exotic name",
   }
 }
 
-TEST_CASE("NtfsMftList lists names that differ only by case, each once",
+TEST_CASE("NtfsScanBench lists names that differ only by case, each once",
           "[mft][sample][name][case]") {
   // 0-2 three files; 3 and 4 the directories a and A, with a file x each; 7 a
   // file with the hard links x and X; 8 and 9 a freed Report.txt and a live
@@ -112,7 +112,7 @@ TEST_CASE("NtfsMftList lists names that differ only by case, each once",
   };
   const TempTreeImage image(BuildFakeNtfsImageWithNameTree(nodes));
 
-  const SampleRun run = RunMftList({L"--deleted", image.path.wstring()});
+  const SampleRun run = RunScanBench({L"--deleted", image.path.wstring()});
 
   CHECK(run.exit_code == 0);
   for (const char* path : {"\\readme", "\\README", "\\ReadMe", "\\a", "\\A",
@@ -128,7 +128,7 @@ TEST_CASE("NtfsMftList lists names that differ only by case, each once",
   CHECK_THAT(run.out, ContainsSubstring("= \\X\n"));
 }
 
-TEST_CASE("NtfsMftList prints a path of more than 32767 units",
+TEST_CASE("NtfsScanBench prints a path of more than 32767 units",
           "[mft][sample][name]") {
   // 200 levels of names of 255 units: the leaf path has about 51 000 units.
   constexpr std::size_t depth = 200;
@@ -146,14 +146,14 @@ TEST_CASE("NtfsMftList prints a path of more than 32767 units",
   const std::string leaf = PathOf(names);
   REQUIRE(leaf.size() > 32767);
 
-  const SampleRun run = RunMftList({image.path.wstring()});
+  const SampleRun run = RunScanBench({image.path.wstring()});
 
   CHECK(run.exit_code == 0);
   CHECK_THAT(run.out, ContainsSubstring(Listed(leaf)));
   CHECK_THAT(run.out, ContainsSubstring(Listed(directory)));
 }
 
-TEST_CASE("NtfsMftList prints the paths of a chain of thousands of levels",
+TEST_CASE("NtfsScanBench prints the paths of a chain of thousands of levels",
           "[mft][sample][name]") {
   // Paths past 4096 bytes are not kept by the listing: each is built again.
   constexpr std::size_t depth = 2300;
@@ -163,7 +163,7 @@ TEST_CASE("NtfsMftList prints the paths of a chain of thousands of levels",
   const std::string directory = PathOf(names);
   names.push_back(L"leaf.txt");
 
-  const SampleRun run = RunMftList({image.path.wstring()});
+  const SampleRun run = RunScanBench({image.path.wstring()});
 
   CHECK(run.exit_code == 0);
   CHECK_THAT(run.out, ContainsSubstring(Listed(PathOf(names))));
@@ -171,7 +171,7 @@ TEST_CASE("NtfsMftList prints the paths of a chain of thousands of levels",
   CHECK(Count(run.out, "<DIR>") == depth + 1);
 }
 
-TEST_CASE("NtfsMftList puts the cluster lines under a path of 32767 units",
+TEST_CASE("NtfsScanBench puts the cluster lines under a path of 32767 units",
           "[mft][sample][name][cluster]") {
   // The leaf is a freed file with clusters, 200 levels down.
   constexpr std::size_t depth = 200;
@@ -192,7 +192,7 @@ TEST_CASE("NtfsMftList puts the cluster lines under a path of 32767 units",
   const std::string leaf = PathOf(names);
 
   const SampleRun run =
-      RunMftList({L"--deleted", L"--clusters=map", image.path.wstring()});
+      RunScanBench({L"--deleted", L"--clusters=map", image.path.wstring()});
 
   CHECK(run.exit_code == 0);
   CHECK_THAT(run.out,
@@ -202,7 +202,7 @@ TEST_CASE("NtfsMftList puts the cluster lines under a path of 32767 units",
                                         "# stream (unnamed): 0..2048 "));
 }
 
-TEST_CASE("NtfsMftList prints the name of a stream in every exotic form",
+TEST_CASE("NtfsScanBench prints the name of a stream in every exotic form",
           "[mft][sample][name][cluster]") {
   namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
   for (const auto& exotic : ExoticNames()) {
@@ -214,7 +214,7 @@ TEST_CASE("NtfsMftList prints the name of a stream in every exotic form",
     const TempTreeImage image(volume.Build());
 
     const SampleRun run =
-        RunMftList({L"--deleted", L"--clusters=map", image.path.wstring()});
+        RunScanBench({L"--deleted", L"--clusters=map", image.path.wstring()});
 
     CHECK(run.exit_code == 0);
     CHECK_THAT(run.out, ContainsSubstring(std::string(path_column, ' ') +
@@ -222,7 +222,7 @@ TEST_CASE("NtfsMftList prints the name of a stream in every exotic form",
   }
 }
 
-TEST_CASE("NtfsMftList prints the name of a long stream",
+TEST_CASE("NtfsScanBench prints the name of a long stream",
           "[mft][sample][name][cluster]") {
   // As long as a record of the fixture holds before its first sector ends.
   const std::wstring name = FillerName(60, L's', L'é');
@@ -234,7 +234,7 @@ TEST_CASE("NtfsMftList prints the name of a long stream",
   const TempTreeImage image(volume.Build());
 
   const SampleRun run =
-      RunMftList({L"--deleted", L"--clusters=map", image.path.wstring()});
+      RunScanBench({L"--deleted", L"--clusters=map", image.path.wstring()});
 
   CHECK(run.exit_code == 0);
   CHECK_THAT(run.out,
@@ -242,14 +242,14 @@ TEST_CASE("NtfsMftList prints the name of a long stream",
                                ToolDeviceAccess::WideToUtf8(name) + ":"));
 }
 
-TEST_CASE("NtfsMftList lists a long name once, whatever its DOS alias",
+TEST_CASE("NtfsScanBench lists a long name once, whatever its DOS alias",
           "[mft][sample][name]") {
   const std::vector<FakeTreeNode> nodes{
       {.links = {{.name = L"LongName.txt"},
                  {.name = L"LONGNA~1.TXT", .name_space = 2}}}};
   const TempTreeImage image(BuildFakeNtfsImageWithNameTree(nodes));
 
-  const SampleRun run = RunMftList({image.path.wstring()});
+  const SampleRun run = RunScanBench({image.path.wstring()});
 
   CHECK(run.exit_code == 0);
   // The alias is not a hard link: one name, and no line of its own.
@@ -257,7 +257,7 @@ TEST_CASE("NtfsMftList lists a long name once, whatever its DOS alias",
   CHECK_THAT(run.out, !ContainsSubstring("LONGNA~1"));
 }
 
-TEST_CASE("NtfsMftList lists an image at a path of more than 260 characters",
+TEST_CASE("NtfsScanBench lists an image at a path of more than 260 characters",
           "[mft][sample][long-path]") {
   const LongTempDir directory(300);
   const Fs::path image =
@@ -265,8 +265,8 @@ TEST_CASE("NtfsMftList lists an image at a path of more than 260 characters",
   REQUIRE(image.native().size() > 260);
   const TempTreeImage short_path;
 
-  const SampleRun long_run = RunMftList({image.wstring()});
-  const SampleRun short_run = RunMftList({short_path.path.wstring()});
+  const SampleRun long_run = RunScanBench({image.wstring()});
+  const SampleRun short_run = RunScanBench({short_path.path.wstring()});
 
   CHECK(long_run.exit_code == 0);
   CHECK(long_run.out == short_run.out);
@@ -274,13 +274,13 @@ TEST_CASE("NtfsMftList lists an image at a path of more than 260 characters",
 
 #ifdef _WIN32
 
-TEST_CASE("NtfsMftList lists an image through every form of a long path",
+TEST_CASE("NtfsScanBench lists an image through every form of a long path",
           "[mft][sample][long-path]") {
   const LongTempDir directory(300);
   const Fs::path image =
       directory.Write("image.img", BuildFakeNtfsImageWithMftTree());
   const TempTreeImage short_path;
-  const SampleRun expected = RunMftList({short_path.path.wstring()});
+  const SampleRun expected = RunScanBench({short_path.path.wstring()});
   const std::wstring plain = image.wstring();
   std::wstring forward = plain;
   std::ranges::replace(forward, L'\\', L'/');
@@ -289,7 +289,7 @@ TEST_CASE("NtfsMftList lists an image through every form of a long path",
        {plain, forward, LR"(\\?\)" + plain,
         directory.Directory().wstring() + LR"(\.\image.img)"}) {
     INFO(Fs::path(form).string().substr(0, 80));
-    const SampleRun run = RunMftList({form});
+    const SampleRun run = RunScanBench({form});
 
     CHECK(run.exit_code == 0);
     CHECK(run.out == expected.out);
@@ -298,11 +298,11 @@ TEST_CASE("NtfsMftList lists an image through every form of a long path",
 
 #else
 
-TEST_CASE("NtfsMftList reports a path longer than the system takes",
+TEST_CASE("NtfsScanBench reports a path longer than the system takes",
           "[mft][sample][long-path]") {
   const std::wstring path = L"/" + std::wstring(5000, L'p') + L"/image.img";
 
-  const SampleRun run = RunMftList({path});
+  const SampleRun run = RunScanBench({path});
 
   CHECK(run.exit_code == sample_failure_exit_code);
   CHECK_THAT(run.err, ContainsSubstring("as an NTFS volume"));

@@ -18,7 +18,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/device-access/temp-dir.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-#include <ntfs-browser/test/mft/ntfsmftlist-sample-support.h>
+#include <ntfs-browser/test/mft/ntfsscanbench-sample-support.h>
 #include <ntfs-browser/test/support/sample-run.h>
 #include <ntfs-browser/tool/device-access/json.h>
 #include <ntfs-browser/tuning/knobs.h>
@@ -36,7 +36,7 @@ using ToolDeviceAccess::JsonValue;
 
 namespace {
 
-// Slots of the image NtfsMftList lists: files with a list of their own, so
+// Slots of the image NtfsScanBench lists: files with a list of their own, so
 // that both passes of the scan run.
 constexpr ULONGLONG list_record_count = 3000;
 constexpr ULONGLONG list_fragment_clusters = 250;
@@ -125,7 +125,7 @@ struct Tool {
 
   [[nodiscard]] SampleRun Run(std::vector<std::wstring> options) const {
     options.push_back(target);
-    return TestMft::RunMftList(options);
+    return TestMft::RunScanBench(options);
   }
 };
 
@@ -139,7 +139,7 @@ struct Images {
 // Every tool of the build, over the image of its listing.
 std::vector<Tool> Tools(const Images& images) {
   std::vector<Tool> tools;
-  tools.push_back({.name = "NtfsMftList",
+  tools.push_back({.name = "NtfsScanBench",
                    .image = images.mft_list.path,
                    .target = images.mft_list.path.wstring()});
   return tools;

@@ -17,7 +17,7 @@
 
 using namespace NTFS_BROWSER_NAMESPACE;
 
-namespace NTFS_BROWSER_NAMESPACE::Example::NtfsMftList {
+namespace NTFS_BROWSER_NAMESPACE::Example::NtfsScanBench {
 
 namespace {
 
@@ -390,4 +390,4 @@ const DisplayPaths::Directory&
   return scratch.unkept;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Example::NtfsMftList
+}  // namespace NTFS_BROWSER_NAMESPACE::Example::NtfsScanBench

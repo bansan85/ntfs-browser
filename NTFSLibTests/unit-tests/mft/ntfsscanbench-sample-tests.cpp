@@ -17,7 +17,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/alloc/cluster-account-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-#include <ntfs-browser/test/mft/ntfsmftlist-sample-support.h>
+#include <ntfs-browser/test/mft/ntfsscanbench-sample-support.h>
 #include <ntfs-browser/test/support/sample-run.h>
 #include <ntfs-browser/tool/device-access/local-time.h>
 
@@ -37,7 +37,7 @@ namespace {
 // $STANDARD_INFORMATION last write time of every record of the fake image.
 constexpr ULONGLONG image_write_time = 0x1112131415161718ULL;
 
-// The listings' "{write}" as NtfsMftList prints it. The sample converts
+// The listings' "{write}" as NtfsScanBench prints it. The sample converts
 // the time to the machine's local zone, so the text depends on the host.
 std::string LocalWriteTime() {
   const auto local = ToolDeviceAccess::UtcTicksToLocalTime(image_write_time);
@@ -66,7 +66,7 @@ std::string WithLocalTimes(std::string_view listing) {
   return result.append(listing);
 }
 
-// Stdout of NtfsMftList on BuildFakeNtfsImageWithMftTree(): the live records
+// Stdout of NtfsScanBench on BuildFakeNtfsImageWithMftTree(): the live records
 // only, with the tree's hard link and lost-parent path.
 constexpr std::string_view live_listing =
     R"(    Record   Seq               Size Last write       Attrib Ln Path
@@ -83,7 +83,7 @@ Record slots: 26, in use: 7, deleted: 4 (0 with an overwritten attribute list), 
 Unreadable: 14, damaged: 0, not linked to the root: 1
 )";
 
-// Stdout of NtfsMftList --deleted on the same image: the freed records
+// Stdout of NtfsScanBench --deleted on the same image: the freed records
 // join the listing, and the one under a lost parent shows <lost #23>.
 constexpr std::string_view deleted_listing =
     R"(    Record   Seq               Size Last write       Attrib Ln Path
@@ -104,7 +104,7 @@ Record slots: 26, in use: 7, deleted: 4 (0 with an overwritten attribute list), 
 Unreadable: 14, damaged: 0, not linked to the root: 2
 )";
 
-// Stderr of NtfsMftList on a target that does not exist. Windows hands the
+// Stderr of NtfsScanBench on a target that does not exist. Windows hands the
 // path to the library, which logs its own error line first. Off Windows the
 // sample finds no device or image to give the library.
 #ifdef _WIN32
@@ -116,14 +116,14 @@ constexpr std::string_view missing_volume_error =
     "Cannot open no-such-volume.img as an NTFS volume\n";
 #endif
 
-// Runs NtfsMftList with args, its stdout and stderr captured apart.
+// Runs NtfsScanBench with args, its stdout and stderr captured apart.
 SampleRun RunSample(const std::vector<std::wstring>& args) {
-  return NTFS_BROWSER_NAMESPACE::Test::Mft::RunMftList(args);
+  return NTFS_BROWSER_NAMESPACE::Test::Mft::RunScanBench(args);
 }
 
 }  // namespace
 
-TEST_CASE("NtfsMftList lists the live records of the MFT tree image",
+TEST_CASE("NtfsScanBench lists the live records of the MFT tree image",
           "[mft][sample][characterization]") {
   const TempTreeImage image;
   const SampleRun run = RunSample({image.path.wstring()});
@@ -132,7 +132,7 @@ TEST_CASE("NtfsMftList lists the live records of the MFT tree image",
   CHECK(run.out == WithLocalTimes(live_listing));
 }
 
-TEST_CASE("NtfsMftList writes only its progress line on stderr without options",
+TEST_CASE("NtfsScanBench writes only its progress line on stderr without options",
           "[mft][sample][characterization][invariance]") {
   const TempTreeImage image;
   const SampleRun run = RunSample({image.path.wstring()});
@@ -142,7 +142,7 @@ TEST_CASE("NtfsMftList writes only its progress line on stderr without options",
   CHECK(run.out == WithLocalTimes(live_listing));
 }
 
-TEST_CASE("NtfsMftList --deleted also lists the freed records",
+TEST_CASE("NtfsScanBench --deleted also lists the freed records",
           "[mft][sample][characterization]") {
   const TempTreeImage image;
   const SampleRun run = RunSample({L"--deleted", image.path.wstring()});
@@ -151,7 +151,7 @@ TEST_CASE("NtfsMftList --deleted also lists the freed records",
   CHECK(run.out == WithLocalTimes(deleted_listing));
 }
 
-TEST_CASE("NtfsMftList shows where the chain breaks in the paths under a loop",
+TEST_CASE("NtfsScanBench shows where the chain breaks in the paths under a loop",
           "[mft][sample][characterization]") {
   std::vector<BYTE> tree =
       NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftTree();
@@ -169,7 +169,7 @@ TEST_CASE("NtfsMftList shows where the chain breaks in the paths under a loop",
   CHECK_THAT(run.out, ContainsSubstring("  1 <lost #23>\\Docs\\NewDir\n"));
 }
 
-TEST_CASE("NtfsMftList --recover on a clean image lists what it lists without",
+TEST_CASE("NtfsScanBench --recover on a clean image lists what it lists without",
           "[mft][sample][characterization]") {
   const TempTreeImage image;
   const SampleRun plain = RunSample({L"--deleted", image.path.wstring()});
@@ -230,7 +230,7 @@ std::vector<BYTE> ImageWithJournal() {
 
 }  // namespace
 
-TEST_CASE("NtfsMftList --recover --deleted shows what the journal knows",
+TEST_CASE("NtfsScanBench --recover --deleted shows what the journal knows",
           "[mft][sample][usn]") {
   const TempTreeImage image(ImageWithJournal());
   const SampleRun run =
@@ -252,7 +252,7 @@ TEST_CASE("NtfsMftList --recover --deleted shows what the journal knows",
                                "in the journal, 0 damaged\n"));
 }
 
-TEST_CASE("NtfsMftList --recover without --deleted lists no journal-only file",
+TEST_CASE("NtfsScanBench --recover without --deleted lists no journal-only file",
           "[mft][sample][usn]") {
   const TempTreeImage image(ImageWithJournal());
   const SampleRun run = RunSample({L"--recover", image.path.wstring()});
@@ -263,7 +263,7 @@ TEST_CASE("NtfsMftList --recover without --deleted lists no journal-only file",
   CHECK_THAT(run.out, !ContainsSubstring("Files only the journal names"));
 }
 
-TEST_CASE("NtfsMftList without --recover ignores the journal",
+TEST_CASE("NtfsScanBench without --recover ignores the journal",
           "[mft][sample][usn]") {
   const TempTreeImage image(ImageWithJournal());
   const SampleRun run = RunSample({L"--deleted", image.path.wstring()});
@@ -274,32 +274,32 @@ TEST_CASE("NtfsMftList without --recover ignores the journal",
   CHECK_THAT(run.out, !ContainsSubstring("Journal:"));
 }
 
-TEST_CASE("NtfsMftList without a target prints usage and fails",
+TEST_CASE("NtfsScanBench without a target prints usage and fails",
           "[mft][sample][characterization]") {
   const SampleRun run = RunSample({L"--deleted"});
 
   CHECK(run.exit_code == sample_failure_exit_code);
-  CHECK_THAT(run.out, ContainsSubstring("Usage: ntfsmftlist"));
+  CHECK_THAT(run.out, ContainsSubstring("Usage: ntfsscanbench"));
 }
 
-TEST_CASE("NtfsMftList with two targets prints usage and fails",
+TEST_CASE("NtfsScanBench with two targets prints usage and fails",
           "[mft][sample][characterization]") {
   const SampleRun run = RunSample({L"first.img", L"second.img"});
 
   CHECK(run.exit_code == sample_failure_exit_code);
-  CHECK_THAT(run.out, ContainsSubstring("Usage: ntfsmftlist"));
+  CHECK_THAT(run.out, ContainsSubstring("Usage: ntfsscanbench"));
 }
 
-TEST_CASE("NtfsMftList rejects a malformed --log option with usage",
+TEST_CASE("NtfsScanBench rejects a malformed --log option with usage",
           "[mft][sample][characterization]") {
   const TempTreeImage image;
   const SampleRun run = RunSample({L"--log=bogus", image.path.wstring()});
 
   CHECK(run.exit_code == sample_failure_exit_code);
-  CHECK_THAT(run.out, ContainsSubstring("Usage: ntfsmftlist"));
+  CHECK_THAT(run.out, ContainsSubstring("Usage: ntfsscanbench"));
 }
 
-TEST_CASE("NtfsMftList reports a target that is not an NTFS volume",
+TEST_CASE("NtfsScanBench reports a target that is not an NTFS volume",
           "[mft][sample][characterization]") {
   const SampleRun run = RunSample({L"no-such-volume.img"});
 
@@ -308,7 +308,7 @@ TEST_CASE("NtfsMftList reports a target that is not an NTFS volume",
   CHECK(run.err == missing_volume_error);
 }
 
-TEST_CASE("NtfsMftList shows one letter per DOS permission flag",
+TEST_CASE("NtfsScanBench shows one letter per DOS permission flag",
           "[mft][sample][characterization]") {
   const auto [permission, attributes] = GENERATE(
       table<NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission, std::string_view>({
@@ -335,7 +335,7 @@ TEST_CASE("NtfsMftList shows one letter per DOS permission flag",
                                         "  1 \\Docs\\report.txt\n"));
 }
 
-TEST_CASE("NtfsMftList reports a file that is not an NTFS volume",
+TEST_CASE("NtfsScanBench reports a file that is not an NTFS volume",
           "[mft][sample][characterization]") {
   const TempTreeImage not_ntfs(std::vector<BYTE>(4096, 0));
   const SampleRun run = RunSample({not_ntfs.path.wstring()});
@@ -347,22 +347,22 @@ TEST_CASE("NtfsMftList reports a file that is not an NTFS volume",
                                " as an NTFS volume\n"));
 }
 
-TEST_CASE("NtfsMftList usage names the device and image forms",
+TEST_CASE("NtfsScanBench usage names the device and image forms",
           "[mft][sample][characterization]") {
   const SampleRun run = RunSample({L"--deleted"});
 
 #ifdef _WIN32
-  CHECK_THAT(run.out, ContainsSubstring("eg. ntfsmftlist c:\n"));
+  CHECK_THAT(run.out, ContainsSubstring("eg. ntfsscanbench c:\n"));
 #else
-  CHECK_THAT(run.out, ContainsSubstring("eg. ntfsmftlist /dev/sda1\n"));
+  CHECK_THAT(run.out, ContainsSubstring("eg. ntfsscanbench /dev/sda1\n"));
   CHECK_THAT(run.out,
-             ContainsSubstring("eg. ntfsmftlist --deleted ./disk.img\n"));
+             ContainsSubstring("eg. ntfsscanbench --deleted ./disk.img\n"));
 #endif
 }
 
 #ifndef _WIN32
 
-TEST_CASE("NtfsMftList refuses a directory after the image",
+TEST_CASE("NtfsScanBench refuses a directory after the image",
           "[mft][sample][characterization]") {
   const TempTreeImage image;
   const SampleRun run = RunSample({image.path.wstring() + L"/Docs"});
@@ -385,7 +385,7 @@ constexpr ULONGLONG busy_fragment_clusters = 255;
 
 }  // namespace
 
-TEST_CASE("NtfsMftList lists the same with one thread as with several",
+TEST_CASE("NtfsScanBench lists the same with one thread as with several",
           "[mft][sample][threads]") {
   const TempTreeImage image(NTFS_BROWSER_NAMESPACE::Test::FakeImage::
                                 BuildFakeNtfsImageWithBusyMftScan(
@@ -422,7 +422,7 @@ TEST_CASE("NtfsMftList lists the same with one thread as with several",
   CHECK(four.out == one.out);
 }
 
-TEST_CASE("NtfsMftList with several threads lists the tree image as with one",
+TEST_CASE("NtfsScanBench with several threads lists the tree image as with one",
           "[mft][sample][threads]") {
   const TempTreeImage image;
 
@@ -436,7 +436,7 @@ TEST_CASE("NtfsMftList with several threads lists the tree image as with one",
   CHECK(deleted.out == WithLocalTimes(deleted_listing));
 }
 
-TEST_CASE("NtfsMftList with several threads keeps the paths under a loop",
+TEST_CASE("NtfsScanBench with several threads keeps the paths under a loop",
           "[mft][sample][threads]") {
   std::vector<BYTE> tree =
       NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftTree();
@@ -451,7 +451,7 @@ TEST_CASE("NtfsMftList with several threads keeps the paths under a loop",
   CHECK_THAT(many.out, ContainsSubstring("  1 <lost #16>\\NewDir\\Docs\n"));
 }
 
-TEST_CASE("NtfsMftList rejects a thread count that is not a number from 1 up",
+TEST_CASE("NtfsScanBench rejects a thread count that is not a number from 1 up",
           "[mft][sample][threads]") {
   const TempTreeImage image;
   for (const std::wstring_view option :
@@ -462,11 +462,11 @@ TEST_CASE("NtfsMftList rejects a thread count that is not a number from 1 up",
 
     INFO(Fs::path(std::wstring(option)).string());
     CHECK(run.exit_code == sample_failure_exit_code);
-    CHECK_THAT(run.out, ContainsSubstring("Usage: ntfsmftlist"));
+    CHECK_THAT(run.out, ContainsSubstring("Usage: ntfsscanbench"));
   }
 }
 
-TEST_CASE("NtfsMftList usage names the --threads option",
+TEST_CASE("NtfsScanBench usage names the --threads option",
           "[mft][sample][threads]") {
   const SampleRun run = RunSample({L"--deleted"});
 
@@ -490,7 +490,7 @@ std::vector<BYTE> ImageWithClusters() {
 
 }  // namespace
 
-TEST_CASE("NtfsMftList --clusters counts the clusters of the freed files",
+TEST_CASE("NtfsScanBench --clusters counts the clusters of the freed files",
           "[mft][sample][cluster]") {
   const TempTreeImage image(ImageWithClusters());
   const SampleRun plain = RunSample({L"--deleted", image.path.wstring()});
@@ -508,7 +508,7 @@ TEST_CASE("NtfsMftList --clusters counts the clusters of the freed files",
   CHECK_THAT(plain.out, !ContainsSubstring("Clusters of"));
 }
 
-TEST_CASE("NtfsMftList --clusters=map gives the byte ranges in file order",
+TEST_CASE("NtfsScanBench --clusters=map gives the byte ranges in file order",
           "[mft][sample][cluster]") {
   const TempTreeImage image(ImageWithClusters());
   const SampleRun run =
@@ -520,7 +520,7 @@ TEST_CASE("NtfsMftList --clusters=map gives the byte ranges in file order",
                                         "3072..4096 intact\n"));
 }
 
-TEST_CASE("NtfsMftList --verify-data reads the clusters presumed intact",
+TEST_CASE("NtfsScanBench --verify-data reads the clusters presumed intact",
           "[mft][sample][cluster]") {
   const TempTreeImage image(ImageWithClusters());
   const SampleRun sampled =
@@ -537,7 +537,7 @@ TEST_CASE("NtfsMftList --verify-data reads the clusters presumed intact",
                                          "zeroed 3\n"));
 }
 
-TEST_CASE("NtfsMftList rejects a malformed cluster option",
+TEST_CASE("NtfsScanBench rejects a malformed cluster option",
           "[mft][sample][cluster]") {
   const TempTreeImage image(ImageWithClusters());
   const SampleRun run = RunSample({L"--clusters=all", image.path.wstring()});

@@ -22,7 +22,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/mft/mft-tree-state-support.h>
-#include <ntfs-browser/test/mft/ntfsmftlist-sample-support.h>
+#include <ntfs-browser/test/mft/ntfsscanbench-sample-support.h>
 #include <ntfs-browser/test/support/name-tree-support.h>
 #include <ntfs-browser/test/support/sample-run.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
@@ -37,7 +37,7 @@ using NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithNameTree;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeDataRun;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::FakeTreeNode;
 using NTFS_BROWSER_NAMESPACE::Test::FakeImage::MakeNameChain;
-using NTFS_BROWSER_NAMESPACE::Test::Mft::RunMftList;
+using NTFS_BROWSER_NAMESPACE::Test::Mft::RunScanBench;
 using NTFS_BROWSER_NAMESPACE::Test::Mft::TempTreeImage;
 using NTFS_BROWSER_NAMESPACE::Test::Support::NameTreeRecord;
 using NTFS_BROWSER_NAMESPACE::Test::Support::SampleRun;
@@ -143,7 +143,7 @@ std::vector<BYTE> WideImage() {
   return image;
 }
 
-// Runs NtfsMftList on image with options and --threads=threads, or with the
+// Runs NtfsScanBench on image with options and --threads=threads, or with the
 // default count when threads is 0.
 SampleRun ListWith(const TempTreeImage& image,
                    const std::vector<std::wstring>& options, unsigned threads) {
@@ -152,7 +152,7 @@ SampleRun ListWith(const TempTreeImage& image,
     args.push_back(L"--threads=" + std::to_wstring(threads));
   }
   args.push_back(image.path.wstring());
-  return RunMftList(args);
+  return RunScanBench(args);
 }
 
 // How many lines text holds.
@@ -162,7 +162,7 @@ std::size_t LineCount(const std::string& text) {
 
 }  // namespace
 
-TEST_CASE("NtfsMftList lists a wide tree the same with every count of threads",
+TEST_CASE("NtfsScanBench lists a wide tree the same with every count of threads",
           "[mft][sample][threads]") {
   const TempTreeImage image(WideImage());
   const std::vector<std::wstring> options = GENERATE(
@@ -184,7 +184,7 @@ TEST_CASE("NtfsMftList lists a wide tree the same with every count of threads",
   }
 }
 
-TEST_CASE("NtfsMftList carries every kind of line through its threads",
+TEST_CASE("NtfsScanBench carries every kind of line through its threads",
           "[mft][sample][threads]") {
   const TempTreeImage image(WideImage());
 
@@ -208,7 +208,7 @@ TEST_CASE("NtfsMftList carries every kind of line through its threads",
   CHECK_THAT(one.out, ContainsSubstring("Files only the journal names: 1\n"));
 }
 
-TEST_CASE("NtfsMftList lists a deep chain the same with several threads",
+TEST_CASE("NtfsScanBench lists a deep chain the same with several threads",
           "[mft][sample][threads][name]") {
   // Past the levels the listing walks itself, and its paths are not kept.
   constexpr std::size_t depth = 1500;
@@ -312,7 +312,7 @@ void CheckPathsAgainstTheTree(const std::vector<BYTE>& image) {
 
 }  // namespace
 
-TEST_CASE("NtfsMftList shows the paths that the tree gives, lost ones too",
+TEST_CASE("NtfsScanBench shows the paths that the tree gives, lost ones too",
           "[mft][sample][threads][name]") {
   std::vector<BYTE> looped = BuildFakeNtfsImageWithMftTree();
   NTFS_BROWSER_NAMESPACE::Test::Mft::LoopDocsAndNewDir(looped);
@@ -321,12 +321,12 @@ TEST_CASE("NtfsMftList shows the paths that the tree gives, lost ones too",
   CheckPathsAgainstTheTree(looped);
 }
 
-TEST_CASE("NtfsMftList shows the paths that the tree gives, in a wide tree",
+TEST_CASE("NtfsScanBench shows the paths that the tree gives, in a wide tree",
           "[mft][sample][threads][name]") {
   CheckPathsAgainstTheTree(BuildFakeNtfsImageWithNameTree(WideTree()));
 }
 
-TEST_CASE("NtfsMftList shows the paths that the tree gives, deep and freed",
+TEST_CASE("NtfsScanBench shows the paths that the tree gives, deep and freed",
           "[mft][sample][threads][name]") {
   // 300 levels is past the 256 the listing walks itself.
   constexpr std::size_t depth = 300;

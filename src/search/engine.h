@@ -20,7 +20,7 @@
 //   DirectoryEngine<S>       The NtfsDir walk, both caches. It fills every
 //                            Entry field except link_count (0), clusters
 //                            (null) and, for a live file, data_state.
-//   MftListEngine            The NtfsMftList walk: every record in $MFT order,
+//   MftListEngine            The MftTree walk: every record in $MFT order,
 //                            one Entry for each name of a record, orphans
 //                            included, with link_count, the cluster counts of
 //                            a deleted file and a percent. It builds an
