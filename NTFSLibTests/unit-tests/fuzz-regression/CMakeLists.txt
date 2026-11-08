@@ -1,7 +1,7 @@
 target_sources(
   NtfsBrowserTests
-  PRIVATE
+  PRIVATE
     "fuzzer-command-line-tests.cpp"
     "fuzzer-expected-messages.h"
-    "fuzzer-regression-tests.cpp"
+    "fuzzer-regression-tests.cpp"
 )

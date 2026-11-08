@@ -27,10 +27,10 @@ from layers and runs the same reads through the library:
 The addresses are volume relative, the way the library asks for them. A
 "reads" file in corpus-reads/ lists the (address, length) of every read of one
 trace. Make it again when the read order of the library changes: run the
-corpus test with NTFS_BROWSER_RECORD_TRACES=1 and a temporary patch of
-Test::DiskReaders::RecordingDiskReader::ReadInto that prints "addr size" per
-read. A test that opens the image several times keeps the reads of the last
-open only.
+corpus test with the image present (and NTFS_BROWSER_FORCE_TRACES unset) and a
+temporary patch of Test::DiskReaders::PartitionDiskReader::ReadInto that
+prints "addr size" per read. A test that opens the image several times keeps
+the reads of the last open only.
 
 The residue is the difference between the image and what NtfsFuzzGen predicts
 (its --predict mode), so the layers have one implementation, in C++. Build

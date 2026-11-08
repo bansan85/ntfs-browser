@@ -16,6 +16,7 @@ ctest --test-dir build/static -C Debug
 - One test: `ctest -R <regex>`, or the `NtfsBrowserTests` binary with a Catch2 name or tag (`"[efs]"`). A `[` in a test name starts a tag: escape it as `\[`.
 - Feature options `NTFS_BROWSER_ENABLE_DECOMPRESSION`, `..._EFS_CRYPTOPP`, `..._EFS_BCRYPT` compile code in or out. Test the macro with `#if` in a `.cpp` or `src/*.h`. A public header MUST NOT test it. Pair the BCrypt macro with `_WIN32`.
 - `NtfsDir2` and `NtfsFuzzer` are Windows-only. The library, unit tests, the console tools (`NtfsAttr`, `NtfsDump`, `NtfsUndel`, `NtfsDir`, `NtfsMftList`, `NtfsCompare`) and `NtfsFuzzerAfl` also build on Linux. There is no MFC in the build.
+- The build generates the fuzz inputs and the corpus traces into `build/<preset>/fuzz-generated/` (target `NtfsFuzzGenData`). `NtfsBrowserTests` depends on it. No such file is committed. See Fuzzing.
 - Source lists are explicit, never globbed. A new file MUST be added to `src/CMakeLists.txt` or to the `CMakeLists.txt` of its test or tool folder, inside the matching feature gate.
 
 ## Formatting
@@ -55,21 +56,29 @@ Conventional Commits, no scope (`fix:`, `feat:`, `refactor:`, `test:`, `docs:`, 
 - **Paths.** Code that opens a user-given path MUST go through `Io::ToExtendedLengthPath()`. Tests that create or list paths over 260 units MUST extend them too.
 - **Names** are raw UTF-16 units. Collate through `$UpCase`, never the locale. A map or set keyed by a name MUST NOT fold case. Print names as UTF-8 (WTF-8 for unpaired surrogates) with `Utf::WideToUtf8()`.
 - **Strict vs recovering.** `VolumeOptions::recover_errors` chooses between rejecting a damaged item and salvaging it. `include_deleted` decides which healthy items show. Call `Log::Recoverable()` only for a condition that strict mode would reject.
-- **Instrumentation and tuning** are opt-in. With neither, no read, hint, log line or output may change: recorded traces and the fuzz corpus check it. A new tunable constant MUST be added to `Tuning::Settings` and to the knob table in `include/ntfs-browser/tuning/knobs.h`. Tests and the fuzz harness MUST NOT set a tuning field.
+- **Instrumentation and tuning** are opt-in. With neither, no read, hint, log line or output may change. A new tunable constant MUST be added to `Tuning::Settings` and to the knob table in `include/ntfs-browser/tuning/knobs.h`. Tests and the fuzz harness MUST NOT set a tuning field.
 
 ## Tests
 
 - Catch2, in `NTFSLibTests/unit-tests/`, one folder per library namespace. A test goes in the folder of the namespace it exercises.
 - A header that another test folder includes lives in `<module>/include/ntfs-browser/{test,tool,example}/<module>/`. Those folders are never installed. Tests include such a header as `#include <ntfs-browser/test/<module>/<header>.h>`. A header used by one folder stays beside its `.cpp` and is included with quotes. CMake source lists use the `include/ntfs-browser/...` path.
 - Modules with public headers: `test/` for `fake-image`, `disk-readers`, `fuzz` and the unit test folders `alloc`, `attr`, `corpus`, `device-access`, `efs`, `io`, `lznt1`, `mft`, `support`, `usn`, `volume`. `tool/` for `device-access` and `ntfscompare`. `example/` for `ntfsattr`, `ntfsdir`, `ntfsdump`, `ntfsundel`.
-- Test code lives in `NTFS_BROWSER_NAMESPACE::Test::<Module>` (`Test::FakeImage`, `Test::DiskReaders`, `Test::Fuzz`, `Test::FuzzRegression`, `Test::Support`). Tools live in `::Tool::<Name>` (`Tool::DeviceAccess`, `Tool::NtfsCompare`, `Tool::Benchmark`). Examples live in `::Example::<Name>` (`Example::NtfsDir`, `Example::NtfsMftList`). Never `Tests`.
+- Test code lives in `NTFS_BROWSER_NAMESPACE::Test::<Module>` (`Test::FakeImage`, `Test::DiskReaders`, `Test::Fuzz`, `Test::FuzzRegression`, `Test::Support`). Tools live in `::Tool::<Name>` (`Tool::DeviceAccess`, `Tool::NtfsCompare`, `Tool::Benchmark`, `Tool::FuzzGen`). Examples live in `::Example::<Name>` (`Example::NtfsDir`, `Example::NtfsMftList`). Never `Tests`.
 - Inside `Test::*`, a library name MUST be fully qualified (`NTFS_BROWSER_NAMESPACE::Alloc::`). The test namespaces shadow the short names. A `.cpp` MAY alias at global scope: `namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;`.
 - Tests MUST NOT touch a real disk or device. They build synthetic images in memory (`NTFSLibTests/tools/fake-image/`, `BuildFakeNtfsImageWithNameTree()`) and serve them through the fake readers in `NTFSLibTests/tools/disk-readers/`. Extend those fakes rather than adding scaffolding. Tests MAY create files under the system temp folder.
-- Corpus tests reach their image through `RequireCorpusImage()` / `OpenCorpusImage()`. Recorded traces live in `NTFSLibTests/fuzz/data/corpus-traces/`. After any change to the read path, record them again with `NTFS_BROWSER_RECORD_TRACES=1` and the images present.
+- Corpus tests reach their image through `RequireCorpusImage()` / `OpenCorpusImage()`. Without the image they replay the trace that `NtfsFuzzGen` generates (`NTFS_TEST_TRACE_DIR`). `NTFS_BROWSER_FORCE_TRACES=1` replays it even when the image is present. Under `NTFS_BROWSER_REQUIRE_TEST_DATA` an absent image fails. The test skips only when the trace is absent too.
 - A test that calls `Log::Configure()` or `SetSinks()` MUST call `InstallCaptureSink()` afterwards.
 - A test that touches EFS MUST call `SetEfsKeyProvider(nullptr)` or install a fake. It MUST NOT reach the real certificate store.
 - Real-disk checks belong to the manual `NtfsCompare` tool, never to ctest or CI.
 
 ## Fuzzing
 
-`FuzzTestcase()` (`NTFSLibTests/fuzz/fuzz-core.cpp`) is shared by `NtfsFuzzer`, `NtfsFuzzerAfl` and the regression test. Saved inputs in `NTFSLibTests/fuzz/data/` replay by read order, not by address. So the read order of `FuzzTestcase()` MUST NOT depend on the build, and a new probe MUST run after the existing ones. Never pass `--inject-read-failures` to AFL.
+`FuzzTestcase()` (`NTFSLibTests/fuzz/fuzz-core.cpp`) is shared by `NtfsFuzzer`, `NtfsFuzzerAfl` and the regression test. Never pass `--inject-read-failures` to AFL.
+
+`NtfsFuzzGen` (`NTFSLibTests/fuzz/generator/`) builds every fuzz input and every corpus trace from code. A scenario makes an image, runs the probes on it and keeps the bytes that the library reads, in its current read order. The read order is free: nothing is recorded by hand.
+
+- `NtfsFuzzGen --out DIR` writes all scenarios under `DIR` (traces in `DIR/corpus-traces/`). CMake runs it at build time, with a stamp on the generator, the library and the resource archives. `--seeds DIR` writes the flat inputs only. `--list` prints the names. `--only NAME...` restricts a run. `--verify DIR` compares each scenario with the file of the same name in `DIR`.
+- The target `NtfsFuzzSeedCorpus` (not part of ALL) writes `fuzz-generated/afl-seeds`, the seed folder for `afl-fuzz`.
+- A scenario that needs LZNT1 decompression or an EFS backend exists only in a build that has it. The regression test skips its file when it is absent.
+- A new regression input is a new scenario plus an entry in `fuzzer-expected-messages.h` with the log messages it MUST produce. A test fails when the two lists differ. `NtfsFuzzGenDeterminism` generates twice and compares.
+- What code cannot compute (file contents, RAM slack, journal data of the forensic images) is in `generator/resources/*.tar.xz`, one archive per source image. CMake extracts them. `resources/make-corpus-residue.py` makes them and needs the real images at development time only. The generator never reads an image. When the reads of a corpus test change, adapt the probes in `corpus-probes.cpp` and the `.reads` lists with a temporary address-logging patch, as the script's docstring explains.

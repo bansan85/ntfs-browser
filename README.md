@@ -217,6 +217,7 @@ Each public class and function is described in the headers under `include/ntfs-b
 - 2026-10 — Bad clusters from `$BadClus`
 - 2026-10 — Change journal (`$UsnJrnl`) in recovery mode
 - 2026-11 — `NtfsAttr`, `NtfsDump` and `NtfsUndel` are console tools on Windows and Linux, MFC is gone from the build
+- 2026-11 — `NtfsFuzzGen` builds the fuzz inputs and the corpus traces from code at build time, so no fuzz data is committed and the read order of the library is free
 
 ## Credits and licence
 
