@@ -31,10 +31,13 @@ class LegacyRecord {
     WORD flags = 0;
     // The name of the attribute, empty for none.
     std::wstring name;
-    // The offset of the name that a resident attribute declares. Empty means
-    // the end of the header. The builders write 0 for an attribute without a
+    // The offset of the name that the attribute declares. Empty means the end
+    // of the header, and for a non-resident attribute without a name the end
+    // of the common header. The builders write 0 for an attribute without a
     // name.
     std::optional<WORD> name_offset;
+    // The instance number of the attribute in its record.
+    WORD id = 0;
     // A resident attribute holds value. Otherwise the fields below apply.
     std::vector<BYTE> value;
     bool non_resident = false;
@@ -61,8 +64,35 @@ class LegacyRecord {
     WORD flags = 1;
     // The reference of the base record, zero for a base record.
     ULONGLONG base_reference = 0;
+    // The sequence number of the record and its count of hard links.
+    WORD sequence = 1;
+    WORD links = 1;
+    // Where the update sequence array sits, and the number it holds. The
+    // builders of the fake volumes put the array at the end of the record,
+    // with the number 0.
+    WORD array_offset = 0x30;
+    WORD update_sequence_number = 1;
+    // The used size the record declares. Empty means the end of the
+    // attributes, with the end marker.
+    std::optional<DWORD> used_size;
+    // The bytes the used size counts after the last attribute: the end marker
+    // and, in most inputs, four bytes of padding. Some inputs count the marker
+    // alone.
+    DWORD used_tail = 8;
+    // The id that the next attribute of the record will get.
+    WORD next_attribute_id = 0;
+    // Where the first attribute starts, and the allocated size the record
+    // declares.
+    WORD first_attribute_offset = 0x38;
+    DWORD allocated_size = 0x400;
+    // The number of the record, which NTFS 3.1 keeps at offset 0x2C. Empty
+    // leaves the field at zero.
+    std::optional<DWORD> record_number;
     std::vector<Attribute> attributes;
   };
+
+  // The bytes of the record that spec describes.
+  [[nodiscard]] static std::vector<BYTE> Bytes(const Spec& spec);
 
   // Writes the record idx of image. The last word of each sector moves into the
   // update sequence array.
@@ -71,6 +101,10 @@ class LegacyRecord {
   // Writes the $MFT record (0) of a volume whose file records fill clusters
   // clusters, from the cluster of the $MFT on.
   static void PutMft(std::vector<BYTE>& image, ULONGLONG clusters);
+
+  // The bytes of one attribute, padded to a multiple of 8.
+  [[nodiscard]] static std::vector<BYTE>
+      AttributeBytes(const Attribute& attribute);
 
   // The bytes of the run list of runs, with its end byte.
   [[nodiscard]] static std::vector<BYTE>

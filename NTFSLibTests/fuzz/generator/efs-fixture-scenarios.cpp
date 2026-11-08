@@ -1,16 +1,22 @@
 #include <ntfs-browser/win-types.h>
 
+#include <algorithm>
 #include <cstddef>
+#include <functional>
 #include <span>
 #include <stdexcept>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/tool/fuzzgen/bpb-edit.h>
 #include <ntfs-browser/tool/fuzzgen/build-features.h>
 #include <ntfs-browser/tool/fuzzgen/efs-fixture-scenarios.h>
+#include <ntfs-browser/tool/fuzzgen/hand-made-efs.h>
 #include <ntfs-browser/tool/fuzzgen/legacy-fixtures.h>
+#include <ntfs-browser/tool/fuzzgen/legacy-record.h>
 #include <ntfs-browser/tool/fuzzgen/record-edit.h>
 #include <ntfs-browser/tool/fuzzgen/recorded-stream.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
@@ -23,6 +29,7 @@
 #endif
 
 #include "data/header-non-resident.h"
+#include "data/ntfs-bpb.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 
@@ -124,12 +131,181 @@ Image EncryptedWith(Algorithm algorithm) {
   return FakeImage::BuildFakeNtfsImageWithEncryptedFile(file);
 }
 
+// An encrypted file of a hand-made volume: a record in the layout of a real
+// NTFS volume, with one encrypted stream and the $EFS value given.
+struct HandMadeFile {
+  ULONGLONG record;
+  ULONGLONG clusters;
+  ULONGLONG allocated_bytes;
+  std::vector<BYTE> runs;
+  std::vector<BYTE> efs;
+};
+
+void PutEncryptedFile(Image& image, const HandMadeFile& file) {
+  constexpr WORD stream_id = 2;
+  constexpr WORD efs_id = 1;
+  LegacyRecord::Put(
+      image, file.record,
+      {.used_tail = 4,
+       .next_attribute_id = 3,
+       .record_number = static_cast<DWORD>(file.record),
+       .attributes = {{.type = LegacyRecord::type_data,
+                       .flags = LegacyRecord::flag_encrypted,
+                       .id = stream_id,
+                       .non_resident = true,
+                       .last_vcn = file.clusters - 1,
+                       .allocated_size = file.allocated_bytes,
+                       .real_size = decrypt_plaintext_bytes,
+                       .initialized_size = decrypt_plaintext_bytes,
+                       .raw_runs = file.runs},
+                      {.type = LegacyRecord::type_logged_utility_stream,
+                       .name = L"$EFS",
+                       .id = efs_id,
+                       .value = file.efs}}});
+}
+
+// The keys of the hand-made entries: 16 bytes for AES with 128 bits, 32 for
+// AES with 256 bits and for the entries that give a key of the wrong length.
+constexpr std::size_t aes128_key_bytes = 16;
+constexpr std::size_t aes256_key_bytes = 32;
+
+// The FEK of AES-128 with a key of 16 bytes.
+std::vector<BYTE> Aes128Fek() {
+  return HandMadeEfs::FekBlob(aes128_key_bytes, HandMadeEfs::aes128,
+                              aes128_key_bytes);
+}
+
+// One entry with the FEK given, and the first byte of its thumbprint.
+HandMadeEfs::Entry EntryWith(BYTE seed, std::vector<BYTE> fek) {
+  return {.seed = seed, .fek = std::move(fek)};
+}
+
+// A value of one entry with the FEK of AES-128, which change then damages.
+std::vector<BYTE>
+    DamagedEntry(BYTE seed,
+                 const std::function<void(HandMadeEfs::Entry&)>& change) {
+  HandMadeEfs::Entry entry = EntryWith(seed, Aes128Fek());
+  change(entry);
+  return HandMadeEfs::ValueBytes({.entries = {entry}});
+}
+
+// The encrypted volume with a $MFT of 16 clusters and files whose $EFS stream
+// is damaged in one field each.
+Image MalformedFields() {
+  Image image = EncryptedWith(Algorithm::Aes128);
+  constexpr ULONGLONG mft_clusters = 16;
+  constexpr BYTE mft_cluster = 1;
+  RecordEdit::MapMft(image, mft_clusters, mft_cluster,
+                     FakeImage::fake_cluster_size);
+  constexpr DWORD far_offset = 0x10000;
+  constexpr DWORD entry_too_long = 0x1000;
+  constexpr DWORD thumbprint_too_short = 0x10;
+  constexpr DWORD drf_offset = 0x48;
+  constexpr std::size_t header_bytes = 0x48;
+  constexpr std::size_t header_and_count_bytes = 0x4C;
+  constexpr ULONGLONG stream_clusters = 4;
+  const std::vector<BYTE> stream_runs = {0x21, 0x04, 0x28, 0x00, 0x00};
+  const std::vector<std::pair<ULONGLONG, std::vector<BYTE>>> files = {
+      // The header stops before the DDF has a count.
+      {7, HandMadeEfs::ValueBytes(
+              {.ddf_offset = far_offset, .length = header_bytes})},
+      // The value ends at the count of the DDF, which is zero.
+      {10,
+       HandMadeEfs::ValueBytes({.count = 0, .length = header_and_count_bytes})},
+      {8, DamagedEntry(0x12, [](auto& e) { e.length = entry_too_long; })},
+      {9,
+       DamagedEntry(0x13, [](auto& e) { e.credential_offset = far_offset; })},
+      {11, DamagedEntry(0x15, [](auto& e) { e.hash_offset = far_offset; })},
+      {12,
+       DamagedEntry(0x16,
+                    [](auto& e) { e.thumbprint_size = thumbprint_too_short; })},
+      {13,
+       DamagedEntry(0x17, [](auto& e) { e.thumbprint_offset = far_offset; })},
+      // A DRF with no DDF.
+      {14,
+       HandMadeEfs::ValueBytes({.ddf_offset = 0,
+                                .drf_offset = drf_offset,
+                                .entries = {EntryWith(0x11, Aes128Fek())}})},
+  };
+  for (const auto& [record, efs] : files) {
+    PutEncryptedFile(image, {.record = record,
+                             .clusters = stream_clusters,
+                             .allocated_bytes =
+                                 stream_clusters * FakeImage::fake_cluster_size,
+                             .runs = stream_runs,
+                             .efs = efs});
+  }
+  return image;
+}
+
+// A volume of sectors of 256 bytes, one to the cluster, whose clusters are
+// smaller than the sector EFS encrypts by. The file has a $EFS of five
+// entries: one good, and one for each way a FEK can be wrong.
+Image UnalignedCluster() {
+  constexpr WORD sector_bytes = 256;
+  constexpr ULONGLONG total_sectors = 256;
+  constexpr ULONGLONG mft_cluster = 4;
+  constexpr DWORD clusters_per_unit = 4;
+  constexpr ULONGLONG mft_clusters = 64;
+  constexpr DWORD unsupported_algorithm = 0x1234;
+  constexpr std::size_t short_fek_bytes = 8;
+  constexpr BYTE swapped_first_marker_byte = 0xAA;
+  constexpr BYTE swapped_second_marker_byte = 0x55;
+  Image image = EncryptedWith(Algorithm::Aes128);
+  BpbEdit::Apply(image, [&](Data::NtfsBpb& bpb) {
+    bpb.bytes_per_sector = sector_bytes;
+    bpb.sectors_per_cluster = 1;
+    bpb.total_sectors = total_sectors;
+    bpb.lcn_mft = mft_cluster;
+    bpb.clusters_per_file_record = clusters_per_unit;
+    bpb.clusters_per_index_block = clusters_per_unit;
+    // The two bytes of the end marker are swapped, as the first recorder left
+    // them.
+    bpb.x_aa = swapped_first_marker_byte;
+    bpb.x_55 = swapped_second_marker_byte;
+  });
+  RecordEdit::MapMft(image, mft_clusters, mft_cluster, sector_bytes);
+  HandMadeEfs::Entry good = EntryWith(0xFF, Aes128Fek());
+  good.fill = 1;
+  // A FEK that stops after the key length and the second field.
+  std::vector<BYTE> short_fek = Aes128Fek();
+  short_fek.resize(short_fek_bytes);
+  const std::vector<std::pair<BYTE, std::vector<BYTE>>> others = {
+      {0x21, short_fek},
+      {0x22, HandMadeEfs::FekBlob(aes128_key_bytes, unsupported_algorithm,
+                                  aes128_key_bytes)},
+      // The key is 32 bytes long, which AES-128 does not take.
+      {0x23, HandMadeEfs::FekBlob(aes256_key_bytes, HandMadeEfs::aes128,
+                                  aes256_key_bytes)},
+      {0x24, HandMadeEfs::FekBlob(aes256_key_bytes, HandMadeEfs::aes256,
+                                  aes256_key_bytes)}};
+  HandMadeEfs::Value value{.entries = {good}};
+  for (const auto& [seed, fek] : others) {
+    value.entries.push_back(EntryWith(seed, fek));
+  }
+  constexpr ULONGLONG stream_clusters = 16;
+  PutEncryptedFile(image, {.record = 6,
+                           .clusters = stream_clusters,
+                           .allocated_bytes = stream_clusters * sector_bytes,
+                           .runs = {0x21, 0x10, 0xA0, 0x00, 0x00},
+                           .efs = HandMadeEfs::ValueBytes(value)});
+  return image;
+}
+
 #else
 
 // A build without an EFS backend skips these inputs before it calls make.
 enum class Algorithm : int { Aes128, Aes192, Aes256, _3Des, Desx };
 
 Image EncryptedWith(Algorithm /*algorithm*/) {
+  throw std::logic_error("this build has no EFS backend");
+}
+
+Image MalformedFields() {
+  throw std::logic_error("this build has no EFS backend");
+}
+
+Image UnalignedCluster() {
   throw std::logic_error("this build has no EFS backend");
 }
 
@@ -160,6 +336,13 @@ void EfsFixtureScenarios::Register(ScenarioRegistry& registry) {
   LegacyFixtures::Register(registry,
                            {{.name = "filerecord_efs_stream_too_large",
                              .make = VolumeWithHugeEfs,
+                             .needs = Feature::Efs},
+                            {.name = "efs_stream_malformed_fields",
+                             .make = MalformedFields,
+                             .needs = Feature::Efs},
+                            {.name = "efs_encrypted_read_unaligned_cluster",
+                             .make = UnalignedCluster,
+                             .boot = LegacyFixtures::Boot::Current,
                              .needs = Feature::Efs}});
   for (const Decrypt& decrypt : decrypts) {
     LegacyFixtures::Register(registry, {{.name = decrypt.name,

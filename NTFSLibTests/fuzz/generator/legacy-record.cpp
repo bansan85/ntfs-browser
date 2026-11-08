@@ -21,20 +21,10 @@ namespace FakeImage = Test::FakeImage;
 // number and one word per sector.
 constexpr std::size_t record_bytes = FakeImage::fake_file_record_size;
 constexpr std::size_t sector_bytes = 512;
-constexpr WORD array_offset = 0x30;
 constexpr WORD array_words = 1 + (record_bytes / sector_bytes);
 
 // The cluster of the $MFT in every fake image.
 constexpr ULONGLONG mft_cluster = 1;
-
-// The first attribute follows the array, on a multiple of 8.
-constexpr WORD first_attribute_offset = 0x38;
-
-// The sequence number of the record, its number of hard links, and the update
-// sequence number that the first hand-made records carry.
-constexpr WORD record_sequence = 1;
-constexpr WORD record_links = 1;
-constexpr WORD update_sequence_number = 1;
 
 // The "FILE" signature, read as a little-endian DWORD.
 constexpr DWORD file_magic = 0x454C4946;
@@ -64,12 +54,15 @@ constexpr std::size_t field_flags = 22;
 constexpr std::size_t field_used = 24;
 constexpr std::size_t field_allocated = 28;
 constexpr std::size_t field_base = 32;
+constexpr std::size_t field_next_attribute = 40;
+constexpr std::size_t field_record_number = 44;
 
 // Offsets of the fields of an attribute header.
 constexpr std::size_t attr_type = 0;
 constexpr std::size_t attr_total = 4;
 constexpr std::size_t attr_non_resident = 8;
 constexpr std::size_t attr_name_length = 9;
+constexpr std::size_t attr_id = 14;
 constexpr std::size_t attr_name_offset = 10;
 constexpr std::size_t attr_flags = 12;
 constexpr std::size_t attr_value_length = 16;
@@ -138,6 +131,7 @@ std::vector<BYTE> ResidentBytes(const LegacyRecord::Attribute& attr) {
   Store<WORD>(out, attr_name_offset,
               attr.name_offset.value_or(resident_header_bytes));
   Store<WORD>(out, attr_flags, attr.flags);
+  Store<WORD>(out, attr_id, attr.id);
   Store<DWORD>(out, attr_value_length, static_cast<DWORD>(attr.value.size()));
   Store<WORD>(out, attr_value_offset, static_cast<WORD>(value_offset));
   std::ranges::copy(attr.value,
@@ -163,9 +157,10 @@ std::vector<BYTE> NonResidentBytes(const LegacyRecord::Attribute& attr) {
   Store<BYTE>(out, attr_name_length, static_cast<BYTE>(attr.name.size()));
   // A stream without a name points its name at the end of the common header.
   Store<WORD>(out, attr_name_offset,
-              static_cast<WORD>(attr.name.empty() ? non_resident_header_bytes
-                                                  : header));
+              attr.name_offset.value_or(static_cast<WORD>(
+                  attr.name.empty() ? non_resident_header_bytes : header)));
   Store<WORD>(out, attr_flags, attr.flags);
+  Store<WORD>(out, attr_id, attr.id);
   Store<ULONGLONG>(out, attr_start_vcn, attr.start_vcn);
   Store<ULONGLONG>(out, attr_last_vcn, attr.last_vcn);
   Store<WORD>(out, attr_runs_offset, static_cast<WORD>(runs_offset));
@@ -184,6 +179,11 @@ std::vector<BYTE> NonResidentBytes(const LegacyRecord::Attribute& attr) {
 }
 
 }  // namespace
+
+std::vector<BYTE> LegacyRecord::AttributeBytes(const Attribute& attribute) {
+  return attribute.non_resident ? NonResidentBytes(attribute)
+                                : ResidentBytes(attribute);
+}
 
 std::vector<BYTE> LegacyRecord::EncodeRuns(const std::vector<Run>& runs) {
   std::vector<BYTE> out;
@@ -204,19 +204,22 @@ std::vector<BYTE> LegacyRecord::EncodeRuns(const std::vector<Run>& runs) {
   return out;
 }
 
-void LegacyRecord::Put(std::vector<BYTE>& image, ULONGLONG idx,
-                       const Spec& spec) {
+std::vector<BYTE> LegacyRecord::Bytes(const Spec& spec) {
   std::vector<BYTE> record(record_bytes, 0);
   Store<DWORD>(record, field_magic, file_magic);
-  Store<WORD>(record, field_array_offset, array_offset);
+  Store<WORD>(record, field_array_offset, spec.array_offset);
   Store<WORD>(record, field_array_words, array_words);
-  Store<WORD>(record, field_sequence, record_sequence);
-  Store<WORD>(record, field_links, record_links);
-  Store<WORD>(record, field_attribute_offset, first_attribute_offset);
+  Store<WORD>(record, field_sequence, spec.sequence);
+  Store<WORD>(record, field_links, spec.links);
+  Store<WORD>(record, field_attribute_offset, spec.first_attribute_offset);
   Store<WORD>(record, field_flags, spec.flags);
-  Store<DWORD>(record, field_allocated, static_cast<DWORD>(record_bytes));
+  Store<DWORD>(record, field_allocated, spec.allocated_size);
   Store<ULONGLONG>(record, field_base, spec.base_reference);
-  std::size_t at = first_attribute_offset;
+  Store<WORD>(record, field_next_attribute, spec.next_attribute_id);
+  if (spec.record_number) {
+    Store<DWORD>(record, field_record_number, *spec.record_number);
+  }
+  std::size_t at = spec.first_attribute_offset;
   for (const Attribute& attr : spec.attributes) {
     const std::vector<BYTE> bytes =
         attr.non_resident ? NonResidentBytes(attr) : ResidentBytes(attr);
@@ -227,16 +230,24 @@ void LegacyRecord::Put(std::vector<BYTE>& image, ULONGLONG idx,
     at += bytes.size();
   }
   Store<DWORD>(record, at, end_marker);
-  Store<DWORD>(record, field_used, static_cast<DWORD>(at + end_bytes));
+  Store<DWORD>(
+      record, field_used,
+      spec.used_size.value_or(static_cast<DWORD>(at + spec.used_tail)));
   // Each sector gives its last word to the array and takes the sequence
   // number in exchange.
-  Store<WORD>(record, array_offset, update_sequence_number);
+  Store<WORD>(record, spec.array_offset, spec.update_sequence_number);
   for (std::size_t sector = 0; sector < record_bytes / sector_bytes; ++sector) {
     const std::size_t end = ((sector + 1) * sector_bytes) - sizeof(WORD);
-    const std::size_t slot = array_offset + ((sector + 1) * sizeof(WORD));
+    const std::size_t slot = spec.array_offset + ((sector + 1) * sizeof(WORD));
     std::memcpy(&record.at(slot), &record.at(end), sizeof(WORD));
-    Store<WORD>(record, end, update_sequence_number);
+    Store<WORD>(record, end, spec.update_sequence_number);
   }
+  return record;
+}
+
+void LegacyRecord::Put(std::vector<BYTE>& image, ULONGLONG idx,
+                       const Spec& spec) {
+  const std::vector<BYTE> record = Bytes(spec);
   const std::size_t offset = RecordEdit::RecordOffset(idx);
   static_cast<void>(image.at(offset + record_bytes - 1));
   std::ranges::copy(record,

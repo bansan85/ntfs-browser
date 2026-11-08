@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstring>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -54,6 +55,21 @@ constexpr std::size_t file_name_length_field = 64;
 // A parent reference keeps the sequence number in its top 16 bits.
 constexpr unsigned sequence_shift = 48;
 
+// The run list of the $MFT that MapMft() writes: a header for a length of one
+// byte and an offset of one byte, the cluster of the $MFT, then the end.
+constexpr BYTE one_byte_run_header = 0x11;
+
+// Fields of the record header: the number of bytes in use, and the offset and
+// word count of the update sequence array. The end of the attributes takes
+// the marker and four more bytes.
+constexpr std::size_t used_field = 24;
+constexpr std::size_t array_offset_field = 4;
+constexpr std::size_t array_words_field = 6;
+constexpr std::size_t end_bytes = 8;
+
+// The sectors of a record are 512 bytes.
+constexpr std::size_t sector_bytes = 512;
+
 // End marker of the attributes of a record.
 constexpr DWORD end_marker = 0xFFFFFFFF;
 
@@ -69,6 +85,46 @@ void Store(std::vector<BYTE>& image, std::size_t offset, T value) {
   // at() checks the last byte too, so a value at the end cannot overrun.
   static_cast<void>(image.at(offset + sizeof(T) - 1));
   std::memcpy(&image.at(offset), &value, sizeof(T));
+}
+
+// The bytes of record idx as the volume means them: the last word of each
+// sector comes back from the update sequence array.
+std::vector<BYTE> LogicalRecord(const std::vector<BYTE>& image, ULONGLONG idx) {
+  const std::size_t offset = RecordEdit::RecordOffset(idx);
+  static_cast<void>(image.at(offset + FakeImage::fake_file_record_size - 1));
+  std::vector<BYTE> record(image.begin() + static_cast<std::ptrdiff_t>(offset),
+                           image.begin() +
+                               static_cast<std::ptrdiff_t>(
+                                   offset + FakeImage::fake_file_record_size));
+  const std::size_t array = Load<WORD>(record, array_offset_field);
+  const std::size_t words = Load<WORD>(record, array_words_field);
+  for (std::size_t sector = 0;
+       sector + 1 < words && (sector + 1) * sector_bytes <= record.size();
+       ++sector) {
+    Store<WORD>(record, ((sector + 1) * sector_bytes) - sizeof(WORD),
+                Load<WORD>(record, array + ((sector + 1) * sizeof(WORD))));
+  }
+  return record;
+}
+
+// Writes the logical bytes of a record back into the image: each sector ends
+// with the update sequence number, and its own last word goes into the array.
+void StoreLogicalRecord(std::vector<BYTE>& image, ULONGLONG idx,
+                        std::vector<BYTE> record) {
+  const std::size_t array = Load<WORD>(record, array_offset_field);
+  const std::size_t words = Load<WORD>(record, array_words_field);
+  const auto number = Load<WORD>(record, array);
+  for (std::size_t sector = 0;
+       sector + 1 < words && (sector + 1) * sector_bytes <= record.size();
+       ++sector) {
+    const std::size_t end = ((sector + 1) * sector_bytes) - sizeof(WORD);
+    Store<WORD>(record, array + ((sector + 1) * sizeof(WORD)),
+                Load<WORD>(record, end));
+    Store<WORD>(record, end, number);
+  }
+  std::copy(record.begin(), record.end(),
+            image.begin() +
+                static_cast<std::ptrdiff_t>(RecordEdit::RecordOffset(idx)));
 }
 
 }  // namespace
@@ -274,6 +330,66 @@ std::size_t RecordEdit::AppendNonResident(std::vector<BYTE>& image,
   }
   Store<DWORD>(image, attr + total, end_marker);
   return attr;
+}
+
+std::vector<std::vector<BYTE>>
+    RecordEdit::Attributes(const std::vector<BYTE>& image, ULONGLONG idx) {
+  const std::vector<BYTE> record = LogicalRecord(image, idx);
+  std::vector<std::vector<BYTE>> attributes;
+  std::size_t offset = Load<WORD>(record, first_attribute_field);
+  while (Load<DWORD>(record, offset) != end_marker) {
+    const auto total_size = Load<DWORD>(record, offset + attr_total_size_field);
+    if (total_size == 0) {
+      break;
+    }
+    static_cast<void>(record.at(offset + total_size - 1));
+    attributes.emplace_back(
+        record.begin() + static_cast<std::ptrdiff_t>(offset),
+        record.begin() + static_cast<std::ptrdiff_t>(offset + total_size));
+    offset += total_size;
+  }
+  return attributes;
+}
+
+void RecordEdit::SetAttributes(
+    std::vector<BYTE>& image, ULONGLONG idx,
+    const std::vector<std::vector<BYTE>>& attributes) {
+  std::vector<BYTE> record = LogicalRecord(image, idx);
+  const std::size_t first = Load<WORD>(record, first_attribute_field);
+  const std::size_t limit = Load<WORD>(record, array_offset_field);
+  std::fill(record.begin() + static_cast<std::ptrdiff_t>(first),
+            record.begin() + static_cast<std::ptrdiff_t>(limit), BYTE{0});
+  std::size_t at = first;
+  for (const std::vector<BYTE>& attribute : attributes) {
+    if (at + attribute.size() + (2 * sizeof(DWORD)) > limit) {
+      throw std::out_of_range("the attributes do not fit in the record");
+    }
+    std::copy(attribute.begin(), attribute.end(),
+              record.begin() + static_cast<std::ptrdiff_t>(at));
+    at += attribute.size();
+  }
+  Store<DWORD>(record, at, end_marker);
+  Store<DWORD>(record, used_field, static_cast<DWORD>(at + end_bytes));
+  StoreLogicalRecord(image, idx, record);
+}
+
+void RecordEdit::MapMft(std::vector<BYTE>& image, ULONGLONG clusters,
+                        BYTE first, ULONGLONG cluster_bytes) {
+  const std::size_t attr = Attribute(image, 0, type_data);
+  const ULONGLONG bytes = clusters * cluster_bytes;
+  Store<ULONGLONG>(image, attr + attr_last_vcn_field, clusters - 1);
+  Store<ULONGLONG>(image, attr + attr_allocated_size_field, bytes);
+  Store<ULONGLONG>(image, attr + attr_real_size_field, bytes);
+  Store<ULONGLONG>(image, attr + attr_initialized_size_field, bytes);
+  if (clusters == 0 || clusters > std::numeric_limits<BYTE>::max()) {
+    throw std::out_of_range("the run length takes one byte");
+  }
+  const std::size_t runs =
+      attr + Load<WORD>(image, attr + attr_data_run_offset_field);
+  Store<BYTE>(image, runs, one_byte_run_header);
+  Store<BYTE>(image, runs + 1, static_cast<BYTE>(clusters));
+  Store<BYTE>(image, runs + 2, first);
+  Store<BYTE>(image, runs + 3, 0);
 }
 
 void RecordEdit::ClearAttributes(std::vector<BYTE>& image, ULONGLONG idx) {

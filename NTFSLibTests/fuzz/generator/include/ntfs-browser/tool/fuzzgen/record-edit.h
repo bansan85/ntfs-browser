@@ -117,6 +117,22 @@ class RecordEdit {
                         const std::vector<BYTE>& runs, ULONGLONG last_vcn,
                         ULONGLONG allocated_size, ULONGLONG real_size);
 
+  // The attributes of record idx, one byte vector each, in order.
+  [[nodiscard]] static std::vector<std::vector<BYTE>>
+      Attributes(const std::vector<BYTE>& image, ULONGLONG idx);
+
+  // Replaces the attributes of record idx by attributes, written one after the
+  // other from the first attribute on, then the end marker. The used size of
+  // the record covers them. Throws std::out_of_range when they do not fit.
+  static void SetAttributes(std::vector<BYTE>& image, ULONGLONG idx,
+                            const std::vector<std::vector<BYTE>>& attributes);
+
+  // Gives the $DATA of the $MFT record (0) one run of clusters clusters that
+  // starts at the cluster first, and the sizes that go with it. A cluster has
+  // cluster_bytes bytes. The length and the cluster fit in a byte.
+  static void MapMft(std::vector<BYTE>& image, ULONGLONG clusters, BYTE first,
+                     ULONGLONG cluster_bytes);
+
   // Removes every attribute of record idx.
   static void ClearAttributes(std::vector<BYTE>& image, ULONGLONG idx);
 

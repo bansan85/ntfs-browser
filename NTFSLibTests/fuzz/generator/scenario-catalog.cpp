@@ -17,6 +17,7 @@
 #include <ntfs-browser/tool/fuzzgen/legacy-builder-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/legacy-index-block-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/legacy-index-root-scenarios.h>
+#include <ntfs-browser/tool/fuzzgen/legacy-name-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/legacy-residency-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/legacy-root-record-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/legacy-volume-scenarios.h>
@@ -68,6 +69,7 @@ ScenarioRegistry ScenarioCatalog::Build() {
   CompressedFileScenarios::Register(registry);
   EfsFixtureScenarios::Register(registry);
   DataRunLcnScenarios::Register(registry);
+  LegacyNameScenarios::Register(registry);
   return registry;
 }
 

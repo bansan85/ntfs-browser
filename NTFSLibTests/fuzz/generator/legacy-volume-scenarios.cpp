@@ -2,6 +2,9 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <optional>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
@@ -266,6 +269,105 @@ Image CompressedOverrun() {
   return image;
 }
 
+// An extension record of the $MFT, as the fake builders write one: the array
+// at the end, the sequence number and the link count 0. The $DATA it holds
+// maps one cluster at lcn for the VCNs from vcn to last_vcn.
+LegacyRecord::Spec MftExtension(std::vector<Attribute> streams,
+                                WORD sequence = 0) {
+  return {.sequence = sequence,
+          .links = 0,
+          .update_sequence_number = 0,
+          .attributes = std::move(streams)};
+}
+
+Attribute MftExtent(ULONGLONG vcn, ULONGLONG last_vcn, ULONGLONG lcn,
+                    std::wstring name = {}) {
+  const bool unnamed = name.empty();
+  return {.type = LegacyRecord::type_data,
+          .name = std::move(name),
+          .name_offset = unnamed ? std::optional<WORD>(0) : std::nullopt,
+          .non_resident = true,
+          .start_vcn = vcn,
+          .last_vcn = last_vcn,
+          .allocated_size = FakeImage::fake_cluster_size,
+          .real_size = FakeImage::fake_cluster_size,
+          .initialized_size = FakeImage::fake_cluster_size,
+          .runs = {{.lcn = lcn, .clusters = 1}}};
+}
+
+// The $MFT lists seven extents of its $DATA in records 6 to 11. Each record
+// breaks one rule: a name, a VCN range that ends before it starts, a range
+// that another record holds too, a sequence number that the list does not
+// know, an entry of length zero.
+Image MftExtensionDefects() {
+  constexpr ULONGLONG first_extension = 6;
+  constexpr ULONGLONG listed_sequence = 3;
+  constexpr WORD reused_sequence = 9;
+  constexpr WORD extension_array_offset = 0x30;
+  constexpr ULONGLONG unnamed_extent_vcn = 32;
+  const std::vector<std::pair<ULONGLONG, ULONGLONG>> listed = {
+      {0x10, first_extension},
+      {0x20, first_extension},
+      {0x30, first_extension + 1},
+      {0x40, first_extension + 2},
+      {0x40, first_extension + 3 | (listed_sequence << 48U)},
+      {0x20, first_extension + 4},
+      {0x00, first_extension + 5}};
+  std::vector<BYTE> list;
+  for (const auto& [vcn, record] : listed) {
+    const std::vector<BYTE> entry = DataEntry(vcn, record);
+    list.insert(list.end(), entry.begin(), entry.end());
+  }
+  // The last entry declares no length.
+  constexpr std::size_t last_entry = 6;
+  list.at((last_entry * entry_bytes) + 4) = 0;
+
+  Image image = FakeImage::BuildFakeNtfsImage();
+  constexpr ULONGLONG mft_bytes = FakeImage::fake_cluster_size;
+  LegacyRecord::Put(image, 0,
+                    {.sequence = 0,
+                     .links = 0,
+                     .array_offset = 0x3FA,
+                     .update_sequence_number = 0,
+                     .attributes = {{.type = LegacyRecord::type_attribute_list,
+                                     .name_offset = 0,
+                                     .value = list},
+                                    {.type = LegacyRecord::type_data,
+                                     .name_offset = 0,
+                                     .non_resident = true,
+                                     .allocated_size = mft_bytes,
+                                     .real_size = mft_bytes,
+                                     .initialized_size = mft_bytes}}});
+  const auto put = [&](ULONGLONG idx, LegacyRecord::Spec spec) {
+    spec.array_offset = extension_array_offset;
+    LegacyRecord::Put(image, idx, spec);
+  };
+  put(first_extension,
+      MftExtension({MftExtent(0x10, 0x10, 0x28, L"x"),
+                    MftExtent(unnamed_extent_vcn, unnamed_extent_vcn, 0x29)}));
+  put(first_extension + 1, MftExtension({MftExtent(0x30, 0x28, 0x2A)}));
+  put(first_extension + 2, MftExtension({MftExtent(0x38, 0x38, 0x2B)}));
+  put(first_extension + 3,
+      MftExtension({MftExtent(0x40, 0x40, 0x2C)}, reused_sequence));
+  put(first_extension + 4,
+      MftExtension({MftExtent(unnamed_extent_vcn, unnamed_extent_vcn, 0x2D)}));
+  // The extents map clusters that hold a record in use with no attribute.
+  constexpr ULONGLONG first_mapped_cluster = 0x28;
+  constexpr ULONGLONG mapped_clusters = 6;
+  const std::vector<BYTE> empty =
+      LegacyRecord::Bytes({.sequence = 0,
+                           .links = 0,
+                           .array_offset = 0x3FA,
+                           .update_sequence_number = 0,
+                           .used_size = 0,
+                           .first_attribute_offset = 0x30,
+                           .allocated_size = 0});
+  for (ULONGLONG i = 0; i < mapped_clusters; ++i) {
+    PutBytes(image, first_mapped_cluster + i, empty);
+  }
+  return image;
+}
+
 }  // namespace
 
 void LegacyVolumeScenarios::Register(ScenarioRegistry& registry) {
@@ -281,6 +383,8 @@ void LegacyVolumeScenarios::Register(ScenarioRegistry& registry) {
            .make = ZeroSizeEfs,
            .needs = Feature::Efs},
           {.name = "mft_data_merged_span_overflow", .make = MergedSpanOverflow},
+          {.name = "mft_attribute_list_extension_defects",
+           .make = MftExtensionDefects},
           {.name = "compressed_overrun_and_lznt1_chunk_overflow",
            .make = CompressedOverrun,
            .needs = Feature::Decompression},
