@@ -239,13 +239,15 @@ TEST_CASE("A pattern that cannot be used has no matcher", "[search][matcher]") {
   Lib::Pattern pattern;
   pattern.text = u"x";
 
-  SECTION("a regular expression") {
+#ifndef NTFS_BROWSER_ENABLE_REGEX
+  SECTION("a regular expression without support") {
     pattern.kind = Lib::PatternKind::Regex;
 
     CHECK(Lib::MakeMatcher(pattern, Table::BuiltIn()) == nullptr);
     CHECK(TestSupport::TakeCapturedLog().find(
               "regex support is not compiled in") != std::string::npos);
   }
+#endif
 
   SECTION("no pattern") {
     pattern.kind = Lib::PatternKind::None;

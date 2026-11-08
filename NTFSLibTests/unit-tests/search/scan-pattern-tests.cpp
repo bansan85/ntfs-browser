@@ -409,7 +409,8 @@ TEST_CASE("A search counts the delivered entries only", "[search][pattern]") {
   CHECK(all.rows.size() > some.rows.size());
 }
 
-TEST_CASE("A scan with a regular expression fails cleanly",
+#ifndef NTFS_BROWSER_ENABLE_REGEX
+TEST_CASE("A scan with a regular expression fails without support",
           "[search][pattern]") {
   TestSupport::InstallCaptureSink();
   const TempImage image(TestSearch::NamesImage());
@@ -426,3 +427,4 @@ TEST_CASE("A scan with a regular expression fails cleanly",
   CHECK(TestSupport::TakeCapturedLog().find(
             "regex support is not compiled in") != std::string::npos);
 }
+#endif

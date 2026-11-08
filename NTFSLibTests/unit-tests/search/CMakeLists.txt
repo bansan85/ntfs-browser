@@ -14,3 +14,10 @@ target_sources(
     "search-types-tests.cpp"
     "target-tests.cpp"
 )
+
+if(NTFS_BROWSER_ENABLE_REGEX)
+  target_sources(
+    NtfsBrowserTests
+    PRIVATE "regex-matcher-tests.cpp" "scan-regex-tests.cpp"
+  )
+endif()

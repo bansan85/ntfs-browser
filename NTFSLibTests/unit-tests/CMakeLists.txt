@@ -207,13 +207,14 @@ target_compile_definitions(
 )
 
 # Mirrors the library's own compile definitions: the EFS tests' #ifdefs live in
-# this target, not the library's, so it needs the same three macros.
+# this target, not the library's, so it needs the same macros.
 target_compile_definitions(
   NtfsBrowserTests
   PRIVATE
     $<$<BOOL:${NTFS_BROWSER_ENABLE_DECOMPRESSION}>:NTFS_BROWSER_ENABLE_DECOMPRESSION>
     $<$<BOOL:${NTFS_BROWSER_ENABLE_EFS_CRYPTOPP}>:NTFS_BROWSER_ENABLE_EFS_CRYPTOPP>
     $<$<BOOL:${NTFS_BROWSER_ENABLE_EFS_BCRYPT}>:NTFS_BROWSER_ENABLE_EFS_BCRYPT>
+    $<$<BOOL:${NTFS_BROWSER_ENABLE_REGEX}>:NTFS_BROWSER_ENABLE_REGEX>
 )
 
 if(WIN32 AND BUILD_SHARED_LIBS)
