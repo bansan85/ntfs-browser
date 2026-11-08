@@ -51,12 +51,20 @@
 // within a few thousand records, but no entry arrives before the end of the
 // read.
 //
+// Search. Options::pattern selects the entries by name, or by full path, with
+// an exact text or with wildcards, and with or without case. The worker tests
+// each entry before it keeps it: an entry that does not match is never
+// delivered and takes no memory. The progress counts the delivered entries
+// only. A scan that matches nothing still ends with a last batch that holds no
+// entry. See Pattern for the rules.
+//
 // Cancel() and the destructor stop the worker through a stop token that every
 // engine looks at between entries. The destructor waits for the thread to end,
 // so no thread outlives the Scan.
 //
 // Errors. Nothing is thrown and the callback has no error result. A target
-// that does not open, a damaged folder or an unreadable record goes to the
+// that does not open, a pattern that cannot be used (a regular expression, for
+// now), a damaged folder or an unreadable record goes to the
 // library log (Log::Error, Log::Warn). An exception in the worker is caught,
 // logged, and ends the scan as Failed. GetState() tells that the scan failed.
 

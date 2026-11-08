@@ -6,6 +6,7 @@ target_sources(
     "scan-directory-tests.cpp"
     "scan-fake-engine.h"
     "scan-mft-list-tests.cpp"
+    "scan-pattern-tests.cpp"
     "scan-poll-tests.cpp"
     "scan-support.cpp"
     "scan-support.h"

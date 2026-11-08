@@ -24,6 +24,16 @@
 //                            included, with link_count, the cluster counts of
 //                            a deleted file and a percent. It builds an
 //                            Mft::MftTree and lists it once the scan is done.
+//   MatchingSink             Sits in front of the sink. Each engine makes one
+//                            once its volume is open, with the $UpCase table of
+//                            the volume, and gives it to its walk. It drops the
+//                            entries that do not match Options::pattern before
+//                            they reach the exchange. A Matcher (ExactMatcher,
+//                            WildcardMatcher, one more for the regular
+//                            expression) does the comparing, built by
+//                            MakeMatcher(). The walk of an engine is not
+//                            touched: a directory that does not match is still
+//                            entered.
 //   EntryBuffer              Owns the text that the views of an Entry point at.
 //   SplitTarget/OpenVolume   The target string, opened without test code.
 //
@@ -41,8 +51,10 @@
 // MftList engine gives its entries to the sink after it read the whole $MFT.
 // The percent moves during the read.
 //
-// Left to do: the name matching and the filters on the fields (Options), and
-// the Options of the regular expression.
+// Left to do: the regular expression matcher (MakeMatcher() fails on it for
+// now) and the filters on the fields (Options). Both go into MatchingSink and
+// MakeMatcher(), not into an engine. An engine MUST give every entry to the
+// MatchingSink it made, and MUST NOT count or test an entry itself.
 
 #include <functional>
 #include <memory>

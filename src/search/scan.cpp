@@ -25,7 +25,8 @@ namespace NTFS_BROWSER_NAMESPACE::Search {
 class Scan::Impl {
  public:
   explicit Impl(Options options)
-      : options_(std::move(options)), exchange_(options_.max_pending_entries) {}
+      : options_(Normalized(std::move(options))),
+        exchange_(options_.max_pending_entries) {}
 
   Impl(const Impl&) = delete;
   Impl& operator=(const Impl&) = delete;
@@ -108,6 +109,16 @@ class Scan::Impl {
   [[nodiscard]] Progress GetProgress() const noexcept { return progress_; }
 
  private:
+  // options with what the scan needs of itself: a pattern on the full path
+  // needs the paths.
+  static Options Normalized(Options options) {
+    if (options.pattern.kind != PatternKind::None &&
+        options.pattern.target == MatchTarget::FullPath) {
+      options.full_path = true;
+    }
+    return options;
+  }
+
   // Marks a Poll() as running, so that a Poll() from the callback does nothing,
   // and gives the entries back when the Poll() ends, even by an exception of
   // the callback.

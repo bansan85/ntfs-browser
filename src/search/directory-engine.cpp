@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <stop_token>
 #include <string>
@@ -28,6 +29,7 @@
 
 #include "log/ntfs-common.h"
 #include "search/engine.h"
+#include "search/match-sink.h"
 #include "search/target.h"
 #include "utf/utf.h"
 
@@ -357,7 +359,12 @@ bool DirectoryEngine<S>::Run(EntrySink& sink, std::stop_token stop) {
   }
   const NtfsVolume<S>& volume = *opened.volume;
   volume.SetReadPattern(Tuning::Pattern::DependentSmall);
-  DirectoryWalk<S> walk(volume, options_, sink, std::move(stop));
+  const std::unique_ptr<MatchingSink> selected =
+      MatchingSink::Make(sink, options_, volume.GetUpCaseTable());
+  if (!selected) {
+    return false;
+  }
+  DirectoryWalk<S> walk(volume, options_, *selected, std::move(stop));
   return walk.Run(parts_.inside);
 }
 

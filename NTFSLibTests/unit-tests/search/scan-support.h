@@ -101,6 +101,17 @@ NTFS_BROWSER_NAMESPACE::Search::State
 // orphan.txt have no parent that the volume holds.
 [[nodiscard]] std::vector<BYTE> OrphanImage();
 
+// Names that stress a search, with the record of each node in brackets. Under
+// the root: Docs (16) with a file named Cafe with an acute e, then .txt (17), a
+// Greek and a Cyrillic file in lowercase (18, 19) and report.txt (20, a hard
+// link, also named "Copy of report.txt" in the root); the same three names in
+// capitals with the extension .DOC (21 to 23); a file with a surrogate pair
+// between a and b (24), axb.txt (25) and a file with an unpaired high surrogate
+// between a and b (26); the deleted gone-e.txt, with an acute e (27); and Deep
+// (28), a folder with Deeper (29), which holds deep.txt (30). The code of each
+// name is in the definition.
+[[nodiscard]] std::vector<BYTE> NamesImage();
+
 // Clusters at the end of the volume that ReallocatedImage() gives to its files.
 inline constexpr std::uint64_t reallocated_tail_clusters = 4;
 

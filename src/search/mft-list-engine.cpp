@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <stop_token>
 #include <string>
@@ -27,6 +28,7 @@
 
 #include "log/ntfs-common.h"
 #include "search/engine.h"
+#include "search/match-sink.h"
 #include "search/target.h"
 #include "utf/utf.h"
 #include "util/local-file-time.h"
@@ -343,6 +345,12 @@ bool MftListEngine::Run(EntrySink& sink, std::stop_token stop) {
     return false;
   }
 
+  const std::unique_ptr<MatchingSink> selected =
+      MatchingSink::Make(sink, options_, opened.volume->GetUpCaseTable());
+  if (!selected) {
+    return false;
+  }
+
   std::optional<ULONGLONG> folder;
   if (!parts_.inside.empty()) {
     folder = FindFolder(*opened.volume, parts_.inside);
@@ -362,7 +370,7 @@ bool MftListEngine::Run(EntrySink& sink, std::stop_token stop) {
     return true;
   }
 
-  TreeListing listing(tree, options_, sink, std::move(stop));
+  TreeListing listing(tree, options_, *selected, std::move(stop));
   if (folder) {
     FolderFilter filter(tree, *folder, options_.recursive);
     listing.Run(&filter);

@@ -161,6 +161,46 @@ std::vector<BYTE> OrphanImage() {
   return Fake::BuildFakeNtfsImageWithNameTree(nodes);
 }
 
+std::vector<BYTE> NamesImage() {
+  using Fake::FakeTreeNode;
+  // A name from UTF-16 units, as the volume stores it. It keeps a surrogate
+  // that has no partner, which a wide literal could not on every host.
+  const auto name = [](std::u16string_view units) {
+    return NTFS_BROWSER_NAMESPACE::Utf::Utf16ToWide(units);
+  };
+  std::vector<FakeTreeNode> nodes;
+  const auto file = [&nodes, &name](std::u16string_view units,
+                                    std::size_t parent) {
+    nodes.push_back(
+        {.links = {{.name = name(units), .parent = parent}}, .data_size = 1});
+  };
+  nodes.push_back({.links = {{.name = L"Docs"}}, .directory = true});
+  file(u"Caf\u00E9.txt", 0);
+  file(u"\u0395\u03BB\u03BB\u03AC\u03B4\u03B1.txt", 0);
+  file(u"\u041F\u0440\u0438\u0432\u0435\u0442.txt", 0);
+  nodes.push_back({.links = {{.name = L"report.txt", .parent = 0},
+                             {.name = L"Copy of report.txt"}},
+                   .data_size = 1});
+  file(u"CAF\u00C9.DOC", Fake::name_tree_root);
+  file(u"\u0395\u039B\u039B\u0386\u0394\u0391.DOC", Fake::name_tree_root);
+  file(u"\u041F\u0420\u0418\u0412\u0415\u0422.DOC", Fake::name_tree_root);
+  file(u"a\U0001D11Eb.txt", Fake::name_tree_root);
+  file(u"axb.txt", Fake::name_tree_root);
+  file(
+      u"a\xD834"
+      u"b.txt",
+      Fake::name_tree_root);
+  nodes.push_back({.links = {{.name = name(u"gone-\u00E9.txt")}},
+                   .in_use = false,
+                   .keep_entries = true,
+                   .data_size = 1});
+  nodes.push_back({.links = {{.name = L"Deep"}}, .directory = true});
+  nodes.push_back(
+      {.links = {{.name = L"Deeper", .parent = 12}}, .directory = true});
+  file(u"deep.txt", 13);
+  return Fake::BuildFakeNtfsImageWithNameTree(nodes);
+}
+
 std::vector<BYTE> ReallocatedImage() {
   using Fake::FakeDataRun;
   using Fake::FakeTreeNode;
