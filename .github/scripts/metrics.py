@@ -49,7 +49,7 @@ except ImportError:
 REPO = Path(__file__).resolve().parents[2]
 DEFAULT_PATHS = ["include", "src", "NTFSLibTests"]
 DEFAULT_OUT = REPO / "build" / "metrics"
-DEFAULT_EXCLUDES = ["*/3rdparty/*", "*/build/*"]
+DEFAULT_EXCLUDES = ["*/3rdparty/*", "*/build*/*"]
 # Merged CI coverage, all phases: the unit tests and the fuzz regression replays.
 DEFAULT_COVERAGE = REPO / "build" / "coverage" / "merged" / "gaps-all.json"
 
