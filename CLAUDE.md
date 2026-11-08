@@ -15,7 +15,7 @@ ctest --test-dir build/static -C Debug
 - Presets (`static`, `shared`, `*-vcpkg`, reduced-feature ones) use the Visual Studio 18 2026 generator. On Linux pass `-G Ninja`. Plain `cmake -S . -B build-linux` also works with GCC.
 - One test: `ctest -R <regex>`, or the `NtfsBrowserTests` binary with a Catch2 name or tag (`"[efs]"`). A `[` in a test name starts a tag: escape it as `\[`.
 - Feature options `NTFS_BROWSER_ENABLE_DECOMPRESSION`, `..._EFS_CRYPTOPP`, `..._EFS_BCRYPT`, `..._REGEX` compile code in or out. `REGEX` pulls PCRE2 (16 bit, JIT, static even in a shared build), and only `src/search/regex-matcher.cpp` includes it. Test the macro with `#if` in a `.cpp` or `src/*.h`. A public header MUST NOT test it. Pair the BCrypt macro with `_WIN32`.
-- `NtfsDir2` and `NtfsFuzzer` are Windows-only. The library, unit tests, the console tools (`NtfsAttr`, `NtfsDump`, `NtfsUndel`, `NtfsDir`, `NtfsMftList`, `NtfsCompare`) and `NtfsFuzzerAfl` also build on Linux. There is no MFC in the build.
+- `NtfsFuzzer` is Windows-only. The library, unit tests, the console tools (`NtfsAttr`, `NtfsDump`, `NtfsUndel`, `NtfsDir`, `NtfsMftList`, `NtfsCompare`) and `NtfsFuzzerAfl` also build on Linux. There is no MFC in the build.
 - The build generates the fuzz inputs and the corpus traces into `build/<preset>/fuzz-generated/` (target `NtfsFuzzGenData`). `NtfsBrowserTests` depends on it. No such file is committed. See Fuzzing.
 - Source lists are explicit, never globbed. A new file MUST be added to `src/CMakeLists.txt` or to the `CMakeLists.txt` of its test or tool folder, inside the matching feature gate.
 

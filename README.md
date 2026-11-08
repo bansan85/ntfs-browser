@@ -27,9 +27,9 @@ Reading a volume needs administrator rights.
 
 On Windows:
 
-- `NtfsDir "C:\Windows"` lists a folder. `NtfsDir C:\image.img\Windows` lists a folder of an image file. `NtfsDir --recursive C:` (or `-r`) lists a folder and every folder below it. `--deleted` adds deleted files, marked with `*`, and `--recover` salvages damaged directory data.
+- `NtfsDir "C:\Windows"` lists a folder. `NtfsDir C:\image.img\Windows` lists a folder of an image file. `NtfsDir --recursive C:` (or `-r`) lists a folder and every folder below it. `--deleted` adds deleted files, marked with `*`, and `--recover` salvages damaged directory data. `--name=*.dll`, `--regex=`, `--min-size=N` and `--files-only` filter the entries, and `--engine=` picks how the volume is walked. `NtfsDir --help` lists every option.
 - `NtfsMftList C:` lists every file of a volume. `--deleted` adds deleted files, and `--recover` salvages damaged entries and reads the change journal (`$UsnJrnl`), which names files the `$MFT` lost. `--threads=N` sets the threads that parse the `$MFT` and format the listing. `--clusters` counts the clusters of each deleted or damaged file by condition (intact, rewritten, bad...), `--clusters=map` also prints where they lie in the file, and `--verify-data[=sample|full]` reads the clusters presumed intact to tell zeros and NTFS metadata from data.
-- `NtfsDir`, `NtfsDir2` and `NtfsMftList` also take the benchmark options (see Benchmark and tuning).
+- `NtfsMftList` also takes the benchmark options (see Benchmark and tuning).
 - `NtfsUndel C:` lists the deleted files of a volume. `NtfsUndel C: --output D:\recovered --all` recovers them, and `--record N` or `--name "*.docx"` picks some. The output folder MUST be on another drive than the one that is read. `--include-doubtful` also recovers a file whose data may belong to another file.
 
 On Linux, `NtfsDir` and `NtfsMftList` take a device or an image file. Reading a device needs read access to it.
@@ -137,7 +137,7 @@ The tools can time themselves, and the constants of the read path can be tuned f
 
 ### What the tools can do
 
-These options work on `NtfsMftList`, `NtfsDir` and `NtfsDir2`:
+These options work on `NtfsMftList`:
 
 - `--benchmark[=<path>]` times the run. It writes a JSON summary at `<path>` (`ntfs-benchmark.json` by default) and the log of every read at `<path>.readlog`. The summary has the phases (open, pass1, pass2, flush, sweep, check, link, journal, walk, print) with their wall time and CPU time, the CPU time of each thread, the reads by kind with their size histogram, the sizes the disk saw, the reads in flight, the bytes read ahead and wasted, the seeks, and the serial tail after the last read. Each read that the reader serves is classed: `io` (the caller waited for the disk), `window` (the read was done, and the read-ahead caps held others back), `ready` (done, nothing held back) or `plan` (never announced, so the caller waited).
 - `--capture=<path>` writes every range the run read into a sparse file of the volume's size. Run the tool on that image, with the image in the file cache, and the time is that of the CPU alone.
