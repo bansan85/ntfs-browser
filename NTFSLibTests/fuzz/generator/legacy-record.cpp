@@ -10,6 +10,7 @@
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/tool/fuzzgen/legacy-record.h>
 #include <ntfs-browser/tool/fuzzgen/record-edit.h>
+#include <ntfs-browser/tool/fuzzgen/update-sequence.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 
@@ -47,6 +48,7 @@ constexpr std::size_t compressed_header_bytes = 0x48;
 constexpr std::size_t field_magic = 0;
 constexpr std::size_t field_array_offset = 4;
 constexpr std::size_t field_array_words = 6;
+constexpr std::size_t field_log_sequence = 8;
 constexpr std::size_t field_sequence = 16;
 constexpr std::size_t field_links = 18;
 constexpr std::size_t field_attribute_offset = 20;
@@ -67,6 +69,7 @@ constexpr std::size_t attr_name_offset = 10;
 constexpr std::size_t attr_flags = 12;
 constexpr std::size_t attr_value_length = 16;
 constexpr std::size_t attr_value_offset = 20;
+constexpr std::size_t attr_indexed = 22;
 constexpr std::size_t attr_start_vcn = 16;
 constexpr std::size_t attr_last_vcn = 24;
 constexpr std::size_t attr_runs_offset = 32;
@@ -134,6 +137,7 @@ std::vector<BYTE> ResidentBytes(const LegacyRecord::Attribute& attr) {
   Store<WORD>(out, attr_id, attr.id);
   Store<DWORD>(out, attr_value_length, static_cast<DWORD>(attr.value.size()));
   Store<WORD>(out, attr_value_offset, static_cast<WORD>(value_offset));
+  Store<BYTE>(out, attr_indexed, attr.indexed ? 1 : 0);
   std::ranges::copy(attr.value,
                     out.begin() + static_cast<std::ptrdiff_t>(value_offset));
   StoreName(out, resident_header_bytes, attr);
@@ -209,6 +213,7 @@ std::vector<BYTE> LegacyRecord::Bytes(const Spec& spec) {
   Store<DWORD>(record, field_magic, file_magic);
   Store<WORD>(record, field_array_offset, spec.array_offset);
   Store<WORD>(record, field_array_words, array_words);
+  Store<ULONGLONG>(record, field_log_sequence, spec.log_sequence);
   Store<WORD>(record, field_sequence, spec.sequence);
   Store<WORD>(record, field_links, spec.links);
   Store<WORD>(record, field_attribute_offset, spec.first_attribute_offset);
@@ -230,18 +235,14 @@ std::vector<BYTE> LegacyRecord::Bytes(const Spec& spec) {
     at += bytes.size();
   }
   Store<DWORD>(record, at, end_marker);
+  Store<DWORD>(record, at + sizeof(DWORD), spec.end_padding);
   Store<DWORD>(
       record, field_used,
       spec.used_size.value_or(static_cast<DWORD>(at + spec.used_tail)));
   // Each sector gives its last word to the array and takes the sequence
   // number in exchange.
-  Store<WORD>(record, spec.array_offset, spec.update_sequence_number);
-  for (std::size_t sector = 0; sector < record_bytes / sector_bytes; ++sector) {
-    const std::size_t end = ((sector + 1) * sector_bytes) - sizeof(WORD);
-    const std::size_t slot = spec.array_offset + ((sector + 1) * sizeof(WORD));
-    std::memcpy(&record.at(slot), &record.at(end), sizeof(WORD));
-    Store<WORD>(record, end, spec.update_sequence_number);
-  }
+  UpdateSequence::Protect(record, spec.array_offset,
+                          spec.update_sequence_number);
   return record;
 }
 

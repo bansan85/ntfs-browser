@@ -40,6 +40,9 @@ class LegacyRecord {
     WORD id = 0;
     // A resident attribute holds value. Otherwise the fields below apply.
     std::vector<BYTE> value;
+    // The indexed flag of a resident attribute, which the $FILE_NAME of a
+    // real volume sets.
+    bool indexed = false;
     bool non_resident = false;
     ULONGLONG start_vcn = 0;
     ULONGLONG last_vcn = 0;
@@ -62,6 +65,8 @@ class LegacyRecord {
   struct Spec {
     // The flags of the record: 1 in use, 2 directory.
     WORD flags = 1;
+    // The $LogFile sequence number of the record.
+    ULONGLONG log_sequence = 0;
     // The reference of the base record, zero for a base record.
     ULONGLONG base_reference = 0;
     // The sequence number of the record and its count of hard links.
@@ -79,6 +84,9 @@ class LegacyRecord {
     // and, in most inputs, four bytes of padding. Some inputs count the marker
     // alone.
     DWORD used_tail = 8;
+    // The four bytes after the end marker. Zero unless a real volume left a
+    // value there.
+    DWORD end_padding = 0;
     // The id that the next attribute of the record will get.
     WORD next_attribute_id = 0;
     // Where the first attribute starts, and the allocated size the record

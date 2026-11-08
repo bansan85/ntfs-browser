@@ -66,10 +66,13 @@ std::vector<BYTE> Record(const TraceSource& source,
     const std::string stem = std::string(source.corpus) + "/" + name;
     const std::vector<BYTE> layers = resources.Read(stem + ".layers");
     const std::vector<BYTE> residue = resources.Read(stem + ".residue");
+    const SparseImage::BlobSource blobs = [&](std::string_view blob) {
+      return resources.Read(blob);
+    };
     auto image = std::make_shared<const SparseImage>(SparseImage::Load(
         std::string_view(reinterpret_cast<const char*>(layers.data()),
                          layers.size()),
-        residue));
+        residue, blobs));
     return std::make_unique<RecordingReader>(
         std::make_unique<SparseDiskReader>(std::move(image)), recorded[name]);
   };

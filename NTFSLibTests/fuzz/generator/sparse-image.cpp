@@ -6,15 +6,16 @@
 #include <cstdint>
 #include <cstring>
 #include <span>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <gsl/narrow>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tool/fuzzgen/layer-script.h>
 #include <ntfs-browser/tool/fuzzgen/sparse-image.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
@@ -47,31 +48,55 @@ T LoadLittleEndian(std::span<const BYTE> bytes) {
 }  // namespace
 
 SparseImage SparseImage::Load(std::string_view layers,
-                              std::span<const BYTE> residue) {
+                              std::span<const BYTE> residue,
+                              const BlobSource& blobs) {
   SparseImage image;
-  std::istringstream lines{std::string(layers)};
-  std::string line;
-  while (std::getline(lines, line)) {
-    std::istringstream fields(line);
-    std::string kind;
-    ULONGLONG address = 0;
-    ULONGLONG size = 0;
-    if (!(fields >> kind)) {
-      continue;
-    }
-    if (!(fields >> address >> size)) {
-      throw std::runtime_error("bad layer line: " + line);
-    }
-    if (kind == "ptrn") {
-      image.layers_.push_back({LayerKind::Ptrn, address, size});
-    } else if (kind == "upcase") {
-      image.layers_.push_back(
-          {LayerKind::IdentityUpcase, address, size * upcase_word_bytes});
-    } else {
-      throw std::runtime_error("unknown layer kind: " + kind);
-    }
-  }
+  LayerScript::Fill(image, layers, blobs);
+  image.AddPatches(residue);
+  return image;
+}
 
+void SparseImage::AddPtrn(ULONGLONG address, ULONGLONG length) {
+  layers_.push_back({.kind = LayerKind::Ptrn,
+                     .address = address,
+                     .length = length,
+                     .stride = 0,
+                     .bytes = {}});
+}
+
+void SparseImage::AddIdentityUpcase(ULONGLONG address, ULONGLONG units) {
+  layers_.push_back({.kind = LayerKind::IdentityUpcase,
+                     .address = address,
+                     .length = units * upcase_word_bytes,
+                     .stride = 0,
+                     .bytes = {}});
+}
+
+void SparseImage::AddStamp(ULONGLONG address, ULONGLONG stride, ULONGLONG count,
+                           std::vector<BYTE> stamp) {
+  if (count == 0 || stride < stamp.size()) {
+    throw std::runtime_error(
+        "a stamp must repeat at least once, and its "
+        "copies must not overlap");
+  }
+  const ULONGLONG length = ((count - 1) * stride) + stamp.size();
+  layers_.push_back({.kind = LayerKind::Stamp,
+                     .address = address,
+                     .length = length,
+                     .stride = stride,
+                     .bytes = std::move(stamp)});
+}
+
+void SparseImage::AddBytes(ULONGLONG address, std::vector<BYTE> bytes) {
+  const ULONGLONG length = bytes.size();
+  layers_.push_back({.kind = LayerKind::Bytes,
+                     .address = address,
+                     .length = length,
+                     .stride = 0,
+                     .bytes = std::move(bytes)});
+}
+
+void SparseImage::AddPatches(std::span<const BYTE> residue) {
   std::size_t position = 0;
   while (position < residue.size()) {
     if (residue.size() - position < patch_header_bytes) {
@@ -86,11 +111,9 @@ SparseImage SparseImage::Load(std::string_view layers,
       throw std::runtime_error("the residue ends inside a patch");
     }
     const std::span<const BYTE> bytes = residue.subspan(position, length);
-    image.patches_.emplace(address,
-                           std::vector<BYTE>(bytes.begin(), bytes.end()));
+    patches_.emplace(address, std::vector<BYTE>(bytes.begin(), bytes.end()));
     position += length;
   }
-  return image;
 }
 
 void SparseImage::ApplyLayer(const Layer& layer, ULONGLONG address,
@@ -100,12 +123,27 @@ void SparseImage::ApplyLayer(const Layer& layer, ULONGLONG address,
       std::min(address + dest.size(), layer.address + layer.length);
   for (ULONGLONG position = low; position < high; ++position) {
     BYTE& out = dest[gsl::narrow<std::size_t>(position - address)];
-    if (layer.kind == LayerKind::Ptrn) {
-      out = ptrn_fill[position % ptrn_fill.size()];
-    } else {
-      const ULONGLONG word = (position - layer.address) / upcase_word_bytes;
-      out = gsl::narrow_cast<BYTE>(
-          word >> (byte_bits * (position % upcase_word_bytes)));
+    const ULONGLONG inside = position - layer.address;
+    switch (layer.kind) {
+      case LayerKind::Ptrn:
+        out = ptrn_fill[position % ptrn_fill.size()];
+        break;
+      case LayerKind::IdentityUpcase:
+        out = gsl::narrow_cast<BYTE>(
+            (inside / upcase_word_bytes) >>
+            (byte_bits * (position % upcase_word_bytes)));
+        break;
+      case LayerKind::Stamp: {
+        // The bytes between two stamps belong to the layers below.
+        const ULONGLONG within = inside % layer.stride;
+        if (within < layer.bytes.size()) {
+          out = layer.bytes[gsl::narrow<std::size_t>(within)];
+        }
+        break;
+      }
+      case LayerKind::Bytes:
+        out = layer.bytes[gsl::narrow<std::size_t>(inside)];
+        break;
     }
   }
 }
