@@ -11,9 +11,10 @@
 
 #include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tool/fuzzgen/command-line.h>
-#include <ntfs-browser/tool/fuzzgen/generator-app.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-catalog.h>
+
+#include "command-line.h"
+#include "generator-app.h"
 
 // Windows gives a wmain() the command line as wide characters. A narrow main()
 // only ever sees it through the active ANSI code page, which cannot express

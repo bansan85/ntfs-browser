@@ -8,7 +8,8 @@
 
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tool/fuzzgen/sparse-image.h>
+
+#include "sparse-image.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

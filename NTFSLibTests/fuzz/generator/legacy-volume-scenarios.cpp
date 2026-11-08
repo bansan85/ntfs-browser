@@ -1,3 +1,5 @@
+#include "legacy-volume-scenarios.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
@@ -9,11 +11,11 @@
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-#include <ntfs-browser/tool/fuzzgen/hex-bytes.h>
-#include <ntfs-browser/tool/fuzzgen/legacy-fixtures.h>
-#include <ntfs-browser/tool/fuzzgen/legacy-record.h>
-#include <ntfs-browser/tool/fuzzgen/legacy-volume-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
+
+#include "hex-bytes.h"
+#include "legacy-fixtures.h"
+#include "legacy-record.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

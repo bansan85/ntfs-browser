@@ -1,3 +1,5 @@
+#include "sparse-image.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
@@ -15,9 +17,9 @@
 #include <gsl/narrow>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tool/fuzzgen/counter-text.h>
-#include <ntfs-browser/tool/fuzzgen/layer-script.h>
-#include <ntfs-browser/tool/fuzzgen/sparse-image.h>
+
+#include "counter-text.h"
+#include "layer-script.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

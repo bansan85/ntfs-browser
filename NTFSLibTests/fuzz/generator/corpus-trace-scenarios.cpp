@@ -1,3 +1,5 @@
+#include "corpus-trace-scenarios.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <map>
@@ -9,14 +11,14 @@
 
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tool/fuzzgen/corpus-probes.h>
-#include <ntfs-browser/tool/fuzzgen/corpus-trace-scenarios.h>
-#include <ntfs-browser/tool/fuzzgen/recording-reader.h>
-#include <ntfs-browser/tool/fuzzgen/resource-locator.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
 #include <ntfs-browser/tool/fuzzgen/scenario.h>
-#include <ntfs-browser/tool/fuzzgen/sparse-disk-reader.h>
-#include <ntfs-browser/tool/fuzzgen/sparse-image.h>
+
+#include "corpus-probes.h"
+#include "recording-reader.h"
+#include "resource-locator.h"
+#include "sparse-disk-reader.h"
+#include "sparse-image.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

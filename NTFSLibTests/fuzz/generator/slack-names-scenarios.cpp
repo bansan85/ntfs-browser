@@ -1,3 +1,5 @@
+#include "slack-names-scenarios.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <vector>
@@ -6,7 +8,6 @@
 #include <ntfs-browser/test/fake-image/slack-inputs.h>
 #include <ntfs-browser/tool/fuzzgen/recorded-stream.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
-#include <ntfs-browser/tool/fuzzgen/slack-names-scenarios.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

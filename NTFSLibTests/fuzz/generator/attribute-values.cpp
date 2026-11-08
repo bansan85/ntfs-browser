@@ -1,3 +1,5 @@
+#include "attribute-values.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <cstddef>
@@ -9,11 +11,10 @@
 #include <gsl/narrow>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tool/fuzzgen/attribute-values.h>
-#include <ntfs-browser/tool/fuzzgen/layer-line.h>
 
 #include "data/filename.h"
 #include "data/standard-information.h"
+#include "layer-line.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

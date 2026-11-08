@@ -1,10 +1,11 @@
+#include "upcase-table.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <cstddef>
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tool/fuzzgen/upcase-table.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

@@ -1,3 +1,5 @@
+#include "lznt1-compressor.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
@@ -13,7 +15,6 @@
 #include <gsl/narrow>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tool/fuzzgen/lznt1-compressor.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

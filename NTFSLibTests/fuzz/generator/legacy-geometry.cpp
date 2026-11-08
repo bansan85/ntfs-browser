@@ -1,3 +1,5 @@
+#include "legacy-geometry.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <cstddef>
@@ -6,13 +8,12 @@
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-#include <ntfs-browser/tool/fuzzgen/bpb-edit.h>
-#include <ntfs-browser/tool/fuzzgen/legacy-geometry.h>
-#include <ntfs-browser/tool/fuzzgen/record-edit.h>
 
+#include "bpb-edit.h"
 #include "data/file-record-header.h"
 #include "data/index-block.h"
 #include "data/ntfs-bpb.h"
+#include "record-edit.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

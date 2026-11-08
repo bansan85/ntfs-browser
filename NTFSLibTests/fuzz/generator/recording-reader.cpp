@@ -1,3 +1,5 @@
+#include "recording-reader.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <memory>
@@ -12,7 +14,6 @@
 
 #include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tool/fuzzgen/recording-reader.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

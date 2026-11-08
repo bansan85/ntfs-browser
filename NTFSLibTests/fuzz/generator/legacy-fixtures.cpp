@@ -1,3 +1,5 @@
+#include "legacy-fixtures.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <cstddef>
@@ -8,15 +10,14 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tool/fuzzgen/bpb-edit.h>
-#include <ntfs-browser/tool/fuzzgen/legacy-fixtures.h>
-#include <ntfs-browser/tool/fuzzgen/legacy-geometry.h>
 #include <ntfs-browser/tool/fuzzgen/recorded-stream.h>
-#include <ntfs-browser/tool/fuzzgen/resource-locator.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
-#include <ntfs-browser/tool/fuzzgen/transient-damage-reader.h>
 
+#include "bpb-edit.h"
 #include "data/ntfs-bpb.h"
+#include "legacy-geometry.h"
+#include "resource-locator.h"
+#include "transient-damage-reader.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

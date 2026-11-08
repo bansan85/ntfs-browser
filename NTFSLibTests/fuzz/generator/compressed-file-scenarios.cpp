@@ -1,13 +1,15 @@
+#include "compressed-file-scenarios.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-#include <ntfs-browser/tool/fuzzgen/compressed-file-scenarios.h>
-#include <ntfs-browser/tool/fuzzgen/legacy-fixtures.h>
 #include <ntfs-browser/tool/fuzzgen/recorded-stream.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
+
+#include "legacy-fixtures.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

@@ -5,7 +5,8 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tool/fuzzgen/layer-line.h>
+
+#include "layer-line.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

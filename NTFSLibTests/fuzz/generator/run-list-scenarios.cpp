@@ -1,3 +1,5 @@
+#include "run-list-scenarios.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <limits>
@@ -8,7 +10,6 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/tool/fuzzgen/recorded-stream.h>
-#include <ntfs-browser/tool/fuzzgen/run-list-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {

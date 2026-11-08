@@ -1,3 +1,5 @@
+#include "index-layer.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
@@ -10,15 +12,14 @@
 
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tool/fuzzgen/attribute-values.h>
-#include <ntfs-browser/tool/fuzzgen/index-layer.h>
-#include <ntfs-browser/tool/fuzzgen/layer-line.h>
-#include <ntfs-browser/tool/fuzzgen/update-sequence.h>
 
+#include "attribute-values.h"
 #include "data/index-block.h"
 #include "data/index-entry-flag.h"
 #include "data/index-entry.h"
 #include "data/index-root.h"
+#include "layer-line.h"
+#include "update-sequence.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

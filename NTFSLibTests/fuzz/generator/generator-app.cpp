@@ -1,3 +1,5 @@
+#include "generator-app.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
@@ -21,14 +23,14 @@
 #include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/fuzzgen/build-features.h>
-#include <ntfs-browser/tool/fuzzgen/byte-writer.h>
-#include <ntfs-browser/tool/fuzzgen/command-line.h>
-#include <ntfs-browser/tool/fuzzgen/generator-app.h>
-#include <ntfs-browser/tool/fuzzgen/resource-locator.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
 #include <ntfs-browser/tool/fuzzgen/scenario.h>
-#include <ntfs-browser/tool/fuzzgen/sparse-image.h>
-#include <ntfs-browser/tool/fuzzgen/stream-comparator.h>
+
+#include "byte-writer.h"
+#include "command-line.h"
+#include "resource-locator.h"
+#include "sparse-image.h"
+#include "stream-comparator.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

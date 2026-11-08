@@ -11,10 +11,11 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/fuzzgen/build-features.h>
 #include <ntfs-browser/tool/fuzzgen/recorded-stream.h>
-#include <ntfs-browser/tool/fuzzgen/resource-locator.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
 #include <ntfs-browser/tool/fuzzgen/scenario.h>
 #include <ntfs-browser/volume-options.h>
+
+#include "resource-locator.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

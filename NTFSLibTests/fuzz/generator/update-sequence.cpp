@@ -1,3 +1,5 @@
+#include "update-sequence.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <cstddef>
@@ -5,7 +7,6 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tool/fuzzgen/update-sequence.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

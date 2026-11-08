@@ -1,17 +1,18 @@
+#include "root-index-edit.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <cstddef>
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tool/fuzzgen/record-edit.h>
-#include <ntfs-browser/tool/fuzzgen/root-index-edit.h>
 
 #include "data/filename-namespace.h"
 #include "data/filename.h"
 #include "data/index-entry-flag.h"
 #include "data/index-entry.h"
 #include "data/index-root.h"
+#include "record-edit.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

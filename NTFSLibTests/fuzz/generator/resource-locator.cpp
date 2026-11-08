@@ -1,3 +1,5 @@
+#include "resource-locator.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <filesystem>
@@ -11,7 +13,6 @@
 
 #include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tool/fuzzgen/resource-locator.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

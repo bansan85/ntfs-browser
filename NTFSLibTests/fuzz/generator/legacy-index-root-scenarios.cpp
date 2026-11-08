@@ -1,18 +1,19 @@
+#include "legacy-index-root-scenarios.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-#include <ntfs-browser/tool/fuzzgen/hex-bytes.h>
-#include <ntfs-browser/tool/fuzzgen/legacy-fixtures.h>
-#include <ntfs-browser/tool/fuzzgen/legacy-index-root-scenarios.h>
-#include <ntfs-browser/tool/fuzzgen/record-edit.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
 
 #include "data/file-record-header.h"
 #include "data/index-entry.h"
 #include "data/index-root.h"
+#include "hex-bytes.h"
+#include "legacy-fixtures.h"
+#include "record-edit.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

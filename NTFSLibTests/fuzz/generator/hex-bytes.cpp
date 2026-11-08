@@ -1,3 +1,5 @@
+#include "hex-bytes.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <stdexcept>
@@ -5,7 +7,6 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tool/fuzzgen/hex-bytes.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

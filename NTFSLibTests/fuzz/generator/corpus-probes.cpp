@@ -1,3 +1,5 @@
+#include "corpus-probes.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <array>
@@ -15,7 +17,6 @@
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tool/fuzzgen/corpus-probes.h>
 #include <ntfs-browser/volume-options.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {

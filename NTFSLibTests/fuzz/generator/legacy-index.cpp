@@ -1,3 +1,5 @@
+#include "legacy-index.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
@@ -10,7 +12,6 @@
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-#include <ntfs-browser/tool/fuzzgen/legacy-index.h>
 
 #include "data/filename-flag.h"
 #include "data/filename-namespace.h"

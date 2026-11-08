@@ -1,3 +1,5 @@
+#include "stream-comparator.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
@@ -11,7 +13,6 @@
 
 #include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tool/fuzzgen/stream-comparator.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

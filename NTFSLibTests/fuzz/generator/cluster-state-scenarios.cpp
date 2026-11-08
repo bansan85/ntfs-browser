@@ -1,3 +1,5 @@
+#include "cluster-state-scenarios.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <optional>
@@ -9,7 +11,6 @@
 #include <ntfs-browser/test/fake-image/account-volume.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/tool/fuzzgen/build-features.h>
-#include <ntfs-browser/tool/fuzzgen/cluster-state-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/recorded-stream.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
 

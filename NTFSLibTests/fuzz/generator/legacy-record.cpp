@@ -1,3 +1,5 @@
+#include "legacy-record.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
@@ -8,9 +10,9 @@
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-#include <ntfs-browser/tool/fuzzgen/legacy-record.h>
-#include <ntfs-browser/tool/fuzzgen/record-edit.h>
-#include <ntfs-browser/tool/fuzzgen/update-sequence.h>
+
+#include "record-edit.h"
+#include "update-sequence.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

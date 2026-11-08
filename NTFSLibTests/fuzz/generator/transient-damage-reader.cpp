@@ -1,3 +1,5 @@
+#include "transient-damage-reader.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
@@ -11,7 +13,6 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tool/fuzzgen/transient-damage-reader.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

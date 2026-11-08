@@ -1,3 +1,5 @@
+#include "cluster-bitmap-scenarios.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <array>
@@ -7,14 +9,13 @@
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-#include <ntfs-browser/tool/fuzzgen/bpb-edit.h>
-#include <ntfs-browser/tool/fuzzgen/cluster-bitmap-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/recorded-stream.h>
-#include <ntfs-browser/tool/fuzzgen/resource-locator.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
 #include <ntfs-browser/tool/fuzzgen/scenario.h>
 
+#include "bpb-edit.h"
 #include "data/ntfs-bpb.h"
+#include "resource-locator.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

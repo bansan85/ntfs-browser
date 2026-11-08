@@ -1,3 +1,5 @@
+#include "layer-script.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
@@ -13,14 +15,14 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tool/fuzzgen/boot-sector-layer.h>
-#include <ntfs-browser/tool/fuzzgen/counter-text.h>
-#include <ntfs-browser/tool/fuzzgen/index-layer.h>
-#include <ntfs-browser/tool/fuzzgen/layer-line.h>
-#include <ntfs-browser/tool/fuzzgen/layer-script.h>
-#include <ntfs-browser/tool/fuzzgen/lznt1-compressor.h>
-#include <ntfs-browser/tool/fuzzgen/record-layer.h>
-#include <ntfs-browser/tool/fuzzgen/sparse-image.h>
+
+#include "boot-sector-layer.h"
+#include "counter-text.h"
+#include "index-layer.h"
+#include "layer-line.h"
+#include "lznt1-compressor.h"
+#include "record-layer.h"
+#include "sparse-image.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

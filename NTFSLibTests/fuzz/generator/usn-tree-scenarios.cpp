@@ -1,3 +1,5 @@
+#include "usn-tree-scenarios.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
@@ -12,10 +14,10 @@
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/usn/usn-journal-record.h>
 #include <ntfs-browser/tool/fuzzgen/recorded-stream.h>
-#include <ntfs-browser/tool/fuzzgen/resource-locator.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
 #include <ntfs-browser/tool/fuzzgen/scenario.h>
-#include <ntfs-browser/tool/fuzzgen/usn-tree-scenarios.h>
+
+#include "resource-locator.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

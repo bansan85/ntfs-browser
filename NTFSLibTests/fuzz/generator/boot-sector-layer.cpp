@@ -1,3 +1,5 @@
+#include "boot-sector-layer.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
@@ -11,10 +13,9 @@
 #include <gsl/narrow>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tool/fuzzgen/boot-sector-layer.h>
-#include <ntfs-browser/tool/fuzzgen/layer-line.h>
 
 #include "data/ntfs-bpb.h"
+#include "layer-line.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

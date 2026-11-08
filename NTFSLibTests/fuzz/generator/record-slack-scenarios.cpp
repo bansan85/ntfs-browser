@@ -1,10 +1,11 @@
+#include "record-slack-scenarios.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/slack-inputs.h>
-#include <ntfs-browser/tool/fuzzgen/record-slack-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/recorded-stream.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
 

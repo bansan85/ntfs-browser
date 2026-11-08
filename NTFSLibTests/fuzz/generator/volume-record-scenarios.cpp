@@ -1,13 +1,15 @@
+#include "volume-record-scenarios.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-#include <ntfs-browser/tool/fuzzgen/legacy-fixtures.h>
-#include <ntfs-browser/tool/fuzzgen/record-edit.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
-#include <ntfs-browser/tool/fuzzgen/volume-record-scenarios.h>
+
+#include "legacy-fixtures.h"
+#include "record-edit.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

@@ -1,3 +1,5 @@
+#include "counter-text.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
@@ -10,7 +12,6 @@
 #include <gsl/narrow>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tool/fuzzgen/counter-text.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

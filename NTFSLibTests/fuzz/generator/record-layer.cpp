@@ -1,3 +1,5 @@
+#include "record-layer.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <stdexcept>
@@ -7,11 +9,11 @@
 #include <gsl/narrow>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tool/fuzzgen/attribute-values.h>
-#include <ntfs-browser/tool/fuzzgen/index-layer.h>
-#include <ntfs-browser/tool/fuzzgen/layer-line.h>
-#include <ntfs-browser/tool/fuzzgen/legacy-record.h>
-#include <ntfs-browser/tool/fuzzgen/record-layer.h>
+
+#include "attribute-values.h"
+#include "index-layer.h"
+#include "layer-line.h"
+#include "legacy-record.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

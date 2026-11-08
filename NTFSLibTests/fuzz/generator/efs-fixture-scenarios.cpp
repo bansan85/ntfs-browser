@@ -1,3 +1,5 @@
+#include "efs-fixture-scenarios.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
@@ -11,15 +13,15 @@
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-#include <ntfs-browser/tool/fuzzgen/bpb-edit.h>
 #include <ntfs-browser/tool/fuzzgen/build-features.h>
-#include <ntfs-browser/tool/fuzzgen/efs-fixture-scenarios.h>
-#include <ntfs-browser/tool/fuzzgen/hand-made-efs.h>
-#include <ntfs-browser/tool/fuzzgen/legacy-fixtures.h>
-#include <ntfs-browser/tool/fuzzgen/legacy-record.h>
-#include <ntfs-browser/tool/fuzzgen/record-edit.h>
 #include <ntfs-browser/tool/fuzzgen/recorded-stream.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
+
+#include "bpb-edit.h"
+#include "hand-made-efs.h"
+#include "legacy-fixtures.h"
+#include "legacy-record.h"
+#include "record-edit.h"
 
 #if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
     (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT))

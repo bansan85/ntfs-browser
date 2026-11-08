@@ -1,3 +1,5 @@
+#include "bpb-edit.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <cstddef>
@@ -6,7 +8,6 @@
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-#include <ntfs-browser/tool/fuzzgen/bpb-edit.h>
 
 #include "data/ntfs-bpb.h"
 

@@ -1,3 +1,5 @@
+#include "tiny-stream-scenarios.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <string>
@@ -5,14 +7,13 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tool/fuzzgen/bpb-edit.h>
-#include <ntfs-browser/tool/fuzzgen/hex-bytes.h>
-#include <ntfs-browser/tool/fuzzgen/resource-locator.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
 #include <ntfs-browser/tool/fuzzgen/scenario.h>
-#include <ntfs-browser/tool/fuzzgen/tiny-stream-scenarios.h>
 
+#include "bpb-edit.h"
 #include "data/ntfs-bpb.h"
+#include "hex-bytes.h"
+#include "resource-locator.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

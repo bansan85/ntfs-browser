@@ -1,3 +1,5 @@
+#include "alloc-scan-scenarios.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <array>
@@ -8,7 +10,6 @@
 #include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-#include <ntfs-browser/tool/fuzzgen/alloc-scan-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/recorded-stream.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
 

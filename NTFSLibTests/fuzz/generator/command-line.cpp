@@ -1,3 +1,5 @@
+#include "command-line.h"
+
 #include <cstddef>
 #include <filesystem>
 #include <optional>
@@ -6,7 +8,6 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tool/fuzzgen/command-line.h>
 
 #ifndef NTFS_FUZZGEN_RESOURCES_DIR
   #define NTFS_FUZZGEN_RESOURCES_DIR ""

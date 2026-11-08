@@ -1,3 +1,5 @@
+#include "layer-line.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <charconv>
@@ -10,8 +12,8 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tool/fuzzgen/hex-bytes.h>
-#include <ntfs-browser/tool/fuzzgen/layer-line.h>
+
+#include "hex-bytes.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

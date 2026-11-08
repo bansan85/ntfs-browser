@@ -1,3 +1,5 @@
+#include "file-record-scenarios.h"
+
 #include <ntfs-browser/win-types.h>
 
 #include <algorithm>
@@ -7,15 +9,14 @@
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-#include <ntfs-browser/tool/fuzzgen/file-record-scenarios.h>
-#include <ntfs-browser/tool/fuzzgen/legacy-fixtures.h>
-#include <ntfs-browser/tool/fuzzgen/record-edit.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
 
 #include "data/header-non-resident.h"
 #include "data/index-block.h"
 #include "data/index-entry-flag.h"
 #include "data/index-entry.h"
+#include "legacy-fixtures.h"
+#include "record-edit.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 
