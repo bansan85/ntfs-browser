@@ -8,6 +8,7 @@
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/tool/fuzzgen/build-features.h>
 #include <ntfs-browser/tool/fuzzgen/legacy-fixtures.h>
 #include <ntfs-browser/tool/fuzzgen/legacy-index.h>
 #include <ntfs-browser/tool/fuzzgen/legacy-name-scenarios.h>
@@ -274,7 +275,8 @@ void LegacyNameScenarios::Register(ScenarioRegistry& registry) {
                  {.name = "upcase_run_lcn_at_address_space_limit",
                   .make = RunAtAddressSpaceLimit,
                   .boot = LegacyFixtures::Boot::PatchedTotalSectors,
-                  .probe = RecordedStream::Probe::FullCache},
+                  .probe = RecordedStream::Probe::FullCache,
+                  .needs = Feature::Decompression},
                  {.name = "upcase_table_read_crosses_64k_blocks",
                   .make = TableInManyBlocks,
                   .boot = LegacyFixtures::Boot::PatchedTotalSectors}});
