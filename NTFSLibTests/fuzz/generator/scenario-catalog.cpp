@@ -8,6 +8,7 @@
 #include <ntfs-browser/tool/fuzzgen/cluster-bitmap-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/cluster-state-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/compressed-file-scenarios.h>
+#include <ntfs-browser/tool/fuzzgen/corpus-trace-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/data-run-lcn-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/efs-fixture-scenarios.h>
 #include <ntfs-browser/tool/fuzzgen/file-record-scenarios.h>
@@ -70,6 +71,7 @@ ScenarioRegistry ScenarioCatalog::Build() {
   EfsFixtureScenarios::Register(registry);
   DataRunLcnScenarios::Register(registry);
   LegacyNameScenarios::Register(registry);
+  CorpusTraceScenarios::Register(registry);
   return registry;
 }
 

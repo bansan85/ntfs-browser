@@ -114,6 +114,14 @@ add_library(
   "legacy-name-scenarios.cpp"
   "include/ntfs-browser/tool/fuzzgen/mft-huge-scan-scenarios.h"
   "mft-huge-scan-scenarios.cpp"
+  "include/ntfs-browser/tool/fuzzgen/sparse-image.h"
+  "sparse-image.cpp"
+  "include/ntfs-browser/tool/fuzzgen/sparse-disk-reader.h"
+  "sparse-disk-reader.cpp"
+  "include/ntfs-browser/tool/fuzzgen/corpus-probes.h"
+  "corpus-probes.cpp"
+  "include/ntfs-browser/tool/fuzzgen/corpus-trace-scenarios.h"
+  "corpus-trace-scenarios.cpp"
 )
 
 target_include_directories(
@@ -149,8 +157,8 @@ set(NTFS_FUZZGEN_RESOURCES_DIR "${NTFS_FUZZGEN_OUTPUT_DIR}/resources")
 
 # The archives that hold what code cannot compute (file contents, journal data
 # of a forensic image), one .tar.xz per source image, in
-# ${CMAKE_CURRENT_SOURCE_DIR}/resources. None is needed yet.
-set(NTFS_FUZZGEN_ARCHIVES)
+# ${CMAKE_CURRENT_SOURCE_DIR}/resources. make-corpus-residue.py makes them.
+set(NTFS_FUZZGEN_ARCHIVES "dftt.tar.xz" "ntfs-samples.tar.xz")
 
 target_compile_definitions(
   NtfsFuzzGenCore
