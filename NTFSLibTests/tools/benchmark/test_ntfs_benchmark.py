@@ -618,7 +618,7 @@ class OffAtZeroSearchTests(unittest.TestCase):
         target = nb.target_of("M3", "Windows\System32")
         self.assertEqual(target.scenario.args, ("-r",))
         self.assertEqual(target.scenario.subpath, "Windows\System32")
-        self.assertEqual(target.scenario.tool, "dir")
+        self.assertEqual(target.scenario.tool, "fullcache")
         # The other patterns are left as they are.
         self.assertIs(nb.target_of("M1", "ignored"), nb.TARGETS["M1"])
 
@@ -1593,7 +1593,7 @@ class WorkflowTests(unittest.TestCase):
             declared.update(re.findall(r"add_executable\(\s*(\w+)", path.read_text()))
         for target in built:
             self.assertIn(target, declared, f"no add_executable({target})")
-        for tool in ("NtfsMftList", "NtfsDir", "NtfsDir2", "NtfsBench"):
+        for tool in ("NtfsScanBench", "NtfsBench"):
             self.assertIn(tool, built, f"{tool} is used by the script")
 
     def test_it_configures_a_preset_that_builds_where_it_looks(self):

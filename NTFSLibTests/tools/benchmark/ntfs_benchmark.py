@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Benchmark of NtfsMftList and ntfsdir: proves where the critical path lies, and
+"""Benchmark of NtfsScanBench, in its three engines (mftlist, fullcache and
+nocache): proves where the critical path lies, and
 tunes the constants of the read path for one disk.
 
 Standard library only, Python 3.12 or later. On Windows it needs an
@@ -121,7 +122,7 @@ class Stats:
 def sha256_of(path: Path, rename: tuple[str, str] | None = None) -> str:
     """SHA-256 of a file. With rename = (old, new), every old in it is read as new.
 
-    ntfsdir names its target in the listing, so the listing of an image carries
+    The walk engines name their target in the listing, so the listing of an image carries
     the path of the image where the listing of the volume carries the volume.
     The hash of a listing of a drive is also taken with the spelling of the
     image: rename = (drive, drive) for the volume, (image, drive) for the image.
@@ -139,7 +140,7 @@ def sha256_of(path: Path, rename: tuple[str, str] | None = None) -> str:
                 if old in line:
                     line = line.replace(old, new)
                 if drive:
-                    # ntfsdir -r heads the root of a drive with a trailing
+                    # the walk engines with -r head the root of a drive with a trailing
                     # backslash and joins its children with two. The root of
                     # an image has neither.
                     if line.rstrip(b"\r\n") == root:
@@ -275,23 +276,15 @@ class Tools:
         return (preferred or found or [direct])[0]
 
     @property
-    def mftlist(self) -> Path:
-        return self.find("NtfsMftList")
-
-    @property
-    def dir_full(self) -> Path:
-        return self.find("NtfsDir")
-
-    @property
-    def dir_none(self) -> Path:
-        return self.find("NtfsDir2")
+    def scan_bench(self) -> Path:
+        return self.find("NtfsScanBench")
 
     @property
     def bench(self) -> Path:
         return self.find("NtfsBench")
 
     def check(self) -> None:
-        for path in (self.mftlist, self.dir_full, self.bench):
+        for path in (self.scan_bench, self.bench):
             if not path.exists():
                 raise SystemExit(f"{path} is missing: build the project first")
 
@@ -301,9 +294,10 @@ class Scenario:
     """One thing a tool is asked to do, in any of the four modes."""
 
     name: str
-    tool: str  # "mftlist", "dir" (FullCache) or "dir2" (NoCache)
+    # The engine of NtfsScanBench: "mftlist", "fullcache" or "nocache".
+    tool: str
     args: tuple[str, ...] = ()
-    # Path inside the volume, for ntfsdir.
+    # Path inside the volume, for the walk engines.
     subpath: str = ""
     # Phase whose wall time stands for the scenario in the constant search.
     phase: str = ""
@@ -317,11 +311,7 @@ class Scenario:
         return volume.rstrip("\\/") + sep + self.subpath.replace("\\", sep)
 
     def executable(self, tools: Tools) -> Path:
-        return {
-            "mftlist": tools.mftlist,
-            "dir": tools.dir_full,
-            "dir2": tools.dir_none,
-        }[self.tool]
+        return tools.scan_bench
 
 
 def scenarios(args: argparse.Namespace) -> list[Scenario]:
@@ -329,8 +319,9 @@ def scenarios(args: argparse.Namespace) -> list[Scenario]:
     chosen: list[Scenario] = []
     if "mftlist" in args.tools:
         chosen.append(Scenario("mftlist", "mftlist", phase="pass1"))
-    for cache, tool in (("fullcache", "dir"), ("nocache", "dir2")):
-        if cache not in args.caches or (tool == "dir2" and not IS_WINDOWS):
+    for cache in ("fullcache", "nocache"):
+        tool = cache
+        if cache not in args.caches:
             continue
         if "dir" not in args.tools:
             continue
@@ -463,7 +454,7 @@ class Runner:
         extra: list[str],
         summary: Path,
     ) -> list[str]:
-        command = [str(scenario.executable(self.tools))]
+        command = [str(scenario.executable(self.tools)), f"--engine={scenario.tool}"]
         command += list(scenario.args)
         command += MODES[mode]
         command += extra
@@ -728,7 +719,7 @@ def measure_combo(
 
 def threads_option(count: int) -> list[str]:
     """The option for a thread count of the sweep. 0 is the scan's own choice:
-    NtfsMftList refuses `--threads=0`, so it is no option at all."""
+    NtfsScanBench refuses `--threads=0`, so it is no option at all."""
     return [f"--threads={count}"] if count else []
 
 
@@ -938,7 +929,7 @@ def render_report(results: dict, previous_path: str | None) -> str:
 
     sweep = results.get("thread_sweep", {})
     if sweep:
-        lines += ["## Thread sweep (NtfsMftList --threads=N)", "", "| Volume | Mode | Threads | T_real |", "|---|---|---:|---|"]
+        lines += ["## Thread sweep (NtfsScanBench --engine=mftlist --threads=N)", "", "| Volume | Mode | Threads | T_real |", "|---|---|---:|---|"]
         for key, values in sweep.items():
             volume, _, mode, count = key.split("|")
             lines.append(f"| {volume} | {mode} | {count} | {Stats(values).text()} |")
@@ -1000,7 +991,7 @@ TARGETS: dict[str, Target] = {
     # The recursive listing of a subtree: the read ahead of its directories
     # only acts when it recurses. search() gives the scenario the subtree.
     "M3": Target(
-        "M3", Scenario("dir-subtree", "dir", ("-r",), "", "walk"), "none", (),
+        "M3", Scenario("dir-subtree", "fullcache", ("-r",), "", "walk"), "none", (),
         "walk", "walk",
         ("walk.read_ahead_dirs", "walk.read_ahead_bytes", LANE_RUNS_KNOB,
          LANE_RUNS_ROTATIONAL_KNOB, "cache.block_bytes"),
@@ -1780,7 +1771,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     def common(p: argparse.ArgumentParser) -> None:
         p.add_argument("--bin-dir", required=True,
-                       help="folder of NtfsMftList, NtfsDir, NtfsDir2 and NtfsBench, or the build tree")
+                       help="folder of NtfsScanBench and NtfsBench, or the build tree")
         p.add_argument("--config", default="Release", help="build configuration, in a build tree")
         p.add_argument("--out-dir", required=True, help="results, CSV and report")
         p.add_argument("--timeout", type=float, default=900, help="seconds a run may take")

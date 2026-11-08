@@ -25,7 +25,7 @@ jobs:
         run: |
           cmake --preset static
           cmake --build $env:BUILD --config Release --parallel `
-            --target NtfsMftList NtfsDir NtfsDir2 NtfsBench
+            --target NtfsScanBench NtfsBench
       - name: Self-test of the searcher
         # The analytic disk, then the simulated disk of NtfsBench.
         run: |
@@ -34,7 +34,7 @@ jobs:
             Select-Object -First 1).FullName
           python NTFSLibTests/tools/benchmark/ntfs_benchmark.py --self-test --sim-exe $bench
       - name: Audit of c:
-        # T_real, T_io and T_cpu for NtfsMftList in its four modes, and one
+        # T_real, T_io and T_cpu for NtfsScanBench (mftlist engine) in its four modes, and one
         # directory scenario. The listings go to d:, never to the scanned disk.
         run: |
           New-Item -ItemType Directory -Force "$env:OUT", "d:\bench-scratch" | Out-Null
