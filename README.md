@@ -223,6 +223,7 @@ Each public class and function is described in the headers under `include/ntfs-b
 - 2026-11: `Search::Scan` lists a folder or a volume without blocking. A worker thread finds the files. The caller polls about every 100 ms, or calls `Run()` to poll until the end. Three engines walk the volume. A scan searches by name, wildcard or regular expression (optional PCRE2) and filters on every field
 - 2026-11: `NtfsDir` is built on `Search::Scan` and takes `--engine=` to pick the engine
 - 2026-11: `NtfsScanBench` replaces `NtfsMftList`. It times the three engines (`mftlist`, `nocache`, `fullcache`), alone or side by side with `--engine=all`. `--via-scan` times a run through `Search::Scan` and reports its critical path
+- 2026-11: `Search::Reader` reads the file behind a `Search::Handle` that a scan gives: its times, names, streams, raw attributes and content, for a live or a deleted file. It fails with an error when the record is another file's. `NtfsUndel` is built on `Search::Scan` and `Search::Reader`
 
 ## Credits and licence
 
