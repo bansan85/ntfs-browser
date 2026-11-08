@@ -38,7 +38,8 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY EntryBuffer {
 
   [[nodiscard]] std::size_t Size() const noexcept;
 
-  // Forgets every entry. Keeps the memory.
+  // Forgets every entry. Keeps the memory. A debug build overwrites the text
+  // first with the unit 0xFFFE, to show a view that outlived its batch.
   void Clear() noexcept;
 
  private:

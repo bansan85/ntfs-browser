@@ -3,10 +3,12 @@ target_sources(
   PRIVATE
     "entry-buffer-tests.cpp"
     "scan-directory-tests.cpp"
+    "scan-fake-engine.h"
     "scan-mft-list-tests.cpp"
     "scan-poll-tests.cpp"
     "scan-support.cpp"
     "scan-support.h"
+    "scan-thread-tests.cpp"
     "search-types-tests.cpp"
     "target-tests.cpp"
 )

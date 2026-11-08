@@ -18,6 +18,13 @@ namespace {
 // its own size.
 constexpr std::size_t chunk_units = 32768;
 
+#ifndef NDEBUG
+// What Clear() writes over the text of the entries it forgets, in a debug
+// build. A view that outlived its batch then shows this unit, which is no
+// character (a Unicode noncharacter), so a test or a debugger sees the misuse.
+constexpr char16_t poison_unit = 0xFFFE;
+#endif
+
 }  // namespace
 
 void EntryBuffer::Add(const Entry& entry) {
@@ -40,6 +47,9 @@ void EntryBuffer::Clear() noexcept {
   entries_.clear();
   summaries_.clear();
   for (Chunk& chunk : chunks_) {
+#ifndef NDEBUG
+    std::fill_n(chunk.units.get(), chunk.used, poison_unit);
+#endif
     chunk.used = 0;
   }
   current_ = 0;

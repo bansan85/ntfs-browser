@@ -377,9 +377,7 @@ TEST_CASE("The MftList engine reports a summary of the clusters",
     }
   });
   scan.Start();
-  while (!scan.Finished()) {
-    scan.Poll();
-  }
+  static_cast<void>(TestSearch::PollToEnd(scan));
 
   CHECK(reallocated == 2);
   CHECK(total == 2);

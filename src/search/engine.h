@@ -2,14 +2,16 @@
 
 // How Search::Scan is built, for whoever extends it.
 //
-//   Scan (public, scan.h)    Start/Poll/Cancel and the state. Today Start()
-//                            runs the engine to its end into one EntryBuffer
-//                            and Poll() hands it over in slices of at most
-//                            4096 entries. The worker thread replaces this:
-//                            it runs Engine::Run() on its own thread with a
-//                            log capture, fills one of two EntryBuffers, and
-//                            Poll() swaps them under a lock, replays the log
-//                            and calls the callback.
+//   Scan (public, scan.h)    Start/Poll/Cancel and the state. Start() makes
+//                            a worker thread that runs Engine::Run() with the
+//                            log captured. Poll() runs on the caller's thread.
+//   ScanExchange             What passes from the worker to Poll(): two
+//                            EntryBuffers that Poll() swaps under a short lock
+//                            (the caller reads one, the worker fills the
+//                            other), the percent, and a Log::Detail::WorkerLog
+//                            that Poll() replays on its own thread. An engine
+//                            sees it as its EntrySink. Add() may wait when
+//                            Options::max_pending_entries is reached.
 //   Engine (this file)       One way to walk a volume. MakeEngine() picks it
 //                            from Options::engine. ResolveEngine() holds the
 //                            Auto rule: MftList for the root of a volume (no
@@ -32,9 +34,17 @@
 // deleted entry has standing Deleted or Reused, and data_state is only set
 // for a deleted entry.
 //
-// Left to do: the worker thread, the name matching and the filters on the
-// fields (Options), and the Options of the regular expression.
+// An engine runs on the worker thread. It MUST NOT touch the sinks of the log
+// (the capture catches what it logs through Log::*), and it MUST call
+// sink.Add() and sink.SetPercent() from that one thread only. It SHOULD look at
+// the stop token often: the destructor of a Scan waits for the thread. The
+// MftList engine gives its entries to the sink after it read the whole $MFT.
+// The percent moves during the read.
+//
+// Left to do: the name matching and the filters on the fields (Options), and
+// the Options of the regular expression.
 
+#include <functional>
 #include <memory>
 #include <stop_token>
 
@@ -92,5 +102,15 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY Engine {
 // Makes the engine ResolveEngine() chooses.
 [[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY std::unique_ptr<Engine>
     MakeEngine(const Options& options, const TargetParts& parts);
+
+// A function that makes an engine in place of the ones above.
+using EngineFactory = std::function<std::unique_ptr<Engine>(
+    const Options& options, const TargetParts& parts)>;
+
+// Makes MakeEngine() call factory from now on. An empty function restores the
+// real engines. For tests: they hold the worker thread of a scan with an engine
+// of their own. Call it while no scan runs: it is not thread safe.
+NTFS_BROWSER_EXPORT_TESTS_ONLY void
+    SetEngineFactoryForTests(EngineFactory factory);
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Search

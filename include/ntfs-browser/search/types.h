@@ -254,6 +254,10 @@ enum class State : std::uint8_t {
 inline constexpr std::uint64_t default_max_cache_bytes =
     std::uint64_t{256} * 1024 * 1024;
 
+// The default of Options::max_pending_entries: 256 Ki entries. A batch of that
+// size takes a few tens of MiB, and a poll every 100 ms never sees more.
+inline constexpr std::size_t default_max_pending_entries = 262144;
+
 // What to scan and how. Set a field before Scan() takes the options. Fields
 // of search patterns and filters are added after the ones below.
 struct Options {
@@ -290,6 +294,15 @@ struct Options {
   // Memory the block cache of the DirectoryFullCache engine may hold, in
   // bytes. The other engines ignore it.
   std::uint64_t max_cache_bytes{default_max_cache_bytes};
+
+  // Entries the scan may hold that Poll() has not delivered. When the scan
+  // finds more than the caller takes, the worker thread waits for the next
+  // Poll() instead of growing its buffer. The memory of a scan is therefore at
+  // most twice this number of entries: the ones in fill and the ones the
+  // callback reads. A batch is never larger. 0 sets no limit: the worker never
+  // waits and the buffer grows with the volume. A caller that stops polling
+  // blocks the worker at the limit. Cancel() and the destructor still end it.
+  std::size_t max_pending_entries{default_max_pending_entries};
 };
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Search

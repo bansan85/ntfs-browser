@@ -20,17 +20,45 @@
 //     // do other work, then wait about 100 ms
 //   }
 //
-// Threads. The caller drives the scan and owns every call: Start(), Poll(),
-// Cancel() and the callback all run on the thread that created the Scan. The
-// library and its log are not thread safe, and the Scan keeps to that.
+// Threads. Start() makes one worker thread, which opens the volume and runs the
+// scan. Start() returns at once. The caller keeps every call: Start(), Poll(),
+// Cancel(), the destructor and the callback all run on the thread that created
+// the Scan. Poll() never waits for the worker: it takes the lock for a moment,
+// swaps the buffer the worker filled for an empty one, and calls the callback
+// with a view of the full one. The worker fills the other buffer meanwhile, so
+// no name and no path is copied, and the worker never writes to what the
+// callback reads. The batch is valid during the callback only: the buffer is
+// recycled when it returns (a debug build overwrites the text).
+//
+// The library and its log are not thread safe, and the Scan keeps to that.
+// Whatever the worker logs, the opening of the volume included, is captured in
+// a buffer of the worker. Poll() replays it to the log sinks on the caller's
+// thread, in order, as it hands over the batches. The sinks are never called
+// from the worker thread. The log levels are the ones the sinks accept when
+// Start() runs.
+//
+// Pace. A Poll() delivers everything found since the previous one, as one
+// batch. Call it about every 100 ms. It calls the callback only when something
+// is new: entries, a change of the percent, or the end. A caller that polls
+// very often gets few batches, and none is empty. A worker faster than the
+// caller waits when Options::max_pending_entries entries are pending, so the
+// memory stays bounded. A caller that polls too rarely slows the scan down by
+// that limit and gets large batches: the limit is also the largest batch.
+//
+// Order of delivery. The directory engines deliver while they walk. The MftList
+// engine reads the whole $MFT first and delivers its entries when the read is
+// over: the progress percent moves during the read, and Cancel() stops the read
+// within a few thousand records, but no entry arrives before the end of the
+// read.
+//
+// Cancel() and the destructor stop the worker through a stop token that every
+// engine looks at between entries. The destructor waits for the thread to end,
+// so no thread outlives the Scan.
 //
 // Errors. Nothing is thrown and the callback has no error result. A target
 // that does not open, a damaged folder or an unreadable record goes to the
-// library log (Log::Error, Log::Warn). GetState() tells that the scan failed.
-//
-// State of the implementation. Today Start() runs the whole scan before it
-// returns and Poll() delivers what it found in batches. The interface is made
-// for a scan on a worker thread: no caller needs a change when it moves.
+// library log (Log::Error, Log::Warn). An exception in the worker is caught,
+// logged, and ends the scan as Failed. GetState() tells that the scan failed.
 
 #include <functional>
 #include <memory>
@@ -54,7 +82,7 @@ class NTFS_BROWSER_EXPORT Scan {
   Scan& operator=(const Scan&) = delete;
   Scan(Scan&&) = delete;
   Scan& operator=(Scan&&) = delete;
-  // Cancels the scan if it still runs.
+  // Cancels the scan if it still runs, and waits for the worker thread to end.
   ~Scan();
 
  private:
@@ -67,8 +95,10 @@ class NTFS_BROWSER_EXPORT Scan {
   // no callback is dropped.
   void OnBatch(BatchCallback callback);
 
-  // Begins the scan. Does nothing when the scan was started already. A target
-  // that cannot be opened makes the state Failed, with the reason in the log.
+  // Begins the scan on a worker thread and returns at once. Does nothing when
+  // the scan was started already. A target that cannot be opened makes the
+  // state Failed, with the reason in the log, once the worker found out: it is
+  // Running until a Poll() delivers the end.
   void Start();
 
   // Delivers to the callback what the scan found since the last call, as one
@@ -77,8 +107,9 @@ class NTFS_BROWSER_EXPORT Scan {
   // end of the scan, which always gets a batch with last set.
   State Poll();
 
-  // Asks the scan to stop. The next Poll() delivers what was found and ends
-  // with the state Cancelled. Does nothing once the scan is over.
+  // Asks the worker to stop. Returns at once. The next Poll() calls deliver
+  // what was found and the last of them ends with the state Cancelled. Does
+  // nothing once the scan is over.
   void Cancel() noexcept;
 
   [[nodiscard]] State GetState() const noexcept;

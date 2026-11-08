@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/search/scan.h>
 #include <ntfs-browser/search/types.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 
@@ -76,6 +77,11 @@ struct Outcome {
 // Runs a scan with options to its end, polling, and collects what it gave.
 [[nodiscard]] Outcome
     RunScan(const NTFS_BROWSER_NAMESPACE::Search::Options& options);
+
+// Polls scan until it is over, or until a long deadline, and returns its state.
+// A scan that is not over by then is stuck and reports Running.
+NTFS_BROWSER_NAMESPACE::Search::State
+    PollToEnd(NTFS_BROWSER_NAMESPACE::Search::Scan& scan);
 
 // The names of rows, as UTF-8, in order.
 [[nodiscard]] std::vector<std::string> Names(const std::vector<Row>& rows);

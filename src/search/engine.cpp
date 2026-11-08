@@ -1,5 +1,6 @@
 #include "search/engine.h"
 
+#include <functional>
 #include <memory>
 #include <utility>
 
@@ -14,6 +15,20 @@
 
 namespace NTFS_BROWSER_NAMESPACE::Search {
 
+namespace {
+
+// The factory of SetEngineFactoryForTests(). Empty in every real use.
+EngineFactory& FactoryOverride() {
+  static EngineFactory factory;
+  return factory;
+}
+
+}  // namespace
+
+void SetEngineFactoryForTests(EngineFactory factory) {
+  FactoryOverride() = std::move(factory);
+}
+
 EngineKind ResolveEngine(const Options& options, const TargetParts& parts) {
   if (options.engine != EngineKind::Auto) {
     return options.engine;
@@ -26,6 +41,9 @@ EngineKind ResolveEngine(const Options& options, const TargetParts& parts) {
 
 std::unique_ptr<Engine> MakeEngine(const Options& options,
                                    const TargetParts& parts) {
+  if (const EngineFactory& factory = FactoryOverride(); factory) {
+    return factory(options, parts);
+  }
   switch (ResolveEngine(options, parts)) {
     case EngineKind::DirectoryNoCache:
       return std::make_unique<DirectoryEngine<Cache::Strategy::NoCache>>(

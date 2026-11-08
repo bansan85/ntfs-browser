@@ -93,3 +93,25 @@ TEST_CASE("An EntryBuffer starts again after Clear", "[search][buffer]") {
     CHECK(buffer.Size() == 0);
   }
 }
+
+#ifndef NDEBUG
+TEST_CASE(
+    "Clear overwrites the text of the entries it forgets in a debug build",
+    "[search][buffer]") {
+  Lib::EntryBuffer buffer;
+  Lib::Entry entry;
+  entry.name = u"forgotten";
+  buffer.Add(entry);
+  const std::u16string_view view = buffer.Entries().front().name;
+  const char16_t* const data = view.data();
+  const std::size_t size = view.size();
+
+  buffer.Clear();
+
+  REQUIRE(size == 9);
+  for (std::size_t unit = 0; unit < size; ++unit) {
+    // The buffer keeps the memory, so reading it is allowed.
+    CHECK(data[unit] == char16_t{0xFFFE});
+  }
+}
+#endif

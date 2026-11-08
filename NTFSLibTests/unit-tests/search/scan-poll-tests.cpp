@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstddef>
 #include <vector>
 
@@ -50,12 +51,13 @@ TEST_CASE("Poll delivers the entries and then the last batch",
   scan.Start();
   CHECK(scan.GetState() == Lib::State::Running);
   CHECK_FALSE(scan.Finished());
-  CHECK(scan.Poll() == Lib::State::Finished);
+  CHECK(TestSearch::PollToEnd(scan) == Lib::State::Finished);
 
   CHECK(scan.Finished());
   CHECK(entries == 5);
-  REQUIRE(last.size() == 1);
-  CHECK(last.front());
+  REQUIRE_FALSE(last.empty());
+  CHECK(last.back());
+  CHECK(std::count(last.begin(), last.end(), true) == 1);
   CHECK(scan.GetProgress().entries_found == 5);
 }
 
@@ -65,10 +67,11 @@ TEST_CASE("Poll after the end calls nothing", "[search][poll]") {
   std::size_t calls = 0;
   scan.OnBatch([&calls](const Lib::Batch&) { ++calls; });
   scan.Start();
-  scan.Poll();
+  static_cast<void>(TestSearch::PollToEnd(scan));
+  const std::size_t calls_at_end = calls;
 
   CHECK(scan.Poll() == Lib::State::Finished);
-  CHECK(calls == 1);
+  CHECK(calls == calls_at_end);
 }
 
 TEST_CASE("Start twice scans once", "[search][poll]") {
@@ -80,7 +83,7 @@ TEST_CASE("Start twice scans once", "[search][poll]") {
 
   scan.Start();
   scan.Start();
-  scan.Poll();
+  static_cast<void>(TestSearch::PollToEnd(scan));
 
   CHECK(entries == 5);
 }
@@ -98,7 +101,7 @@ TEST_CASE("Cancel ends the scan as Cancelled", "[search][poll]") {
   scan.Start();
   scan.Cancel();
 
-  CHECK(scan.Poll() == Lib::State::Cancelled);
+  CHECK(TestSearch::PollToEnd(scan) == Lib::State::Cancelled);
   CHECK(scan.Finished());
   CHECK(last_batches == 1);
 }
@@ -109,7 +112,7 @@ TEST_CASE("A scan with no callback still ends", "[search][poll]") {
 
   scan.Start();
 
-  CHECK(scan.Poll() == Lib::State::Finished);
+  CHECK(TestSearch::PollToEnd(scan) == Lib::State::Finished);
 }
 
 TEST_CASE("A scan destroyed before the end is harmless", "[search][poll]") {

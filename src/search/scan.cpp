@@ -1,10 +1,9 @@
-#include <algorithm>
-#include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <memory>
 #include <optional>
 #include <stop_token>
-#include <string>
+#include <thread>
 #include <utility>
 
 #include <ntfs-browser/namespace.h>
@@ -13,47 +12,31 @@
 
 #include "log/ntfs-common.h"
 #include "search/engine.h"
-#include "search/entry-buffer.h"
+#include "search/scan-exchange.h"
 #include "search/target.h"
 #include "utf/utf.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Search {
 
-namespace {
-
-// Entries in one batch at most. Poll() hands over this many and returns: a
-// caller that polls every 100 ms is never held longer than a callback over this
-// many entries takes. A run of entries a worker found in one slice is no
-// larger than this either, once the scan has its own thread.
-constexpr std::size_t max_batch_entries = 4096;
-
-// Keeps what an engine reports: every entry in a buffer, and the percent.
-class BufferSink final : public EntrySink {
- public:
-  explicit BufferSink(EntryBuffer& buffer) : buffer_(buffer) {}
-
-  void Add(const Entry& entry) override { buffer_.Add(entry); }
-
-  void SetPercent(double percent) override { percent_ = percent; }
-
-  [[nodiscard]] const std::optional<double>& Percent() const noexcept {
-    return percent_;
-  }
-
- private:
-  EntryBuffer& buffer_;
-  std::optional<double> percent_;
-};
-
-}  // namespace
-
-// The state of a scan. Today the engine runs inside Start() and fills one
-// buffer; Poll() hands that buffer over in slices. The worker thread of the
-// next step replaces buffer_ with two buffers that it swaps under a lock and
-// runs the engine from a thread, and keeps the rest.
+// The state of a scan. A worker thread runs the engine into exchange_. The
+// caller's thread owns every member that is not part of the exchange: Start(),
+// Poll(), Cancel() and the callback run there. The worker touches the options
+// (read only), the stop source (thread safe) and the exchange.
 class Scan::Impl {
  public:
-  explicit Impl(Options options) : options_(std::move(options)) {}
+  explicit Impl(Options options)
+      : options_(std::move(options)), exchange_(options_.max_pending_entries) {}
+
+  Impl(const Impl&) = delete;
+  Impl& operator=(const Impl&) = delete;
+  Impl(Impl&&) = delete;
+  Impl& operator=(Impl&&) = delete;
+
+  // Stops the worker and waits for it: no thread outlives the scan.
+  ~Impl() {
+    stop_.request_stop();
+    Join();
+  }
 
   void SetCallback(BatchCallback callback) { callback_ = std::move(callback); }
 
@@ -62,41 +45,42 @@ class Scan::Impl {
       return;
     }
     started_ = true;
+    exchange_.Prepare(Log::Detail::EnabledLevels(), stop_.get_token());
     try {
-      result_ = Run();
+      worker_ = std::thread([this] { Work(); });
     } catch (const std::exception& error) {
-      Log::Error("The scan failed: {}", error.what());
-      result_ = State::Failed;
-    } catch (...) {
-      Log::Error("The scan failed");
-      result_ = State::Failed;
+      Log::Error("The scan thread did not start: {}", error.what());
+      exchange_.BeginWork();
+      exchange_.EndWork(State::Failed);
     }
   }
 
   State Poll() {
-    if (!started_ || final_delivered_) {
+    if (!started_ || final_delivered_ || polling_) {
       return GetState();
     }
-    const std::size_t found = buffer_.Size();
-    const std::size_t count = std::min(found - delivered_, max_batch_entries);
-    const bool last = delivered_ + count == found;
-    const bool progress_changed = percent_ != reported_percent_;
-    if (count == 0 && !last && !progress_changed) {
+    const PollGuard guard(*this);
+    const ScanExchange::Taken taken = exchange_.Take();
+    // After Take(): a worker that ended has its log whole by then.
+    exchange_.ReplayLog();
+
+    const std::optional<double> percent = exchange_.Percent();
+    const bool progress_changed = percent != reported_percent_;
+    if (taken.entries.empty() && !taken.last && !progress_changed) {
       return GetState();
     }
 
-    progress_.entries_found = delivered_ + count;
-    progress_.percent = percent_;
-    reported_percent_ = percent_;
-    const Batch batch{.entries = buffer_.Entries().subspan(delivered_, count),
-                      .progress = progress_,
-                      .last = last};
-    delivered_ += count;
-    if (last) {
+    delivered_ += taken.entries.size();
+    progress_.entries_found = delivered_;
+    progress_.percent = percent;
+    reported_percent_ = percent;
+    if (taken.last) {
       final_delivered_ = true;
+      result_ = taken.result;
     }
     if (callback_) {
-      callback_(batch);
+      callback_(Batch{
+          .entries = taken.entries, .progress = progress_, .last = taken.last});
     }
     return GetState();
   }
@@ -124,8 +108,46 @@ class Scan::Impl {
   [[nodiscard]] Progress GetProgress() const noexcept { return progress_; }
 
  private:
-  // Splits the target, makes the engine and runs it into buffer_. Returns the
-  // state the scan ends in when nobody cancels it.
+  // Marks a Poll() as running, so that a Poll() from the callback does nothing,
+  // and gives the entries back when the Poll() ends, even by an exception of
+  // the callback.
+  class PollGuard {
+   public:
+    explicit PollGuard(Impl& scan) noexcept : scan_(scan) {
+      scan_.polling_ = true;
+    }
+
+    PollGuard(const PollGuard&) = delete;
+    PollGuard& operator=(const PollGuard&) = delete;
+    PollGuard(PollGuard&&) = delete;
+    PollGuard& operator=(PollGuard&&) = delete;
+
+    ~PollGuard() {
+      scan_.exchange_.Release();
+      scan_.polling_ = false;
+    }
+
+   private:
+    Impl& scan_;
+  };
+
+  // The body of the worker thread. Nothing leaves it: an exception ends the
+  // scan as Failed, and its text goes to the captured log.
+  void Work() noexcept {
+    exchange_.BeginWork();
+    State result = State::Failed;
+    try {
+      result = Run();
+    } catch (const std::exception& error) {
+      Log::Error("The scan failed: {}", error.what());
+    } catch (...) {
+      Log::Error("The scan failed");
+    }
+    exchange_.EndWork(result);
+  }
+
+  // Splits the target, makes the engine and runs it into exchange_. Returns
+  // the state the scan ends in when nobody cancels it. Runs on the worker.
   State Run() {
     const std::optional<TargetParts> parts =
         SplitTarget(Utf::Utf16ToWide(options_.target));
@@ -138,38 +160,46 @@ class Scan::Impl {
     if (!engine) {
       return State::Failed;
     }
-    BufferSink sink(buffer_);
-    const bool ran = engine->Run(sink, stop_.get_token());
-    percent_ = sink.Percent();
-    return ran ? State::Finished : State::Failed;
+    return engine->Run(exchange_, stop_.get_token()) ? State::Finished
+                                                     : State::Failed;
+  }
+
+  // Waits for the worker. Never throws.
+  void Join() noexcept {
+    try {
+      if (worker_.joinable()) {
+        worker_.join();
+      }
+    } catch (...) {
+      // A thread that cannot be joined cannot be helped here.
+    }
   }
 
   Options options_;
   BatchCallback callback_;
   std::stop_source stop_;
-  EntryBuffer buffer_;
+  ScanExchange exchange_;
 
   bool started_{false};
-  // How the engine ended: Finished, or Failed. Set by Start().
+  // How the engine ended, as the last batch reported it.
   State result_{State::NotStarted};
   bool cancelled_{false};
   // Whether Poll() has delivered the batch that has last set.
   bool final_delivered_{false};
-  // Entries of buffer_ that Poll() handed over.
-  std::size_t delivered_{0};
-  std::optional<double> percent_;
+  // A Poll() is running: it is not reentrant.
+  bool polling_{false};
+  // Entries handed to the callback so far.
+  std::uint64_t delivered_{0};
   std::optional<double> reported_percent_;
   Progress progress_;
+  // Declared last: the worker uses every member above.
+  std::thread worker_;
 };
 
 Scan::Scan(Options options)
     : impl_(std::make_unique<Impl>(std::move(options))) {}
 
-Scan::~Scan() {
-  if (impl_) {
-    impl_->Cancel();
-  }
-}
+Scan::~Scan() = default;
 
 void Scan::OnBatch(BatchCallback callback) {
   impl_->SetCallback(std::move(callback));

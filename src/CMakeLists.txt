@@ -73,6 +73,7 @@ set(
   "search/engine.cpp"
   "search/entry-buffer.cpp"
   "search/mft-list-engine.cpp"
+  "search/scan-exchange.cpp"
   "search/scan.cpp"
   "search/target.cpp"
   "tuning/knobs.cpp"
@@ -287,6 +288,7 @@ set(
   "search/engine.h"
   "search/entry-buffer.h"
   "search/mft-list-engine.h"
+  "search/scan-exchange.h"
   "search/target.h"
 )
 

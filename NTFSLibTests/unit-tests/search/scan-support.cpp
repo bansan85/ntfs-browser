@@ -2,12 +2,14 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -25,9 +27,9 @@ namespace {
 namespace Fake = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Lib = NTFS_BROWSER_NAMESPACE::Search;
 
-// Polls that RunScan() makes at most: a scan that polls this often without
-// ending is stuck.
-constexpr std::size_t max_polls = 100000;
+// How long PollToEnd() waits for a scan: far more than any test scan needs, so
+// that only a stuck scan reaches it.
+constexpr std::chrono::seconds poll_deadline{60};
 
 Row RowOf(const Lib::Entry& entry) {
   return {.name = std::u16string(entry.name),
@@ -82,11 +84,18 @@ Outcome RunScan(const Lib::Options& options) {
     }
   });
   scan.Start();
-  for (std::size_t polls = 0; !scan.Finished() && polls < max_polls; ++polls) {
-    scan.Poll();
-  }
+  PollToEnd(scan);
   outcome.state = scan.GetState();
   return outcome;
+}
+
+Lib::State PollToEnd(Lib::Scan& scan) {
+  const auto deadline = std::chrono::steady_clock::now() + poll_deadline;
+  while (!scan.Finished() && std::chrono::steady_clock::now() < deadline) {
+    scan.Poll();
+    std::this_thread::yield();
+  }
+  return scan.GetState();
 }
 
 std::vector<std::string> Names(const std::vector<Row>& rows) {
