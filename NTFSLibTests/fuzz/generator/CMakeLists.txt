@@ -256,3 +256,15 @@ add_test(
     -DWORK=${NTFS_FUZZGEN_OUTPUT_DIR}/determinism -P
     "${CMAKE_CURRENT_SOURCE_DIR}/check-determinism.cmake"
 )
+
+# The seed corpus of AFL and libFuzzer, on demand (not part of ALL): the fuzz
+# inputs without the corpus traces, flat in <output dir>/afl-seeds.
+add_custom_target(
+  NtfsFuzzSeedCorpus
+  COMMAND ${CMAKE_COMMAND} -E rm -rf "${NTFS_FUZZGEN_OUTPUT_DIR}/afl-seeds"
+  COMMAND
+    NtfsFuzzGen --seeds "${NTFS_FUZZGEN_OUTPUT_DIR}/afl-seeds" --resources
+    "${NTFS_FUZZGEN_RESOURCES_DIR}"
+  COMMENT "Writing the AFL seed corpus"
+  VERBATIM
+)

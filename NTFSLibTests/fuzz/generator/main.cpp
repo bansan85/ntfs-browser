@@ -1,7 +1,7 @@
-// Writes the saved fuzz inputs, and checks the ones committed in
-// NTFSLibTests/fuzz/data against what the library reads today.
+// Writes the fuzz inputs and the corpus traces from code, with the read order
+// of the library as it is today. The unit tests and the AFL fuzzer read them.
 //
-// usage: NtfsFuzzGen (--list | --out DIR | --verify DIR)
+// usage: NtfsFuzzGen (--list | --out DIR | --seeds DIR | --verify DIR)
 //                    [--only NAME...] [--resources DIR]
 
 #include <exception>

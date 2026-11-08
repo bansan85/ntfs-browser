@@ -15,8 +15,7 @@ class ResourceLocator;
 
 // One generated file.
 struct Scenario {
-  // The path of the file under the output folder, with forward slashes. It
-  // equals the name of the committed file the scenario replaces.
+  // The path of the file under the output folder, with forward slashes.
   std::string name;
   // The feature that the build MUST have to make the file.
   Feature needs = Feature::None;

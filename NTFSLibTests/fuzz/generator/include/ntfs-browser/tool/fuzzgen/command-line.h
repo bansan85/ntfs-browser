@@ -18,8 +18,12 @@ struct Options {
     Help,
     // --list: print the names of the scenarios.
     List,
-    // --out DIR: write the files under DIR.
+    // --out DIR: write every file under DIR: the fuzz inputs, and the corpus
+    // traces in DIR/corpus-traces.
     Out,
+    // --seeds DIR: write only the fuzz inputs, flat in DIR. They are the seed
+    // corpus of AFL and libFuzzer.
+    Seeds,
     // --verify DIR: compare the files with the ones under DIR.
     Verify,
     // --predict LAYERS INTERVALS OUT: write what the layers file gives for the
@@ -28,7 +32,7 @@ struct Options {
   };
 
   Mode mode = Mode::Help;
-  // The folder of --out or --verify.
+  // The folder of --out, --seeds or --verify.
   std::filesystem::path folder;
   // The layers file, the intervals file and the output file of --predict.
   std::filesystem::path layers;

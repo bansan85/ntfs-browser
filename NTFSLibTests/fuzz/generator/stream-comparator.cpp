@@ -16,15 +16,15 @@
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 
 Comparison StreamComparator::Compare(std::span<const BYTE> generated,
-                                     const std::filesystem::path& committed) {
+                                     const std::filesystem::path& reference) {
   Comparison result{.generated_size = generated.size()};
-  std::ifstream in(Io::ToExtendedLengthFsPath(committed), std::ios::binary);
+  std::ifstream in(Io::ToExtendedLengthFsPath(reference), std::ios::binary);
   if (!in) {
     return result;
   }
   const std::vector<char> file((std::istreambuf_iterator<char>(in)),
                                std::istreambuf_iterator<char>());
-  result.committed_size = file.size();
+  result.reference_size = file.size();
 
   const std::size_t common = std::min(file.size(), generated.size());
   const auto mismatch = std::mismatch(
@@ -50,11 +50,11 @@ std::string StreamComparator::Describe(const Comparison& comparison) {
       return "identical";
     case Verdict::Prefix:
       return "prefix (the file has " +
-             std::to_string(comparison.committed_size) + " bytes, the stream " +
+             std::to_string(comparison.reference_size) + " bytes, the stream " +
              std::to_string(comparison.generated_size) + ")";
     case Verdict::Different:
       return "different at offset " + std::to_string(comparison.offset) +
-             " (the file has " + std::to_string(comparison.committed_size) +
+             " (the file has " + std::to_string(comparison.reference_size) +
              " bytes, the stream " + std::to_string(comparison.generated_size) +
              ")";
     case Verdict::Missing:

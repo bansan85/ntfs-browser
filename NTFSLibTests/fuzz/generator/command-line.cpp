@@ -32,7 +32,7 @@ std::optional<Options>
   // Reads the folder that follows a mode option.
   const auto set_mode = [&](Options::Mode mode, std::size_t& index) {
     if (options.mode != Options::Mode::Help) {
-      err << "only one of --list, --out and --verify is allowed\n";
+      err << "only one of --list, --out, --seeds and --verify is allowed\n";
       return false;
     }
     options.mode = mode;
@@ -54,12 +54,14 @@ std::optional<Options>
       ok = set_mode(Options::Mode::List, index);
     } else if (arg == "--out") {
       ok = set_mode(Options::Mode::Out, index);
+    } else if (arg == "--seeds") {
+      ok = set_mode(Options::Mode::Seeds, index);
     } else if (arg == "--verify") {
       ok = set_mode(Options::Mode::Verify, index);
     } else if (arg == "--predict") {
       if (options.mode != Options::Mode::Help) {
-        err << "only one of --list, --out, --verify and --predict is "
-               "allowed\n";
+        err << "only one of --list, --out, --seeds, --verify and --predict "
+               "is allowed\n";
         return std::nullopt;
       }
       constexpr std::size_t predict_operands = 3;
@@ -98,10 +100,15 @@ std::optional<Options>
 }
 
 void CommandLine::Usage(std::ostream& out) {
-  out << "usage: NtfsFuzzGen (--list | --out DIR | --verify DIR)\n"
+  out << "usage: NtfsFuzzGen (--list | --out DIR | --seeds DIR | --verify "
+         "DIR)\n"
          "                   [--only NAME...] [--resources DIR]\n"
          "  --list       print the name of each scenario\n"
-         "  --out DIR    write the generated files under DIR\n"
+         "  --out DIR    write every generated file under DIR: the fuzz "
+         "inputs\n"
+         "               flat, the corpus traces in DIR/corpus-traces\n"
+         "  --seeds DIR  write only the fuzz inputs, flat in DIR: the seed\n"
+         "               corpus of AFL and libFuzzer\n"
          "  --verify DIR compare the generated files with the ones under DIR\n"
          "               (exit 1 if one differs or is missing)\n"
          "  --predict    write the bytes that a layers file gives for the\n"

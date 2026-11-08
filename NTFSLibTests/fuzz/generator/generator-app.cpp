@@ -54,6 +54,12 @@ int GeneratorApp::Run(const Options& options) const {
       return 0;
     case Options::Mode::Out:
       return Generate(options, selected);
+    case Options::Mode::Seeds:
+      // The traces sit in a subfolder: they are no fuzz input.
+      std::erase_if(selected, [](const Scenario* scenario) {
+        return scenario->name.find('/') != std::string::npos;
+      });
+      return Generate(options, selected);
     case Options::Mode::Verify:
       return Verify(options, selected);
     case Options::Mode::Help:
@@ -176,7 +182,7 @@ int GeneratorApp::Verify(const Options& options,
     }
   }
 
-  // The committed files that no scenario makes yet: the work left to migrate.
+  // The files of the folder that no scenario makes.
   int uncovered = 0;
   if (options.only.empty()) {
     std::set<std::string> known;
