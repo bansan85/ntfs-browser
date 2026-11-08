@@ -38,7 +38,7 @@ without crashing.
 A crash, access violation or undefined behaviour MUST NOT escape the library.
 Rejection MUST affect one item only: the enclosing scan or walk continues with the next item.
 Salvaging partial data MUST be opt-in through `VolumeOptions::recover_errors`. Strict mode is the default.
-Each crash found by fuzzing MUST be saved in `NTFSLibTests/fuzz/data/` as a regression input.
+Each crash found by fuzzing MUST become a scenario of `NtfsFuzzGen` (`NTFSLibTests/fuzz/generator`) as a regression input.
 Its test MUST fail before the fix and pass after it.
 
 Rationale: the disks this library reads are often damaged, and they are never trusted.
@@ -49,7 +49,7 @@ Every behaviour MUST be covered by a Catch2 test.
 Coverage MUST stay high. A change that adds code without tests MUST NOT merge.
 Tests MUST NOT touch a real disk or device. They MUST use the synthetic images in
 `fake-ntfs-image.h`, or corpus image files reached through `RequireCorpusImage()` and `OpenCorpusImage()`.
-Corpus traces in `NTFSLibTests/fuzz/data/` MUST be re-recorded after any change to the read path.
+Corpus traces come from `NtfsFuzzGen`, which writes them into the build tree. No trace is committed.
 New test scaffolding SHOULD NOT be written when an existing fake disk reader can be extended.
 
 Rationale: synthetic images cover the rules. Corpus images and traces catch what synthetic images miss.
