@@ -228,11 +228,21 @@ FakeRecord MakeMftRecordWithRealDataRun(DWORD lcn, DWORD clusters);
 // record it extends; 0 leaves it a base record.
 FakeRecord MakeIndexRootExtensionRecord(ULONGLONG base_idx = 0);
 
+// The four times of a $STANDARD_INFORMATION, in UTC ticks. The defaults are the
+// constants every builder writes.
+struct FakeStdInfoTimes {
+  ULONGLONG create = std_info_create_time;
+  ULONGLONG alter = std_info_alter_time;
+  ULONGLONG mft = std_info_mft_time;
+  ULONGLONG read = std_info_read_time;
+};
+
 // Writes one resident $STANDARD_INFORMATION attribute at record[offset]
-// with the given DOS permission bits, and returns its total_size.
+// with the given DOS permission bits and times, and returns its total_size.
 DWORD WriteStandardInformationAttr(
     FakeRecord& record, DWORD offset,
-    NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission permission);
+    NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission permission,
+    const FakeStdInfoTimes& times = {});
 
 // Header fields the deliberately malformed compression fixtures forge -
 // values a well-formed builder never derives from its own run list.
@@ -335,6 +345,12 @@ struct FakeIndexName {
   // The namespace the entry's $FILE_NAME carries.
   NTFS_BROWSER_NAMESPACE::Data::FilenameNamespace name_space =
       NTFS_BROWSER_NAMESPACE::Data::FilenameNamespace::Win32;
+  // The other times of the entry's $FILE_NAME, as alter_time is the write time.
+  ULONGLONG create_time = 0;
+  ULONGLONG mft_time = 0;
+  ULONGLONG read_time = 0;
+  // Win32 attribute bits ORed onto the DIRECTORY/NONE flag of the entry.
+  DWORD extra_flags = 0;
 };
 
 // Writes "name" as a leaf index entry at "dest" and returns its size in

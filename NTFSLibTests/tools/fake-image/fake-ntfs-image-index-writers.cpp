@@ -32,12 +32,16 @@ WORD WriteFilenameEntry(BYTE* dest, const FakeIndexName& name) {
   auto& filename =
       *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::Filename*>(&entry.stream);
   filename.parent_ref = name.parent_ref;
+  filename.create_time = name.create_time;
   filename.alter_time = name.alter_time;
+  filename.mft_time = name.mft_time;
+  filename.read_time = name.read_time;
   filename.alloc_size = name.alloc_size;
   filename.real_size = name.real_size;
-  filename.flags = name.directory
-                       ? NTFS_BROWSER_NAMESPACE::Data::FilenameFlag::Directory
-                       : NTFS_BROWSER_NAMESPACE::Data::FilenameFlag::None;
+  filename.flags =
+      (name.directory ? NTFS_BROWSER_NAMESPACE::Data::FilenameFlag::Directory
+                      : NTFS_BROWSER_NAMESPACE::Data::FilenameFlag::None) |
+      static_cast<NTFS_BROWSER_NAMESPACE::Data::FilenameFlag>(name.extra_flags);
   const std::vector<WORD> encoded_name = ToUtf16(name.name);
   filename.name_length = gsl::narrow<BYTE>(encoded_name.size());
   filename.name_space = name.name_space;

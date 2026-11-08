@@ -247,7 +247,8 @@ FakeRecord MakeMftRecordWithRealDataRun(DWORD lcn, DWORD clusters) {
 // with the given DOS permission bits, and returns its total_size.
 DWORD WriteStandardInformationAttr(
     FakeRecord& record, DWORD offset,
-    NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission permission) {
+    NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission permission,
+    const FakeStdInfoTimes& times) {
   auto& attr = InitResidentAttr(
       record, offset, NTFS_BROWSER_NAMESPACE::Attr::Type::StandardInformation);
   attr.attr_size = static_cast<DWORD>(
@@ -257,10 +258,10 @@ DWORD WriteStandardInformationAttr(
   auto& std_info =
       *reinterpret_cast<NTFS_BROWSER_NAMESPACE::Data::StandardInformation*>(
           &record.at(offset + attr.attr_offset));
-  std_info.create_time = std_info_create_time;
-  std_info.alter_time = std_info_alter_time;
-  std_info.mft_time = std_info_mft_time;
-  std_info.read_time = std_info_read_time;
+  std_info.create_time = times.create;
+  std_info.alter_time = times.alter;
+  std_info.mft_time = times.mft;
+  std_info.read_time = times.read;
   std_info.permission = permission;
 
   return attr.header.total_size;

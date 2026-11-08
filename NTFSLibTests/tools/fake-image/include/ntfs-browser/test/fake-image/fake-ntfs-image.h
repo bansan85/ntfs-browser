@@ -2245,6 +2245,16 @@ struct FakeTreeLink {
   BYTE name_space = 1;
 };
 
+// The times of a node, in UTC ticks. A time left at 0 keeps the default: the
+// std_info_* constants in the record, and no time (write time:
+// name_tree_write_time) in the index entries.
+struct FakeTreeTimes {
+  ULONGLONG created = 0;
+  ULONGLONG modified = 0;
+  ULONGLONG mft_changed = 0;
+  ULONGLONG accessed = 0;
+};
+
 // One file or directory of the tree, and so one MFT record.
 struct FakeTreeNode {
   // The names of the record. The first is its primary name. A second one that
@@ -2270,6 +2280,13 @@ struct FakeTreeNode {
   // $DATA, they MAY differ from it, as on a real volume.
   ULONGLONG index_size = 0;
   ULONGLONG index_allocated_size = 0;
+  // Win32 attribute bits of the record and of its index entries (the
+  // directory bit comes from `directory`). 0 keeps the defaults: Normal in the
+  // $STANDARD_INFORMATION and no bit in the entries.
+  DWORD attributes = 0;
+  // The times of the record and of its index entries. The index entries get
+  // every time that is set.
+  FakeTreeTimes times;
 };
 
 // How BuildFakeNtfsImageWithNameTree() lays the tree out.

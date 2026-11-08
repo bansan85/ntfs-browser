@@ -151,11 +151,16 @@ void FileLinks(std::span<const FakeTreeNode> nodes, std::size_t node,
          .sequence = tree_sequence,
          .real_size = tree_node.index_size,
          .alloc_size = tree_node.index_allocated_size,
-         .alter_time = name_tree_write_time,
+         .alter_time = tree_node.times.modified != 0 ? tree_node.times.modified
+                                                     : name_tree_write_time,
          .parent_ref = ReferenceOf(link.parent),
          .name_space =
              static_cast<NTFS_BROWSER_NAMESPACE::Data::FilenameNamespace>(
-                 link.name_space)});
+                 link.name_space),
+         .create_time = tree_node.times.created,
+         .mft_time = tree_node.times.mft_changed,
+         .read_time = tree_node.times.accessed,
+         .extra_flags = tree_node.attributes});
   }
 }
 
@@ -333,8 +338,17 @@ FakeRecord MakeNodeRecord(const FakeTreeNode& node, const DirectoryPlan& plan) {
                                         : gsl::narrow<WORD>(tree_sequence + 1));
 
   DWORD offset = tree_attr_offset;
-  offset +=
-      WriteStandardInformationAttr(record, offset, StdInfoPermission::Normal);
+  const auto or_default = [](ULONGLONG time, ULONGLONG fallback) {
+    return time != 0 ? time : fallback;
+  };
+  offset += WriteStandardInformationAttr(
+      record, offset,
+      node.attributes != 0 ? static_cast<StdInfoPermission>(node.attributes)
+                           : StdInfoPermission::Normal,
+      {.create = or_default(node.times.created, std_info_create_time),
+       .alter = or_default(node.times.modified, std_info_alter_time),
+       .mft = or_default(node.times.mft_changed, std_info_mft_time),
+       .read = or_default(node.times.accessed, std_info_read_time)});
   for (const FakeTreeLink& link : node.links) {
     offset += WriteFileNameAttr(
         record, offset,
@@ -342,7 +356,9 @@ FakeRecord MakeNodeRecord(const FakeTreeNode& node, const DirectoryPlan& plan) {
          .parent_ref = ReferenceOf(link.parent),
          .name_space =
              static_cast<NTFS_BROWSER_NAMESPACE::Data::FilenameNamespace>(
-                 link.name_space)},
+                 link.name_space),
+         .extra_flags = static_cast<NTFS_BROWSER_NAMESPACE::Data::FilenameFlag>(
+             node.attributes)},
         node.directory);
   }
   if (!node.directory && !node.runs.empty()) {
