@@ -15,6 +15,7 @@
 #include <gsl/narrow>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tool/fuzzgen/counter-text.h>
 #include <ntfs-browser/tool/fuzzgen/layer-script.h>
 #include <ntfs-browser/tool/fuzzgen/sparse-image.h>
 
@@ -61,6 +62,7 @@ void SparseImage::AddPtrn(ULONGLONG address, ULONGLONG length) {
                      .address = address,
                      .length = length,
                      .stride = 0,
+                     .origin = 0,
                      .bytes = {}});
 }
 
@@ -69,6 +71,17 @@ void SparseImage::AddIdentityUpcase(ULONGLONG address, ULONGLONG units) {
                      .address = address,
                      .length = units * upcase_word_bytes,
                      .stride = 0,
+                     .origin = 0,
+                     .bytes = {}});
+}
+
+void SparseImage::AddCounterText(ULONGLONG address, ULONGLONG length,
+                                 ULONGLONG origin) {
+  layers_.push_back({.kind = LayerKind::CounterText,
+                     .address = address,
+                     .length = length,
+                     .stride = 0,
+                     .origin = origin,
                      .bytes = {}});
 }
 
@@ -84,6 +97,7 @@ void SparseImage::AddStamp(ULONGLONG address, ULONGLONG stride, ULONGLONG count,
                      .address = address,
                      .length = length,
                      .stride = stride,
+                     .origin = 0,
                      .bytes = std::move(stamp)});
 }
 
@@ -93,6 +107,7 @@ void SparseImage::AddBytes(ULONGLONG address, std::vector<BYTE> bytes) {
                      .address = address,
                      .length = length,
                      .stride = 0,
+                     .origin = 0,
                      .bytes = std::move(bytes)});
 }
 
@@ -121,6 +136,14 @@ void SparseImage::ApplyLayer(const Layer& layer, ULONGLONG address,
   const ULONGLONG low = std::max(address, layer.address);
   const ULONGLONG high =
       std::min(address + dest.size(), layer.address + layer.length);
+  if (layer.kind == LayerKind::CounterText) {
+    if (low < high) {
+      CounterText::Fill(layer.origin + (low - layer.address),
+                        dest.subspan(gsl::narrow<std::size_t>(low - address),
+                                     gsl::narrow<std::size_t>(high - low)));
+    }
+    return;
+  }
   for (ULONGLONG position = low; position < high; ++position) {
     BYTE& out = dest[gsl::narrow<std::size_t>(position - address)];
     const ULONGLONG inside = position - layer.address;
@@ -143,6 +166,8 @@ void SparseImage::ApplyLayer(const Layer& layer, ULONGLONG address,
       }
       case LayerKind::Bytes:
         out = layer.bytes[gsl::narrow<std::size_t>(inside)];
+        break;
+      case LayerKind::CounterText:
         break;
     }
   }

@@ -35,8 +35,9 @@ constexpr ULONGLONG default_sectors_per_track = 63;
 constexpr ULONGLONG default_heads = 255;
 constexpr ULONGLONG default_hidden = 128;
 
-// Bytes 0x24 to 0x27, which NTFS does not use and Windows fills with the
-// value of a FAT boot sector for a hard disk (80 00 80 00).
+// Bytes 0x24 to 0x27, which NTFS does not use. Windows 10 fills them with the
+// value of a FAT boot sector for a hard disk (80 00 80 00). Windows XP leaves
+// the last two bytes zero.
 constexpr DWORD windows_unused_marker = 0x00800080;
 
 // The size of a file record, as the signed byte count of 1 KiB records: 2 to
@@ -66,7 +67,8 @@ std::vector<BYTE> BootSectorLayer::Render(const LayerLine& line,
   bpb.number_of_heads = gsl::narrow<WORD>(line.Number("heads", default_heads));
   bpb.hidden_sectors =
       gsl::narrow<DWORD>(line.Number("hidden", default_hidden));
-  bpb.not_used3 = windows_unused_marker;
+  bpb.not_used3 =
+      gsl::narrow<DWORD>(line.Number("unused", windows_unused_marker));
   bpb.total_sectors = line.Number("total");
   bpb.lcn_mft = line.Number("mft");
   bpb.lcn_mft_mirr = line.Number("mirror");

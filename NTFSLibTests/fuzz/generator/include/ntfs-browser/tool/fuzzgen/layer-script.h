@@ -11,6 +11,15 @@ namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 // SparseImage. One layer per line, the address first (volume relative):
 //   ptrn ADDR LENGTH                  the "PTRN" fill (SparseImage::AddPtrn)
 //   upcase ADDR UNITS                 an identity $UpCase table
+//   text ADDR LENGTH file=N          the CounterText of a log file, from its
+//                                     byte N
+//   lznt1 ADDR file=N count=N [name=RESOURCE]
+//                                     count chunks of 4096 bytes, from byte N
+//                                     of the CounterText or of the resource, as
+//                                     an LZNT1 stream (Lznt1Compressor)
+//   blob ADDR name=RESOURCE offset=N length=N
+//                                     bytes of a resource, such as a file whose
+//                                     content no code makes
 //   stamp ADDR stride=N count=N bytes=HEX
 //                                     a block repeated on every page
 //   boot ADDR code=RESOURCE FIELDS    the boot area (BootSectorLayer)

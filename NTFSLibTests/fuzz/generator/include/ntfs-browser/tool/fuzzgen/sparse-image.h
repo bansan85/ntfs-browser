@@ -18,7 +18,8 @@ namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 //   1. a patch of the residue, the bytes that no code can compute;
 //   2. a layer, a structure that code computes: the "PTRN" fill, an identity
 //      $UpCase table, a stamp repeated on every page, and the boot sector, file
-//      records and index blocks that LayerScript builds from named fields. A
+//      records and index blocks that LayerScript builds from named fields, the
+//      counter text of a log file, and bytes of a named resource. A
 //      later layer wins over an earlier one;
 //   3. zero.
 // The addresses are volume relative, as the library asks for them.
@@ -44,6 +45,10 @@ class SparseImage {
   // itself: the 16-bit word at address + 2 * k is k.
   void AddIdentityUpcase(ULONGLONG address, ULONGLONG units);
 
+  // Adds the text of CounterText over length bytes from address, so that the
+  // byte at address is the byte of the text at offset origin.
+  void AddCounterText(ULONGLONG address, ULONGLONG length, ULONGLONG origin);
+
   // Adds a copy of stamp at address, address + stride, and so on, count times.
   void AddStamp(ULONGLONG address, ULONGLONG stride, ULONGLONG count,
                 std::vector<BYTE> stamp);
@@ -59,7 +64,13 @@ class SparseImage {
 
  private:
   // The structures that a layer can compute.
-  enum class LayerKind : std::uint8_t { Ptrn, IdentityUpcase, Stamp, Bytes };
+  enum class LayerKind : std::uint8_t {
+    Ptrn,
+    IdentityUpcase,
+    Stamp,
+    Bytes,
+    CounterText
+  };
 
   struct Layer {
     LayerKind kind = LayerKind::Ptrn;
@@ -68,6 +79,8 @@ class SparseImage {
     ULONGLONG length = 0;
     // The distance between two stamps.
     ULONGLONG stride = 0;
+    // The offset in the text of the first byte of a counter text layer.
+    ULONGLONG origin = 0;
     // The bytes of a stamp, or of a block of bytes.
     std::vector<BYTE> bytes;
   };
