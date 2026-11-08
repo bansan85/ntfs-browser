@@ -28,6 +28,16 @@ class Table;
 
 }  // namespace UpCase
 
+// The four times of a $FILE_NAME, as stored: UTC, in 100 ns ticks since
+// 1601-01-01. No zone conversion is applied.
+struct FileTimesUtc {
+  ULONGLONG write{0};
+  ULONGLONG create{0};
+  ULONGLONG access{0};
+  // The last MFT (metadata) change.
+  ULONGLONG change{0};
+};
+
 class NTFS_BROWSER_EXPORT Filename {
  public:
   Filename() = default;
@@ -89,6 +99,10 @@ class NTFS_BROWSER_EXPORT Filename {
 
   // changeTm is the last MFT (metadata) change time, distinct from writeTm's
   // content modification time.
+  // The times as GetFileTime() reads them, without the conversion to local
+  // time. All zeros for a name with no $FILE_NAME.
+  [[nodiscard]] FileTimesUtc GetFileTimesUtc() const noexcept;
+
   virtual void GetFileTime(FILETIME* write_tm, FILETIME* create_tm,
                            FILETIME* access_tm,
                            FILETIME* change_tm = nullptr) const noexcept;

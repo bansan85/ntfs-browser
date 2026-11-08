@@ -172,6 +172,16 @@ bool Filename::IsWin32Name() const noexcept {
   return filename_->name_space != Data::FilenameNamespace::Dos;
 }
 
+FileTimesUtc Filename::GetFileTimesUtc() const noexcept {
+  if (filename_ == nullptr) {
+    return {};
+  }
+  return {.write = filename_->alter_time,
+          .create = filename_->create_time,
+          .access = filename_->read_time,
+          .change = filename_->mft_time};
+}
+
 // Change from UTC time to local time
 void Filename::GetFileTime(FILETIME* write_tm, FILETIME* create_tm,
                            FILETIME* access_tm,

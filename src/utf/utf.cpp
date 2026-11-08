@@ -158,4 +158,32 @@ std::wstring Utf16ToWide(std::u16string_view units) {
   return out;
 }
 
+std::u16string WideToUtf16(std::wstring_view wide) {
+  std::u16string out;
+  out.reserve(wide.size());
+
+  if constexpr (sizeof(wchar_t) > sizeof(char16_t)) {
+    for (const wchar_t character : wide) {
+      const char32_t unit = Widen(character);
+      if (unit >= surrogate_base && unit <= max_code_point) {
+        const char32_t offset = unit - surrogate_base;
+        out.push_back(static_cast<char16_t>(high_surrogate_first +
+                                            (offset >> surrogate_shift)));
+        out.push_back(static_cast<char16_t>(low_surrogate_first +
+                                            (offset & surrogate_mask)));
+      } else if (unit > max_code_point) {
+        out.push_back(static_cast<char16_t>(replacement_character));
+      } else {
+        out.push_back(static_cast<char16_t>(unit));
+      }
+    }
+  } else {
+    for (const wchar_t unit : wide) {
+      out.push_back(static_cast<char16_t>(unit));
+    }
+  }
+
+  return out;
+}
+
 }  // namespace NTFS_BROWSER_NAMESPACE::Utf

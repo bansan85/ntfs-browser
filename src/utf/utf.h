@@ -28,4 +28,11 @@ NTFS_BROWSER_EXPORT_TESTS_ONLY std::string WideToUtf8(std::wstring_view wide);
 NTFS_BROWSER_EXPORT_TESTS_ONLY std::wstring
     Utf16ToWide(std::u16string_view units);
 
+// The inverse of Utf16ToWide(): the raw UTF-16 code units of a decoded name.
+// A code point above U+FFFF becomes its surrogate pair, a unit that is no
+// code point (an unpaired surrogate) passes through as it is, and a value past
+// U+10FFFF becomes U+FFFD. On Windows it is a plain narrow.
+NTFS_BROWSER_EXPORT_TESTS_ONLY std::u16string
+    WideToUtf16(std::wstring_view wide);
+
 }  // namespace NTFS_BROWSER_NAMESPACE::Utf
