@@ -19,6 +19,7 @@
 #include "log/worker-log.h"
 #include "search/engine.h"
 #include "search/entry-buffer.h"
+#include "search/scan-probe.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Search {
 
@@ -115,6 +116,13 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY ScanExchange final : public EntrySink {
   [[nodiscard]] std::optional<double> Percent() const noexcept;
 
  private:
+  // Add() under a probe (see scan-probe.h): the same steps, timed.
+  void AddTimed(const Entry& entry, ScanTimings& timings);
+
+  // Copies entry into the buffer the worker fills and counts the news. Call it
+  // with mutex_ held and room in the buffer.
+  void Store(const Entry& entry);
+
   // Counts one more piece of news and wakes the caller if it sleeps. Call it
   // with mutex_ held.
   void NoteNews();

@@ -48,6 +48,12 @@
 //   SetEngineFactoryForTests Tests swap the engines for a scripted one, to
 //                            control the worker thread of a scan.
 //   SplitTarget/OpenVolume   The target string, opened without test code.
+//   scan-probe.h             Two more seams for tests and benchmarks: a reader
+//                            factory (a simulated disk in place of the file),
+//                            and ScanTimings, which the worker fills when a
+//                            probe is set: its wall and CPU time, the wait for
+//                            the caller, the match stage, the exchange and the
+//                            entries seen and delivered.
 //
 // Entry conventions that every engine MUST keep, so that the engines agree:
 // times are UTC ticks (FileTimesUtc), names are raw UTF-16 units, the path

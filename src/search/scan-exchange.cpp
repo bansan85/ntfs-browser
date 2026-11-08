@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <mutex>
 #include <optional>
 #include <stop_token>
@@ -12,6 +13,7 @@
 #include <ntfs-browser/search/types.h>
 
 #include "log/ntfs-common.h"
+#include "search/scan-probe.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Search {
 
@@ -28,11 +30,48 @@ void ScanExchange::BeginWork() noexcept { log_.Begin(); }
 
 void ScanExchange::Add(const Entry& entry) {
   log_.Checkpoint();
+  ScanTimings* const timings = WorkerTimings();
+  if (timings != nullptr) {
+    AddTimed(entry, *timings);
+    return;
+  }
   std::unique_lock lock(mutex_);
   if (max_pending_ != 0) {
     filled_.wait(lock, stop_,
                  [this] { return buffers_.at(fill_).Size() < max_pending_; });
   }
+  Store(entry);
+}
+
+// Add() under a probe: the same steps, with the wait and the rest timed apart.
+void ScanExchange::AddTimed(const Entry& entry, ScanTimings& timings) {
+  using Clock = std::chrono::steady_clock;
+  const auto nanoseconds = [](Clock::duration length) {
+    return static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(length).count());
+  };
+  const Clock::time_point begin = Clock::now();
+  std::unique_lock lock(mutex_);
+  Clock::duration waited = Clock::duration::zero();
+  if (max_pending_ != 0) {
+    const auto room = [this] {
+      return buffers_.at(fill_).Size() < max_pending_;
+    };
+    if (!room()) {
+      const Clock::time_point wait_begin = Clock::now();
+      filled_.wait(lock, stop_, room);
+      waited = Clock::now() - wait_begin;
+    }
+  }
+  Store(entry);
+  lock.unlock();
+  timings.wait_ns += nanoseconds(waited);
+  timings.exchange_ns += nanoseconds(Clock::now() - begin - waited);
+  ++timings.entries_delivered;
+}
+
+// Copies entry into the buffer the worker fills. The caller holds mutex_.
+void ScanExchange::Store(const Entry& entry) {
   EntryBuffer& buffer = buffers_.at(fill_);
   buffer.Add(entry);
   // The batch cannot grow any more: the caller gains nothing by waiting.

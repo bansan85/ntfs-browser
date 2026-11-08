@@ -9,14 +9,17 @@
 #include <thread>
 #include <utility>
 
+#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/search/scan.h>
 #include <ntfs-browser/search/types.h>
 
+#include "bench/process-times.h"
 #include "log/ntfs-common.h"
 #include "search/engine.h"
 #include "search/field-filter.h"
 #include "search/scan-exchange.h"
+#include "search/scan-probe.h"
 #include "search/target.h"
 #include "utf/utf.h"
 
@@ -52,6 +55,7 @@ class Scan::Impl {
       return;
     }
     started_ = true;
+    probe_ = ScanProbeTarget();
     exchange_.Prepare(Log::Detail::EnabledLevels(), stop_.get_token());
     try {
       worker_ = std::thread([this] { Work(); });
@@ -191,13 +195,43 @@ class Scan::Impl {
     exchange_.BeginWork();
     State result = State::Failed;
     try {
-      result = Run();
+      result = probe_ != nullptr ? RunProbed() : Run();
     } catch (const std::exception& error) {
       Log::Error("The scan failed: {}", error.what());
     } catch (...) {
       Log::Error("The scan failed");
     }
     exchange_.EndWork(result);
+  }
+
+  // Run() with the worker timed: see scan-probe.h. The numbers go to the probe
+  // when Run() ends, however it ends, and before the exchange tells the caller.
+  State RunProbed() {
+    using Clock = std::chrono::steady_clock;
+    ScanTimings timings;
+    const Bench::ThreadScope thread(Bench::ThreadRole::Other);
+    const WorkerTimingsScope scope(&timings);
+    const auto [user_begin, kernel_begin] = Bench::ThreadTimes();
+    const Clock::time_point begin = Clock::now();
+    const auto publish = [&] {
+      const auto [user_end, kernel_end] = Bench::ThreadTimes();
+      timings.worker_wall_ns = static_cast<std::uint64_t>(
+          std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
+                                                               begin)
+              .count());
+      timings.worker_cpu_ns =
+          (user_end - user_begin) + (kernel_end - kernel_begin);
+      *probe_ = timings;
+    };
+    State result = State::Failed;
+    try {
+      result = Run();
+    } catch (...) {
+      publish();
+      throw;
+    }
+    publish();
+    return result;
   }
 
   // Splits the target, makes the engine and runs it into exchange_. Returns
@@ -237,6 +271,9 @@ class Scan::Impl {
   BatchCallback callback_;
   std::stop_source stop_;
   ScanExchange exchange_;
+  // Where the worker puts its timings: set by SetScanProbeForTests(), null in
+  // every real use. Set before the worker starts.
+  ScanTimings* probe_{nullptr};
 
   // The three flags are atomic because Cancel() reads and sets them from any
   // thread.

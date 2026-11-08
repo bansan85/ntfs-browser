@@ -10,6 +10,7 @@
 #include "search/engine.h"
 #include "search/field-filter.h"
 #include "search/matcher.h"
+#include "search/scan-probe.h"
 #include "upcase/upcase.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Search {
@@ -38,7 +39,15 @@ MatchingSink::MatchingSink(EntrySink& inner, FieldFilter filter,
     : inner_(inner), filter_(std::move(filter)), matcher_(std::move(matcher)) {}
 
 void MatchingSink::Add(const Entry& entry) {
-  if (Accepts(entry)) {
+  bool accepted = false;
+  if (ScanTimings* const timings = WorkerTimings(); timings != nullptr) {
+    ++timings->entries_seen;
+    const StageTimer timer(&ScanTimings::match_ns);
+    accepted = Accepts(entry);
+  } else {
+    accepted = Accepts(entry);
+  }
+  if (accepted) {
     inner_.Add(entry);
   }
 }

@@ -12,12 +12,14 @@
 #include <vector>
 
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "log/ntfs-common.h"
+#include "search/scan-probe.h"
 #include "utf/utf.h"
 
 #ifndef _WIN32
@@ -141,9 +143,13 @@ std::optional<TargetParts> SplitTarget(std::wstring_view target) {
   return std::nullopt;
 }
 
+namespace {
+
+// Opens the file, device or drive that parts names. No volume when the open
+// fails: the log says why.
 template <Cache::Strategy S>
-OpenedVolume<S> OpenVolume(const TargetParts& parts,
-                           const VolumeOptions& options) {
+OpenedVolume<S> OpenFromTarget(const TargetParts& parts,
+                               const VolumeOptions& options) {
   OpenedVolume<S> opened;
 #ifdef _WIN32
   // Win32DiskReader opens a plain file the same way as a device.
@@ -166,6 +172,28 @@ OpenedVolume<S> OpenVolume(const TargetParts& parts,
   }
   opened.volume = std::make_unique<NtfsVolume<S>>(std::move(reader), options);
 #endif
+  return opened;
+}
+
+}  // namespace
+
+template <Cache::Strategy S>
+OpenedVolume<S> OpenVolume(const TargetParts& parts,
+                           const VolumeOptions& options) {
+  OpenedVolume<S> opened;
+  if (const ReaderFactory& factory = ReaderFactoryOverride(); factory) {
+    std::unique_ptr<IDiskReader> reader = factory(parts);
+    if (!reader) {
+      Log::Error("Cannot open {}", Utf::WideToUtf8(parts.source));
+      return opened;
+    }
+    opened.volume = std::make_unique<NtfsVolume<S>>(std::move(reader), options);
+  } else {
+    opened = OpenFromTarget<S>(parts, options);
+    if (!opened.volume) {
+      return opened;
+    }
+  }
   if (!opened.volume->IsVolumeOK()) {
     Log::Error("Cannot get NTFS BPB from boot sector of {}",
                Utf::WideToUtf8(parts.source));

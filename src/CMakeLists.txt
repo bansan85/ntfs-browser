@@ -78,6 +78,7 @@ set(
   "search/matcher.cpp"
   "search/mft-list-engine.cpp"
   "search/scan-exchange.cpp"
+  "search/scan-probe.cpp"
   "search/scan.cpp"
   "search/target.cpp"
   "search/wildcard-matcher.cpp"
@@ -304,6 +305,7 @@ set(
   "search/mft-list-engine.h"
   "search/regex-matcher.h"
   "search/scan-exchange.h"
+  "search/scan-probe.h"
   "search/target.h"
   "search/wildcard-matcher.h"
 )
