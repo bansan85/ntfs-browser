@@ -39,10 +39,10 @@
 #include <ntfs-browser/test/disk-readers/throttled-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/support/test-log-sink.h>
+#include <ntfs-browser/tool/dir-walk/directory-walk.h>
 #include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
 
-#include "directory-listing.h"
 #include "io/directory-read-ahead-testing.h"
 #include "log/ntfs-common.h"
 
@@ -242,7 +242,7 @@ Run ListVolume(NtfsVolume<S>& volume,
   REQUIRE(file != nullptr);
 
   Run run;
-  run.exit_code = ListFrom<S>(
+  run.exit_code = NTFS_BROWSER_NAMESPACE::Tool::DirWalk::ListFrom<S>(
       volume, {.label = L"image", .path = L"", .root = L"image"}, true, file);
   run.text = ReadAndRemove(file, path);
   run.log = WithoutReadLines(Test::Support::TakeCapturedLog());

@@ -162,8 +162,9 @@ std::size_t LineCount(const std::string& text) {
 
 }  // namespace
 
-TEST_CASE("NtfsScanBench lists a wide tree the same with every count of threads",
-          "[mft][sample][threads]") {
+TEST_CASE(
+    "NtfsScanBench lists a wide tree the same with every count of threads",
+    "[mft][sample][threads]") {
   const TempTreeImage image(WideImage());
   const std::vector<std::wstring> options = GENERATE(
       std::vector<std::wstring>{}, std::vector<std::wstring>{L"--deleted"},

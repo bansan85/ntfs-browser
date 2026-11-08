@@ -132,8 +132,9 @@ TEST_CASE("NtfsScanBench lists the live records of the MFT tree image",
   CHECK(run.out == WithLocalTimes(live_listing));
 }
 
-TEST_CASE("NtfsScanBench writes only its progress line on stderr without options",
-          "[mft][sample][characterization][invariance]") {
+TEST_CASE(
+    "NtfsScanBench writes only its progress line on stderr without options",
+    "[mft][sample][characterization][invariance]") {
   const TempTreeImage image;
   const SampleRun run = RunSample({image.path.wstring()});
 
@@ -151,8 +152,9 @@ TEST_CASE("NtfsScanBench --deleted also lists the freed records",
   CHECK(run.out == WithLocalTimes(deleted_listing));
 }
 
-TEST_CASE("NtfsScanBench shows where the chain breaks in the paths under a loop",
-          "[mft][sample][characterization]") {
+TEST_CASE(
+    "NtfsScanBench shows where the chain breaks in the paths under a loop",
+    "[mft][sample][characterization]") {
   std::vector<BYTE> tree =
       NTFS_BROWSER_NAMESPACE::Test::FakeImage::BuildFakeNtfsImageWithMftTree();
   NTFS_BROWSER_NAMESPACE::Test::Mft::LoopDocsAndNewDir(tree);
@@ -169,8 +171,9 @@ TEST_CASE("NtfsScanBench shows where the chain breaks in the paths under a loop"
   CHECK_THAT(run.out, ContainsSubstring("  1 <lost #23>\\Docs\\NewDir\n"));
 }
 
-TEST_CASE("NtfsScanBench --recover on a clean image lists what it lists without",
-          "[mft][sample][characterization]") {
+TEST_CASE(
+    "NtfsScanBench --recover on a clean image lists what it lists without",
+    "[mft][sample][characterization]") {
   const TempTreeImage image;
   const SampleRun plain = RunSample({L"--deleted", image.path.wstring()});
   const SampleRun recovering =
@@ -252,8 +255,9 @@ TEST_CASE("NtfsScanBench --recover --deleted shows what the journal knows",
                                "in the journal, 0 damaged\n"));
 }
 
-TEST_CASE("NtfsScanBench --recover without --deleted lists no journal-only file",
-          "[mft][sample][usn]") {
+TEST_CASE(
+    "NtfsScanBench --recover without --deleted lists no journal-only file",
+    "[mft][sample][usn]") {
   const TempTreeImage image(ImageWithJournal());
   const SampleRun run = RunSample({L"--recover", image.path.wstring()});
 

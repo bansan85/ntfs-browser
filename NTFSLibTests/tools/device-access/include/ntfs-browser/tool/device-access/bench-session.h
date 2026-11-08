@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -38,6 +39,12 @@ class BenchSession {
     std::vector<std::string> arguments;
     // What it was given to list.
     std::string target;
+    // The engine of a tool that has several, named in the summary. Empty for
+    // a tool with one.
+    std::string engine;
+    // Starts a session even when the command line asks for no benchmark and
+    // no capture, so that Report() has the numbers of the run.
+    bool measure{false};
   };
 
   // options are the volume options in force.
@@ -58,6 +65,13 @@ class BenchSession {
   // size. Reports a failure on stderr. Safe to call twice.
   void Finish();
 
+  // The numbers of the run, once Finish() has ended a session. Empty before,
+  // and for a run that had no session.
+  [[nodiscard]] const std::optional<NTFS_BROWSER_NAMESPACE::Bench::Report>&
+      Report() const noexcept {
+    return report_;
+  }
+
  private:
   // The summary of a finished run, as JSON.
   [[nodiscard]] std::string
@@ -69,6 +83,7 @@ class BenchSession {
   AppliedTuning applied_;
   NTFS_BROWSER_NAMESPACE::VolumeOptions options_;
   std::shared_ptr<SparseCapture> capture_;
+  std::optional<NTFS_BROWSER_NAMESPACE::Bench::Report> report_;
   bool active_{false};
 };
 

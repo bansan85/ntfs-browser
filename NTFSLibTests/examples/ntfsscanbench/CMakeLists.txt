@@ -1,17 +1,28 @@
+# Three ways to list a volume, timed: the scan of $MFT (mft-list-engine.cpp),
+# and the walk of the directory indexes with a volume that keeps no cache or
+# one that does (tools/dir-walk). --engine=all runs the three in turn.
 add_executable(
   NtfsScanBench
   WIN32
   "arguments.h"
   "arguments.cpp"
+  "comparison-table.h"
+  "comparison-table.cpp"
   "display-paths.h"
   "display-paths.cpp"
+  "engine.h"
   "main.cpp"
+  "mft-list-engine.cpp"
+  "run-engine.cpp"
+  "scan-bench.h"
+  "scan-bench.cpp"
+  "walk-engine.cpp"
 )
 # The listing is written by a thread of its own.
 find_package(Threads REQUIRED)
 target_link_libraries(
   NtfsScanBench
-  PRIVATE ${PROJECT_NAME} NtfsDeviceAccess Threads::Threads
+  PRIVATE ${PROJECT_NAME} NtfsDeviceAccess NtfsDirWalk Threads::Threads
 )
 set_target_properties(NtfsScanBench PROPERTIES WIN32_EXECUTABLE 0)
 if(WIN32)

@@ -1,8 +1,6 @@
 target_sources(
   NtfsBrowserTests
   PRIVATE
-    "directory-listing.cpp"
-    "directory-listing.h"
     "directory-read-ahead-class-tests.cpp"
     "directory-read-ahead-gain-tests.cpp"
     "directory-read-ahead-lane-digest-tests.cpp"
@@ -42,8 +40,9 @@ target_include_directories(
   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
-# The tests of the NtfsDir command call its logic.
-target_link_libraries(NtfsBrowserTests PRIVATE NtfsDirCore)
+# The tests of the NtfsDir command call its logic. The read ahead tests list
+# with the directory walk of NtfsScanBench.
+target_link_libraries(NtfsBrowserTests PRIVATE NtfsDirCore NtfsDirWalk)
 
 # NtfsAttr, NtfsDump and NtfsUndel run on Windows and Linux. The tests link
 # their logic (examples/ntfsattr/ntfsattr-core.h, examples/ntfsdump/

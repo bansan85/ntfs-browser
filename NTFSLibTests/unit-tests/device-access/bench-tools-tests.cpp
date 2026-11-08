@@ -23,6 +23,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/device-access/temp-dir.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/io/ntfsdir-sample-support.h>
 #include <ntfs-browser/test/mft/ntfsscanbench-sample-support.h>
 #include <ntfs-browser/test/support/sample-run.h>
 #include <ntfs-browser/tool/device-access/json.h>
@@ -31,6 +32,7 @@
 namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
 
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
+namespace TestIo = NTFS_BROWSER_NAMESPACE::Test::Io;
 namespace TestMft = NTFS_BROWSER_NAMESPACE::Test::Mft;
 namespace TestDeviceAccess = NTFS_BROWSER_NAMESPACE::Test::DeviceAccess;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
@@ -113,6 +115,17 @@ bool CaptureIsASubsetOf(const std::vector<BYTE>& capture,
   return true;
 }
 
+// text with every spelling of path replaced by a placeholder: a walk prints the
+// path it was given, and two images are not at one path.
+std::string WithoutPath(std::string text, const std::filesystem::path& path) {
+  const std::string spelling = path.string();
+  for (size_t at = text.find(spelling); at != std::string::npos;
+       at = text.find(spelling, at)) {
+    text.replace(at, spelling.size(), "<image>");
+  }
+  return text;
+}
+
 // Checks the phases of a listing: each ran, in the order of the scan.
 void CheckListingPhases(const JsonValue& run_json) {
   for (const std::string_view name :
@@ -176,8 +189,9 @@ void CheckStandingLaneIsIdle(const JsonValue& run_json,
 
 }  // namespace
 
-TEST_CASE("NtfsScanBench on its capture image lists what it listed on the image",
-          "[device-access][capture][sample]") {
+TEST_CASE(
+    "NtfsScanBench on its capture image lists what it listed on the image",
+    "[device-access][capture][sample]") {
   const bool deleted = GENERATE(false, true);
   const bool big = GENERATE(false, true);
   INFO("deleted " << deleted << ", list image " << big);
@@ -355,7 +369,7 @@ TEST_CASE("NtfsScanBench --stop-after ends the run after the phase",
 
   const SampleRun run =
       TestMft::RunScanBench({Option(L"--benchmark", summary),
-                           L"--stop-after=pass1", image.path.wstring()});
+                             L"--stop-after=pass1", image.path.wstring()});
 
   // No tree and no listing, and the summary says where the run stopped.
   CHECK(run.exit_code == 0);
@@ -368,4 +382,138 @@ TEST_CASE("NtfsScanBench --stop-after ends the run after the phase",
   CHECK(PhaseNamed(run_json, "pass2") == nullptr);
   CHECK(PhaseNamed(run_json, "link") == nullptr);
   CHECK(PhaseNamed(run_json, "print") == nullptr);
+}
+
+TEST_CASE("NtfsScanBench walks on their capture image list what they listed",
+          "[device-access][capture][sample]") {
+  const bool deleted = GENERATE(false, true);
+  const std::wstring engine =
+      GENERATE(as<std::wstring>{}, L"--engine=nocache", L"--engine=fullcache");
+  INFO("deleted " << deleted << ", " << std::filesystem::path(engine).string());
+  const std::vector<BYTE> original =
+      TestFakeImage::BuildFakeNtfsImageWithReportName(
+          L"report.txt", TestFakeImage::dump_broken_alter_time);
+  const TestMft::TempTreeImage image(original);
+  const TestDeviceAccess::TempDir dir;
+  const std::filesystem::path capture = dir.Path() / "capture.img";
+  std::vector<std::wstring> extra{engine, L"--recursive"};
+  if (deleted) {
+    extra.emplace_back(L"--deleted");
+  }
+  const auto run = [&](const std::filesystem::path& target,
+                       std::vector<std::wstring> more = {}) {
+    std::vector<std::wstring> args = extra;
+    args.insert(args.end(), more.begin(), more.end());
+    args.push_back(target.wstring());
+    return TestMft::RunScanBench(args);
+  };
+
+  const SampleRun plain = run(image.path);
+  REQUIRE(plain.exit_code == 0);
+  REQUIRE_THAT(plain.out, ContainsSubstring("report.txt"));
+  const SampleRun captured = run(image.path, {Option(L"--capture", capture)});
+  CHECK(captured.exit_code == 0);
+  CHECK(captured.out == plain.out);
+  CHECK(captured.err == plain.err);
+
+  REQUIRE(std::filesystem::exists(capture));
+  CHECK(std::filesystem::file_size(capture) == original.size());
+  CHECK(CaptureIsASubsetOf(ReadFile(capture), original));
+
+  // The capture holds what the walk read: the listing is the same, but for the
+  // path it names.
+  const SampleRun again = run(capture);
+  CHECK(again.exit_code == 0);
+  CHECK(again.err == plain.err);
+  CHECK(WithoutPath(again.out, capture) == WithoutPath(plain.out, image.path));
+}
+
+TEST_CASE("NtfsScanBench walks write a summary with the walk phase",
+          "[device-access][benchmark][sample]") {
+  const TestIo::TempImage image;
+  const TestDeviceAccess::TempDir dir;
+
+  for (const std::string_view engine : {"nocache", "fullcache"}) {
+    INFO(engine);
+    const std::wstring engine_option =
+        L"--engine=" + std::wstring(engine.begin(), engine.end());
+    const std::filesystem::path summary = dir.Path() / "summary-walk.json";
+    std::filesystem::remove(summary);
+    const std::wstring target = image.path.wstring() + L"/Docs";
+    const SampleRun plain = TestMft::RunScanBench({engine_option, target});
+    const SampleRun run = TestMft::RunScanBench(
+        {engine_option, Option(L"--benchmark", summary), target});
+
+    REQUIRE(run.exit_code == 0);
+    CHECK(run.out == plain.out);
+    const JsonValue root = LoadSummary(summary);
+    CHECK(Member(root, "tool").text == "NtfsScanBench");
+    CHECK(Member(root, "engine").text == engine);
+    const JsonValue& run_json = Member(root, "run");
+    CHECK(PhaseNamed(run_json, "open") != nullptr);
+    CHECK(PhaseNamed(run_json, "walk") != nullptr);
+    CHECK(PhaseNamed(run_json, "pass1") == nullptr);
+    CHECK(Count(Member(Member(run_json, "reads"), "requested")) > 0);
+    CHECK(Count(Member(Member(Member(run_json, "kinds"), "boot"), "reads")) >
+          0);
+  }
+}
+
+TEST_CASE("NtfsScanBench names the mftlist engine in its summary",
+          "[device-access][benchmark][sample]") {
+  const TestMft::TempTreeImage image;
+  const TestDeviceAccess::TempDir dir;
+  const std::filesystem::path summary = dir.Path() / "summary.json";
+
+  const SampleRun run = TestMft::RunScanBench(
+      {Option(L"--benchmark", summary), image.path.wstring()});
+
+  REQUIRE(run.exit_code == 0);
+  CHECK(Member(LoadSummary(summary), "engine").text == "mftlist");
+}
+
+TEST_CASE("NtfsScanBench --engine=all writes one summary for each engine",
+          "[device-access][benchmark][sample]") {
+  const TestMft::TempTreeImage image;
+  const TestDeviceAccess::TempDir dir;
+  const std::filesystem::path summary = dir.Path() / "run.json";
+
+  const SampleRun run = TestMft::RunScanBench(
+      {L"--engine=all", Option(L"--benchmark", summary), image.path.wstring()});
+
+  REQUIRE(run.exit_code == 0);
+  // The name of the command line is left alone: each engine adds its own.
+  CHECK_FALSE(std::filesystem::exists(summary));
+  for (const std::string_view engine : {"mftlist", "nocache", "fullcache"}) {
+    INFO(engine);
+    const std::filesystem::path named =
+        dir.Path() / ("run-" + std::string(engine) + ".json");
+    CHECK_THAT(run.err, ContainsSubstring(named.filename().string()));
+    CHECK(std::filesystem::exists(named.string() + ".readlog"));
+    const JsonValue root = LoadSummary(named);
+    CHECK(Member(root, "tool").text == "NtfsScanBench");
+    CHECK(Member(root, "engine").text == engine);
+    const JsonValue& run_json = Member(root, "run");
+    CHECK(PhaseNamed(run_json, "open") != nullptr);
+    CHECK((PhaseNamed(run_json, "walk") != nullptr) == (engine != "mftlist"));
+    CHECK((PhaseNamed(run_json, "print") != nullptr) == (engine == "mftlist"));
+  }
+}
+
+TEST_CASE("NtfsScanBench --engine=all writes one capture for each engine",
+          "[device-access][capture][sample]") {
+  const TestMft::TempTreeImage image;
+  const TestDeviceAccess::TempDir dir;
+  const std::filesystem::path capture = dir.Path() / "cap.img";
+
+  const SampleRun run = TestMft::RunScanBench(
+      {L"--engine=all", Option(L"--capture", capture), image.path.wstring()});
+
+  REQUIRE(run.exit_code == 0);
+  CHECK_FALSE(std::filesystem::exists(capture));
+  for (const char* engine : {"mftlist", "nocache", "fullcache"}) {
+    INFO(engine);
+    CHECK(std::filesystem::exists(dir.Path() /
+                                  (std::string("cap-") + engine + ".img")));
+  }
 }

@@ -8,6 +8,7 @@ target_sources(
     "device-path-tests.cpp"
     "json-tests.cpp"
     "ntfs-bench-tool-tests.cpp"
+    "ntfsscanbench-engine-tests.cpp"
     "ordered-chunks-tests.cpp"
     "output-tests.cpp"
     "profile-tools-tests.cpp"

@@ -1,8 +1,9 @@
-#include "directory-listing.h"
-
 #include <ntfs-browser/win-types.h>
 
+#include <cerrno>
 #include <cstdio>
+#include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -11,6 +12,7 @@
 #include <vector>
 
 #include <ntfs-browser/attr/mask.h>
+#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/directory-read-ahead.h>
@@ -19,20 +21,22 @@
 #include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/tool/device-access/device-path.h>
 #include <ntfs-browser/tool/device-access/local-time.h>
 #include <ntfs-browser/tool/device-access/output.h>
+#include <ntfs-browser/tool/device-access/text-convert.h>
 #include <ntfs-browser/tool/device-access/tool-support.h>
+#include <ntfs-browser/tool/dir-walk/directory-walk.h>
 #include <ntfs-browser/tuning/tuning.h>
+#include <ntfs-browser/volume-options.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Test::Io {
+#ifndef _WIN32
+  #include <ntfs-browser/tool/device-access/posix-device-disk-reader.h>
+#endif
+
+namespace NTFS_BROWSER_NAMESPACE::Tool::DirWalk {
 
 namespace {
-
-// Totals of the entries a listing shows.
-struct Total {
-  int files = 0;
-  int dirs = 0;
-};
 
 // Splits off and returns the first path segment of ppath (up to the next
 // backslash or double quote), and moves the start of ppath past that segment
@@ -79,8 +83,7 @@ void Report(Tool::DeviceAccess::Output& out, const std::wstring& message) {
 // file names and entries with no name.
 bool IsListed(const IndexEntryView& ie) {
   // Record numbers below the first user record are system metafiles.
-  if (ie.GetFileReference() <
-      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::User)) {
+  if (ie.GetFileReference() < static_cast<ULONGLONG>(Mft::Idx::User)) {
     return false;
   }
 
@@ -164,14 +167,14 @@ constexpr wchar_t path_separator = L'/';
 #endif
 
 // The marker column of an entry whose record stands as given.
-Marker MarkerOf(NTFS_BROWSER_NAMESPACE::Io::RecordStanding standing) {
+Marker MarkerOf(Io::RecordStanding standing) {
   switch (standing) {
-    case NTFS_BROWSER_NAMESPACE::Io::RecordStanding::Live:
+    case Io::RecordStanding::Live:
       return ' ';
-    case NTFS_BROWSER_NAMESPACE::Io::RecordStanding::Unreadable:
+    case Io::RecordStanding::Unreadable:
       return '?';
-    case NTFS_BROWSER_NAMESPACE::Io::RecordStanding::Deleted:
-    case NTFS_BROWSER_NAMESPACE::Io::RecordStanding::Reused:
+    case Io::RecordStanding::Deleted:
+    case Io::RecordStanding::Reused:
       break;
   }
   return '*';
@@ -201,8 +204,7 @@ struct DirectoryEntries {
 // and, in a recursive listing, collects a subdirectory that is still the
 // entry's own.
 template <Cache::Strategy S>
-void VisitEntry(const IndexEntryView& ie,
-                NTFS_BROWSER_NAMESPACE::Io::RecordStanding standing,
+void VisitEntry(const IndexEntryView& ie, Io::RecordStanding standing,
                 void* context) {
   if (!IsListed(ie)) {
     return;
@@ -221,8 +223,7 @@ void VisitEntry(const IndexEntryView& ie,
     return;
   }
   entries.total.dirs++;
-  if (entries.recursive &&
-      standing != NTFS_BROWSER_NAMESPACE::Io::RecordStanding::Reused) {
+  if (entries.recursive && standing != Io::RecordStanding::Reused) {
     entries.children.push_back(
         {ie.GetFileReference(), std::wstring(ie.GetFilename())});
   }
@@ -272,10 +273,8 @@ struct TreeWalk {
 // Makes fr the next pending directory that is new and parses, and reports the
 // ones that are not. Returns false when none is left.
 template <Cache::Strategy S>
-bool EnterNextDirectory(
-    Tool::DeviceAccess::Output& out,
-    NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>& fr,
-    NTFS_BROWSER_NAMESPACE::Io::DirectoryReadAhead<S>& ahead, TreeWalk& walk) {
+bool EnterNextDirectory(Tool::DeviceAccess::Output& out, Io::FileRecord<S>& fr,
+                        Io::DirectoryReadAhead<S>& ahead, TreeWalk& walk) {
   while (!walk.pending.empty()) {
     Pending next = std::move(walk.pending.back());
     walk.pending.pop_back();
@@ -312,9 +311,8 @@ bool EnterNextDirectory(
 // listing, and fr takes them from there: the lines, their order and the reads
 // that are not held stay as they are.
 template <Cache::Strategy S>
-Total ListTree(Tool::DeviceAccess::Output& out,
-               NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>& fr, bool marking,
-               const std::wstring& root) {
+Total ListTree(Tool::DeviceAccess::Output& out, Io::FileRecord<S>& fr,
+               bool marking, const std::wstring& root) {
   Total tree;
   TreeWalk walk;
   walk.path = root;
@@ -322,7 +320,7 @@ Total ListTree(Tool::DeviceAccess::Output& out,
   if (const std::optional<ULONGLONG> start = fr.GetFileReference()) {
     walk.listed.insert(*start);
   }
-  NTFS_BROWSER_NAMESPACE::Io::DirectoryReadAhead<S> ahead(fr.GetVolume());
+  Io::DirectoryReadAhead<S> ahead(fr.GetVolume());
   ahead.Attach(fr);
   ahead.Begin();
   std::vector<ULONGLONG> upcoming;
@@ -359,8 +357,7 @@ Total ListTree(Tool::DeviceAccess::Output& out,
 // Moves fr into the subdirectory named pathname. Returns false after
 // printing why it cannot.
 template <Cache::Strategy S>
-bool EnterSubdirectory(NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>& fr,
-                       std::wstring_view pathname) {
+bool EnterSubdirectory(Io::FileRecord<S>& fr, std::wstring_view pathname) {
   std::optional<IndexEntry> ie = fr.FindSubEntry(pathname);
   if (!ie) {
     Say(L"Cannot find directory " + std::wstring(pathname));
@@ -386,10 +383,9 @@ bool EnterSubdirectory(NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>& fr,
 // Moves fr to the root directory of the volume called label, then to each
 // directory path names in turn. Returns false after printing why it cannot.
 template <Cache::Strategy S>
-bool EnterDirectories(NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>& fr,
-                      const std::wstring& label, std::wstring_view path) {
-  if (!fr.ParseFileRecord(
-          static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root))) {
+bool EnterDirectories(Io::FileRecord<S>& fr, const std::wstring& label,
+                      std::wstring_view path) {
+  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root))) {
     Say(L"Cannot read root directory of volume " + label);
     return false;
   }
@@ -410,17 +406,123 @@ bool EnterDirectories(NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>& fr,
   }
 }
 
+// Opens the device or image file at device, which label names in messages.
+// Returns null after printing why it cannot.
+template <Cache::Strategy S>
+std::unique_ptr<NtfsVolume<S>>
+    OpenDeviceVolume(const std::filesystem::path& device,
+                     const std::wstring& label, const VolumeOptions& options) {
+#ifdef _WIN32
+  // Win32DiskReader opens a plain file the same way as a device.
+  return std::make_unique<NtfsVolume<S>>(std::wstring_view(label), options);
+#else
+  auto reader = std::make_unique<Tool::DeviceAccess::PosixDeviceDiskReader>();
+  if (!reader->Open(Tool::DeviceAccess::WideFromPath(device))) {
+    const int error = reader->LastError();
+    if (error == EACCES || error == EPERM) {
+      Say(L"Cannot read device " + label + L": read access is needed");
+    } else {
+      Say(L"Cannot open " + label);
+    }
+    return nullptr;
+  }
+  return std::make_unique<NtfsVolume<S>>(std::move(reader), options);
+#endif
+}
+
+// Lists the directory of an image file or device. Returns the exit code.
+template <Cache::Strategy S>
+int ListDevice(const Tool::DeviceAccess::DeviceTarget& target, bool recursive,
+               const VolumeOptions& options, std::FILE* stream, Total* total) {
+  const std::wstring label = Tool::DeviceAccess::WideFromPath(target.device);
+  const std::unique_ptr<NtfsVolume<S>> volume =
+      OpenDeviceVolume<S>(target.device, label, options);
+  if (!volume) {
+    return -1;
+  }
+  if (!volume->IsVolumeOK()) {
+    Say(L"Cannot get NTFS BPB from boot sector of " + label);
+    return -1;
+  }
+  const std::wstring root = target.directory.empty()
+                                ? label
+                                : label + path_separator + target.directory;
+  return ListFrom(*volume,
+                  {.label = label, .path = target.directory, .root = root},
+                  recursive, stream, total);
+}
+
+#ifdef _WIN32
+
+// Lists the directory of a drive, from a path such as "c:\windows". Returns
+// the exit code.
+template <Cache::Strategy S>
+int ListDrive(wchar_t* path, bool recursive, const VolumeOptions& options,
+              std::FILE* stream, Total* total) {
+  const wchar_t volname = Getvolume(&path);
+  if (volname == L'\0') {
+    Say(L"Cannot find a drive letter in " + std::wstring(path));
+    return -1;
+  }
+
+  NtfsVolume<S> volume(volname, options);
+  const std::wstring label(1, volname);
+  if (!volume.IsVolumeOK()) {
+    Say(L"Cannot get NTFS BPB from boot sector of volume " + label);
+    return -1;
+  }
+  const std::wstring root = label + L':' + path_separator + path;
+  return ListFrom(volume, {.label = label, .path = path, .root = root},
+                  recursive, stream, total);
+}
+
+#endif  // _WIN32
+
 }  // namespace
 
-template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
+wchar_t Getvolume(wchar_t** ppath) {
+  wchar_t* p = *ppath;
+
+  while (*p == L' ' || *p == L'"') {
+    p++;
+  }
+  if (*p == L'\0') {
+    return L'\0';
+  }
+  const wchar_t volname = *p++;
+
+  while (*p == L' ') {
+    p++;
+  }
+  if (*p != L':') {
+    return L'\0';
+  }
+
+  // Skips the colon and the first directory name, up to a backslash.
+  while (*p != L'\\' && *p != L'\0') {
+    p++;
+  }
+  while (*p == L'\\' || *p == L'"') {
+    p++;
+  }
+
+  *ppath = p;
+  return volname;
+}
+
+template <Cache::Strategy S>
 int ListFrom(NtfsVolume<S>& volume, const ListTarget& target, bool recursive,
-             std::FILE* stream) {
+             std::FILE* stream, Total* total) {
+  // The listing is printed as the walk goes: the phase holds both.
+  const Bench::PhaseScope walk(Bench::Phase::Walk);
+  if (Bench::StopRequested()) {
+    return 0;
+  }
   volume.SetReadPattern(Tuning::Pattern::DependentSmall);
-  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> fr(volume);
+  Io::FileRecord<S> fr(volume);
   // we only need INDEX_ROOT and INDEX_ALLOCATION
   // don't waste time and ram to parse unwanted attributes
-  fr.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
-                 NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+  fr.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
   if (!EnterDirectories(fr, target.label, target.path)) {
     return -1;
   }
@@ -430,25 +532,52 @@ int ListFrom(NtfsVolume<S>& volume, const ListTarget& target, bool recursive,
 
   Tool::DeviceAccess::Output out(volume.GetOptions().tuning.output.flush_bytes,
                                  stream);
-  Total total;
+  Total listed;
   if (recursive) {
-    total = ListTree(out, fr, marking, target.root);
+    listed = ListTree(out, fr, marking, target.root);
   } else {
     DirectoryEntries<S> entries;
     entries.out = &out;
     entries.marking = marking;
     fr.TraverseSubEntriesWithStanding(VisitEntry<S>, &entries);
-    total = entries.total;
+    listed = entries.total;
   }
-  out.PrintLine("Files: {}, Directories: {}", total.files, total.dirs);
+  out.PrintLine("Files: {}, Directories: {}", listed.files, listed.dirs);
+  if (total != nullptr) {
+    *total = listed;
+  }
   return 0;
 }
 
-template int ListFrom<NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>(
-    NtfsVolume<NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>& volume,
-    const ListTarget& target, bool recursive, std::FILE* stream);
-template int ListFrom<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>(
-    NtfsVolume<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>& volume,
-    const ListTarget& target, bool recursive, std::FILE* stream);
+template <Cache::Strategy S>
+int ListDirectory(wchar_t* path, bool recursive, const VolumeOptions& options,
+                  std::FILE* stream, Total* total) {
+  if (const std::optional<Tool::DeviceAccess::DeviceTarget> target =
+          Tool::DeviceAccess::SplitDeviceTarget(path)) {
+    return ListDevice<S>(*target, recursive, options, stream, total);
+  }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Test::Io
+#ifdef _WIN32
+  return ListDrive<S>(path, recursive, options, stream, total);
+#else
+  Say(L"Cannot find a device or image file in " + std::wstring(path));
+  return -1;
+#endif
+}
+
+template int ListFrom<Cache::Strategy::FullCache>(
+    NtfsVolume<Cache::Strategy::FullCache>& volume, const ListTarget& target,
+    bool recursive, std::FILE* stream, Total* total);
+template int ListFrom<Cache::Strategy::NoCache>(
+    NtfsVolume<Cache::Strategy::NoCache>& volume, const ListTarget& target,
+    bool recursive, std::FILE* stream, Total* total);
+template int
+    ListDirectory<Cache::Strategy::FullCache>(wchar_t* path, bool recursive,
+                                              const VolumeOptions& options,
+                                              std::FILE* stream, Total* total);
+template int
+    ListDirectory<Cache::Strategy::NoCache>(wchar_t* path, bool recursive,
+                                            const VolumeOptions& options,
+                                            std::FILE* stream, Total* total);
+
+}  // namespace NTFS_BROWSER_NAMESPACE::Tool::DirWalk

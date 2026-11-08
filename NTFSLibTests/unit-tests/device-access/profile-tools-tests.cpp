@@ -18,6 +18,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/device-access/temp-dir.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/io/ntfsdir-sample-support.h>
 #include <ntfs-browser/test/mft/ntfsscanbench-sample-support.h>
 #include <ntfs-browser/test/support/sample-run.h>
 #include <ntfs-browser/tool/device-access/json.h>
@@ -25,6 +26,7 @@
 
 namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
 
+namespace TestIo = NTFS_BROWSER_NAMESPACE::Test::Io;
 namespace TestMft = NTFS_BROWSER_NAMESPACE::Test::Mft;
 namespace TestDeviceAccess = NTFS_BROWSER_NAMESPACE::Test::DeviceAccess;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
@@ -119,11 +121,16 @@ std::wstring Option(std::wstring_view name, const std::filesystem::path& path) {
 // One tool, as the tests run it: its listing arguments, and how to start it.
 struct Tool {
   std::string name;
+  // The engine option the tool takes, or empty for the default.
+  std::wstring engine;
   // The image and the target the listing names.
   std::filesystem::path image;
   std::wstring target;
 
   [[nodiscard]] SampleRun Run(std::vector<std::wstring> options) const {
+    if (!engine.empty()) {
+      options.push_back(engine);
+    }
     options.push_back(target);
     return TestMft::RunScanBench(options);
   }
@@ -134,14 +141,23 @@ struct Images {
   TestMft::TempTreeImage mft_list{
       TestFakeImage::BuildFakeNtfsImageWithListMftScan(list_record_count,
                                                        list_fragment_clusters)};
+  TestIo::TempImage dir;
 };
 
 // Every tool of the build, over the image of its listing.
 std::vector<Tool> Tools(const Images& images) {
   std::vector<Tool> tools;
-  tools.push_back({.name = "NtfsScanBench",
+  tools.push_back({.name = "mftlist",
+                   .engine = L"--engine=mftlist",
                    .image = images.mft_list.path,
                    .target = images.mft_list.path.wstring()});
+  for (const std::string_view engine : {"nocache", "fullcache"}) {
+    tools.push_back(
+        {.name = std::string(engine),
+         .engine = L"--engine=" + std::wstring(engine.begin(), engine.end()),
+         .image = images.dir.path,
+         .target = TestIo::InImage(images.dir.path, L"Docs")});
+  }
   return tools;
 }
 
@@ -236,8 +252,13 @@ TEST_CASE(
     CHECK(Count(Member(Member(plain, "tuning"), "mft.window_bytes")) ==
           Tuning::FindKnob("mft.window_bytes")->default_value);
 
-    // The reads they changed: a smaller window reads $MFT in more pieces.
-    CHECK(RequestedReads(summary) > RequestedReads(plain));
+    // The reads they changed. A smaller window reads $MFT in more pieces; a
+    // larger block reads the cache in fewer.
+    if (tool.name == "mftlist") {
+      CHECK(RequestedReads(summary) > RequestedReads(plain));
+    } else if (tool.name == "fullcache") {
+      CHECK(RequestedReads(summary) != RequestedReads(plain));
+    }
   }
 }
 

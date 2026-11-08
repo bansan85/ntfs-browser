@@ -240,7 +240,7 @@ BenchSession::BenchSession(RunInfo run, const BenchOptions& bench,
   if (bench.stop_after) {
     Bench::SetStopAfter(bench.stop_after);
   }
-  if (!bench.WantsSession()) {
+  if (!bench.WantsSession() && !run_.measure) {
     return;
   }
   if (!bench.capture_path.empty()) {
@@ -274,6 +274,9 @@ std::string
   json.BeginObject();
   json.Field("format", summary_format);
   json.Field("tool", run_.tool);
+  if (!run_.engine.empty()) {
+    json.Field("engine", run_.engine);
+  }
   json.Field("target", run_.target);
   json.Key("arguments");
   json.BeginArray();
@@ -316,7 +319,8 @@ void BenchSession::Finish() {
     return;
   }
   active_ = false;
-  const Bench::Report report = Bench::Stop();
+  report_ = Bench::Stop();
+  const Bench::Report& report = *report_;
   Bench::ReadLog log = Bench::TakeReadLog();
   Bench::SetCaptureSink(nullptr);
 

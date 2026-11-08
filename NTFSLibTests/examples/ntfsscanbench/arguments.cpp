@@ -1,5 +1,6 @@
 #include "arguments.h"
 
+#include <array>
 #include <cstdint>
 #include <cstdio>
 #include <string>
@@ -18,6 +19,13 @@ namespace NTFS_BROWSER_NAMESPACE::Example::NtfsScanBench {
 
 namespace {
 
+// Command-line prefix of the switch that picks the engine, and its values.
+constexpr std::wstring_view engine_option = L"--engine=";
+// Command-line switches that list every directory below the target, and that
+// write no listing.
+constexpr std::wstring_view recursive_option = L"--recursive";
+constexpr std::wstring_view recursive_short_option = L"-r";
+constexpr std::wstring_view quiet_option = L"--quiet";
 // Command-line switch that adds the records NTFS freed to the listing.
 constexpr std::wstring_view deleted_option = L"--deleted";
 // Command-line switch that salvages a damaged item instead of rejecting it.
@@ -67,6 +75,28 @@ bool ParseThreads(std::wstring_view text, unsigned& threads) {
   return true;
 }
 
+// Reads the engine name of --engine=. False for a name that is not one.
+bool ParseEngine(std::wstring_view text, Engine& engine) {
+  struct Named {
+    std::wstring_view name;
+    Engine engine;
+  };
+
+  constexpr std::array<Named, 4> engines{{{L"mftlist", Engine::MftList},
+                                          {L"nocache", Engine::NoCache},
+                                          {L"fullcache", Engine::FullCache},
+                                          {L"all", Engine::All}}};
+  for (const Named& named : engines) {
+    if (text == named.name) {
+      engine = named.engine;
+      return true;
+    }
+  }
+  fprintf(stderr, "Unknown engine %s: mftlist, nocache, fullcache or all\n",
+          Tool::DeviceAccess::WideToUtf8(text).c_str());
+  return false;
+}
+
 // Applies arg when it is an instrumentation, tuning or logging option, the
 // ones the console tools share.
 OptionStatus ParseSharedOption(std::wstring_view arg, Arguments& args) {
@@ -92,6 +122,19 @@ OptionStatus ParseSharedOption(std::wstring_view arg, Arguments& args) {
 OptionStatus ParseListingOption(std::wstring_view arg, Arguments& args) {
   if (arg == deleted_option) {
     args.volume_options.include_deleted = true;
+    return OptionStatus::Accepted;
+  }
+  if (arg.starts_with(engine_option)) {
+    return ParseEngine(arg.substr(engine_option.size()), args.engine)
+               ? OptionStatus::Accepted
+               : OptionStatus::Rejected;
+  }
+  if (arg == recursive_option || arg == recursive_short_option) {
+    args.recursive = true;
+    return OptionStatus::Accepted;
+  }
+  if (arg == quiet_option) {
+    args.quiet = true;
     return OptionStatus::Accepted;
   }
   if (arg == recover_option) {
@@ -120,6 +163,20 @@ OptionStatus ParseListingOption(std::wstring_view arg, Arguments& args) {
 
 }  // namespace
 
+std::string_view EngineName(Engine engine) {
+  switch (engine) {
+    case Engine::MftList:
+      return "mftlist";
+    case Engine::NoCache:
+      return "nocache";
+    case Engine::FullCache:
+      return "fullcache";
+    case Engine::All:
+      break;
+  }
+  return "all";
+}
+
 bool ParseArguments(int argc, wchar_t* argv[], Arguments& args) {
   for (int i = 1; i < argc; i++) {
     const std::wstring_view arg(argv[i]);
@@ -144,10 +201,35 @@ bool ParseArguments(int argc, wchar_t* argv[], Arguments& args) {
 
 void Usage() {
   printf(
-      "Usage: ntfsscanbench [--log=...] [--deleted] [--recover] [--threads=N] "
-      "[--clusters[=map]] [--verify-data[=sample|full]] <volume>\n");
+      "Usage: ntfsscanbench [--engine=mftlist|nocache|fullcache|all] "
+      "[--recursive] [--quiet] [--log=...] [--deleted] [--recover] "
+      "[--threads=N] [--clusters[=map]] [--verify-data[=sample|full]] "
+      "<volume>\n");
   printf("  %s\n", std::string(Log::option_usage).c_str());
   printf("%s", std::string(Tool::DeviceAccess::BenchUsage()).c_str());
+  printf(
+      "  --engine=E    how the volume is listed: mftlist (the default) "
+      "scans\n");
+  printf(
+      "                $MFT and lists every file; nocache and fullcache "
+      "walk\n");
+  printf(
+      "                the directories with a volume that keeps no cache or "
+      "one\n");
+  printf(
+      "                that does; all runs the three one after the other on\n");
+  printf(
+      "                the same target, each in a recursive listing, and "
+      "prints\n");
+  printf(
+      "                a table. With --benchmark, the summary of each engine "
+      "is\n");
+  printf("                written to the file name plus -<engine>\n");
+  printf(
+      "  --recursive   (-r) list every directory below the target: nocache "
+      "and\n");
+  printf("                fullcache only, mftlist always lists them all\n");
+  printf("  --quiet       write no listing, only the messages and the table\n");
   printf("  --deleted     also list the records NTFS freed\n");
   printf(
       "  --threads=N   threads that parse $MFT and format the listing, 1 "
@@ -189,6 +271,7 @@ void Usage() {
 #else
   printf("  <volume>      a device or image path\n");
 #endif
+  printf("                nocache and fullcache also take a folder after it\n");
   printf(
       "Columns: record, sequence, DEL if freed, <DIR> or size, last write,\n");
   printf(
