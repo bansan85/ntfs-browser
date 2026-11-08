@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -45,6 +46,9 @@ class BenchSession {
     // Starts a session even when the command line asks for no benchmark and
     // no capture, so that Report() has the numbers of the run.
     bool measure{false};
+    // Keeps the read log after Finish(), for ReadLog(), even when the command
+    // line asks for no summary.
+    bool keep_read_log{false};
   };
 
   // options are the volume options in force.
@@ -61,9 +65,25 @@ class BenchSession {
   // Whether a session runs: the run is timed or captured.
   [[nodiscard]] bool Active() const noexcept { return active_; }
 
-  // Ends the session and writes the summary, the read log and the capture
-  // size. Reports a failure on stderr. Safe to call twice.
+  // Ends the session and gathers its report and read log, without writing
+  // anything. A tool that has to compute from them before the summary is
+  // written calls it, then SetExtra(), then Finish(). Safe to call twice.
+  void Collect();
+
+  // Adds the member name to the summary, filled by writer: the writer writes
+  // one JSON value. Call it before Finish().
+  void SetExtra(std::string name, std::function<void(JsonWriter&)> writer);
+
+  // Ends the session if Collect() did not, and writes the summary, the read log
+  // and the capture size. Reports a failure on stderr. Safe to call twice.
   void Finish();
+
+  // The read log of the run, once Collect() or Finish() has ended a session,
+  // when RunInfo::keep_read_log asked for it.
+  [[nodiscard]] const std::optional<NTFS_BROWSER_NAMESPACE::Bench::ReadLog>&
+      KeptReadLog() const noexcept {
+    return kept_log_;
+  }
 
   // The numbers of the run, once Finish() has ended a session. Empty before,
   // and for a run that had no session.
@@ -77,6 +97,13 @@ class BenchSession {
   [[nodiscard]] std::string
       BuildSummary(const NTFS_BROWSER_NAMESPACE::Bench::Report& report,
                    const std::filesystem::path& log_path) const;
+
+  // The read log that Collect() took, until Finish() writes it.
+  std::optional<NTFS_BROWSER_NAMESPACE::Bench::ReadLog> pending_log_;
+  std::optional<NTFS_BROWSER_NAMESPACE::Bench::ReadLog> kept_log_;
+  std::string extra_name_;
+  std::function<void(JsonWriter&)> extra_writer_;
+  bool finished_{false};
 
   RunInfo run_;
   BenchOptions bench_;

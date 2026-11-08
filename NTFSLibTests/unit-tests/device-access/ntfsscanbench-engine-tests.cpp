@@ -245,7 +245,7 @@ TEST_CASE("NtfsScanBench usage names the engines and the quiet option",
 
   CHECK(run.exit_code == sample_failure_exit_code);
   CHECK_THAT(run.out,
-             ContainsSubstring("--engine=mftlist|nocache|fullcache|all"));
+             ContainsSubstring("--engine=mftlist|nocache|fullcache|auto|all"));
   CHECK_THAT(run.out, ContainsSubstring("--quiet"));
   CHECK_THAT(run.out, ContainsSubstring("--recursive"));
 }

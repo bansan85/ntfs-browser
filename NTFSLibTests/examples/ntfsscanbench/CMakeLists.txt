@@ -1,6 +1,29 @@
 # Three ways to list a volume, timed: the scan of $MFT (mft-list-engine.cpp),
 # and the walk of the directory indexes with a volume that keeps no cache or
 # one that does (tools/dir-walk). --engine=all runs the three in turn.
+# The measure of a Search::Scan and its verdicts, shared with the unit tests
+# (unit-tests/search/scan-via-*-tests.cpp). They reach the test seams of the
+# scan in src/search/scan-probe.h, which the library exports under
+# NTFS_BROWSER_EXPORT_INTERNALS_FOR_TESTS (see tools/fake-image/CMakeLists.txt):
+# this target MUST define it too.
+add_library(
+  NtfsScanBenchCore
+  STATIC
+  "include/ntfs-browser/example/ntfsscanbench/via-scan.h"
+  "scan-measure.cpp"
+  "scan-verdict.cpp"
+)
+target_include_directories(
+  NtfsScanBenchCore
+  PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
+  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../../src"
+)
+target_compile_definitions(
+  NtfsScanBenchCore
+  PRIVATE NTFS_BROWSER_EXPORT_INTERNALS_FOR_TESTS
+)
+target_link_libraries(NtfsScanBenchCore PUBLIC ${PROJECT_NAME} NtfsDeviceAccess)
+
 add_executable(
   NtfsScanBench
   WIN32
@@ -16,13 +39,19 @@ add_executable(
   "run-engine.cpp"
   "scan-bench.h"
   "scan-bench.cpp"
+  "via-scan.cpp"
   "walk-engine.cpp"
 )
 # The listing is written by a thread of its own.
 find_package(Threads REQUIRED)
 target_link_libraries(
   NtfsScanBench
-  PRIVATE ${PROJECT_NAME} NtfsDeviceAccess NtfsDirWalk Threads::Threads
+  PRIVATE
+    ${PROJECT_NAME}
+    NtfsDeviceAccess
+    NtfsDirWalk
+    NtfsScanBenchCore
+    Threads::Threads
 )
 set_target_properties(NtfsScanBench PROPERTIES WIN32_EXECUTABLE 0)
 if(WIN32)

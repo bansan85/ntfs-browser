@@ -9,6 +9,7 @@ target_sources(
     "json-tests.cpp"
     "ntfs-bench-tool-tests.cpp"
     "ntfsscanbench-engine-tests.cpp"
+    "ntfsscanbench-via-scan-tests.cpp"
     "ordered-chunks-tests.cpp"
     "output-tests.cpp"
     "profile-tools-tests.cpp"

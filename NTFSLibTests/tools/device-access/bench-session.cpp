@@ -254,7 +254,7 @@ BenchSession::BenchSession(RunInfo run, const BenchOptions& bench,
   }
   Bench::SessionOptions session;
   // A capture run is not a timing run: it keeps no log.
-  session.keep_log = bench.benchmark;
+  session.keep_log = bench.benchmark || run_.keep_read_log;
   Bench::Start(session);
   active_ = true;
 }
@@ -310,27 +310,50 @@ std::string
   json.BeginObject();
   WriteReportJson(json, report);
   json.EndObject();
+  if (extra_writer_) {
+    json.Key(extra_name_);
+    extra_writer_(json);
+  }
   json.EndObject();
   return json.Take();
 }
 
-void BenchSession::Finish() {
+void BenchSession::Collect() {
   if (!active_) {
     return;
   }
   active_ = false;
   report_ = Bench::Stop();
-  const Bench::Report& report = *report_;
-  Bench::ReadLog log = Bench::TakeReadLog();
+  pending_log_ = Bench::TakeReadLog();
   Bench::SetCaptureSink(nullptr);
+  if (run_.keep_read_log) {
+    kept_log_ = pending_log_;
+  }
 
   if (capture_) {
-    if (!capture_->SetSize(report.volume_bytes) || !capture_->Ok()) {
+    if (!capture_->SetSize(report_->volume_bytes) || !capture_->Ok()) {
       std::fprintf(stderr, "Cannot finish the capture file: %s\n",
                    capture_->Error().c_str());
     }
     capture_.reset();
   }
+}
+
+void BenchSession::SetExtra(std::string name,
+                            std::function<void(JsonWriter&)> writer) {
+  extra_name_ = std::move(name);
+  extra_writer_ = std::move(writer);
+}
+
+void BenchSession::Finish() {
+  Collect();
+  if (finished_ || !report_ || !pending_log_) {
+    return;
+  }
+  finished_ = true;
+  const Bench::Report& report = *report_;
+  const Bench::ReadLog log = std::move(*pending_log_);
+  pending_log_.reset();
   if (!bench_.benchmark) {
     return;
   }

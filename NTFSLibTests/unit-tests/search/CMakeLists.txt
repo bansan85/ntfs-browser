@@ -9,12 +9,17 @@ target_sources(
     "scan-mft-list-tests.cpp"
     "scan-pattern-tests.cpp"
     "scan-poll-tests.cpp"
+    "scan-probe-tests.cpp"
     "scan-support.cpp"
     "scan-support.h"
     "scan-thread-tests.cpp"
+    "scan-verdict-tests.cpp"
     "search-types-tests.cpp"
     "target-tests.cpp"
 )
+
+# The measure of a scan (examples/ntfsscanbench), run here on synthetic images.
+target_link_libraries(NtfsBrowserTests PRIVATE NtfsScanBenchCore)
 
 if(NTFS_BROWSER_ENABLE_REGEX)
   target_sources(

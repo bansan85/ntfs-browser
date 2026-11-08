@@ -72,6 +72,7 @@ int RunSingle(const Arguments& args) {
   plan.engine = args.engine;
   plan.bench = args.bench;
   plan.recursive = args.recursive;
+  plan.via_scan = args.via_scan;
   std::optional<NullStream> discard;
   if (args.quiet) {
     discard.emplace();
@@ -81,7 +82,14 @@ int RunSingle(const Arguments& args) {
     }
     plan.sink = discard->Get();
   }
-  return RunEngine(args, plan).exit_code;
+  const Outcome outcome = RunEngine(args, plan);
+  if (args.via_scan) {
+    // A run through the scan lists nothing: its result is the tables.
+    const std::array<EngineRow, 1> rows{MakeRow(args.engine, outcome)};
+    const std::string tables = FormatScanTables(rows);
+    fwrite(tables.data(), 1, tables.size(), stdout);
+  }
+  return outcome.exit_code;
 }
 
 // Runs the three engines one after the other on the target, each in a
@@ -109,13 +117,15 @@ int RunAll(const Arguments& args) {
     plan.recursive = true;
     plan.measure = true;
     plan.release = true;
+    plan.via_scan = args.via_scan;
     const Outcome outcome = RunEngine(args, plan);
     rows.push_back(MakeRow(engine, outcome));
     if (outcome.exit_code != 0) {
       exit_code = -1;
     }
   }
-  const std::string table = FormatTable(rows);
+  std::string table = FormatTable(rows);
+  table += FormatScanTables(rows);
   fwrite(table.data(), 1, table.size(), stdout);
   return exit_code;
 }

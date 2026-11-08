@@ -5,8 +5,11 @@
 #include <optional>
 
 #include <ntfs-browser/bench/bench.h>
+#include <ntfs-browser/example/ntfsscanbench/via-scan.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/search/types.h>
 #include <ntfs-browser/tool/device-access/bench-options.h>
+#include <ntfs-browser/tool/device-access/json.h>
 #include <ntfs-browser/volume-options.h>
 
 #include "arguments.h"
@@ -31,6 +34,16 @@ struct RunPlan {
   // process leaves it to the system, which is faster; a run that others
   // follow gives the memory back.
   bool release = false;
+  // Runs the engine through Search::Scan under the worker probe, and measures
+  // what the benchmark of the direct path does not: the worker thread.
+  bool via_scan = false;
+};
+
+// What a run through Search::Scan measured, with its verdicts.
+struct ScanResult {
+  ScanMeasure measure;
+  ScanFigures figures;
+  Verdict verdict;
 };
 
 // What one run gave.
@@ -41,6 +54,9 @@ struct Outcome {
   std::uint64_t entries = 0;
   // The numbers of the session, when the run had one.
   std::optional<NTFS_BROWSER_NAMESPACE::Bench::Report> report;
+  // What the run through the scan measured. Set only for a via-scan run that
+  // finished.
+  std::optional<ScanResult> scan;
 };
 
 // Runs plan.engine on the target of args, in a benchmark session of its own.
@@ -48,6 +64,21 @@ struct Outcome {
 // caps when the volume opens. Reports a bad profile on stderr and returns -1
 // as the exit code.
 Outcome RunEngine(const Arguments& args, const RunPlan& plan);
+
+// Runs plan.engine through Search::Scan with the options of args, in the
+// session that the caller holds. Fills outcome.entries and outcome.scan (with
+// the figures of the worker only: the caller completes them from the report
+// once the session has ended). Returns the exit code.
+int RunViaScan(const Arguments& args, const RunPlan& plan, Outcome& outcome);
+
+// The options of the Search::Scan that RunViaScan() runs: the target, the
+// engine, the pattern and the filters of args, and plan.recursive.
+NTFS_BROWSER_NAMESPACE::Search::Options ScanOptionsOf(const Arguments& args,
+                                                      const RunPlan& plan);
+
+// Writes scan as one JSON object: the worker, the figures and the verdicts.
+void WriteScanJson(NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess::JsonWriter& json,
+                   const ScanResult& scan);
 
 // Lists every record of $MFT of the volume args names, with MftTree. Writes
 // the listing to plan.sink and counts the records in entries. Returns the exit
