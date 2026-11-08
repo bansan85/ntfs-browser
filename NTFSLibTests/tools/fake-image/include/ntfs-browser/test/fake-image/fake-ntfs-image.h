@@ -1200,6 +1200,13 @@ inline constexpr std::string_view freed_file_content = "Recovered text.\n";
 // "OldDir" (20, freed directory). Every other record is as that fixture has it.
 [[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithFreedFileTree();
 
+// Same volume as BuildFakeNtfsImageWithFreedFileTree(), with the freed file
+// 19 called name instead of "old.tmp". Docs indexes it after "OldDir", so name
+// MUST sort after "OLDDIR" under $UpCase. The volume has no $UpCase record, so
+// the library's built-in mapping collates it.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithFreedFileName(std::wstring_view name);
+
 // Same volume as BuildFakeNtfsImageWithFreedFileTree(), except that the root
 // (#5) is named root_name and indexes "draft.doc" (21) beside "Docs". draft.doc
 // now names the root as its parent.

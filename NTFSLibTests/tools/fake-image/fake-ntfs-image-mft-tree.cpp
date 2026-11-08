@@ -479,6 +479,10 @@ FakeRecord MakeFreedNonResidentFileRecord(const FakeFreedStream& stream) {
 }  // namespace
 
 std::vector<BYTE> BuildFakeNtfsImageWithFreedFileTree() {
+  return BuildFakeNtfsImageWithFreedFileName(L"old.tmp");
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithFreedFileName(std::wstring_view name) {
   using NTFS_BROWSER_NAMESPACE::Data::FileRecordFlag;
 
   std::vector<BYTE> image = BuildFakeNtfsImageWithMftTree();
@@ -488,11 +492,11 @@ std::vector<BYTE> BuildFakeNtfsImageWithFreedFileTree() {
   PutRootRecord(image, MakeRootDirRecord(L".", root_names));
 
   const std::array<FakeIndexName, 2> docs_names{
-      {{L"old.tmp", mft_tree_deleted_file_idx, false},
+      {{name, mft_tree_deleted_file_idx, false},
        {L"OldDir", mft_tree_deleted_dir_idx, true}}};
   PutMftRecord(image, mft_tree_docs_idx, MakeDocsDirRecord(docs_names));
 
-  // The freed "old.tmp": resident $DATA, written by hand so its content lands
+  // The freed file: resident $DATA, written by hand so its content lands
   // in the record.
   FakeRecord old_tmp = MakeRecordHeader(attr_offset_value, FileRecordFlag{}, 2);
   DWORD offset = attr_offset_value;
@@ -500,7 +504,7 @@ std::vector<BYTE> BuildFakeNtfsImageWithFreedFileTree() {
       old_tmp, offset, NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Normal);
   offset += WriteFileNameAttr(
       old_tmp, offset,
-      {.name = L"old.tmp",
+      {.name = name,
        .parent_ref = MakeFileReference(mft_tree_docs_idx, tree_docs_sequence)},
       false);
   const DWORD data_offset = offset;

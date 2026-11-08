@@ -16,6 +16,7 @@
 #include <vector>
 
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/example/ntfsundel/name-matcher.h>
 #include <ntfs-browser/example/ntfsundel/ntfsundel-core.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/ntfs-volume.h>
@@ -37,7 +38,8 @@ struct Arguments {
   // --record N, once per record: select the listed file of that MFT record.
   std::vector<std::uint64_t> records;
   // --name PATTERN, once per pattern: select the listed files whose name
-  // matches. See WildcardMatch().
+  // matches, with case folded through the volume's $UpCase table. See
+  // NameMatcher::Matches().
   std::vector<std::wstring> names;
   // --output DIR: the folder the recovered files go into. Empty means list
   // only.
@@ -63,12 +65,6 @@ std::string UsageText();
 std::optional<Arguments> ParseArguments(int argc, wchar_t* argv[],
                                         std::wstring& error);
 
-// Reports whether text matches pattern from end to end. '*' matches any run of
-// characters, '?' matches one. ASCII letters match without regard to case. All
-// other units must be equal, the way names are, as raw UTF-16 units.
-[[nodiscard]] bool WildcardMatch(std::wstring_view pattern,
-                                 std::wstring_view text);
-
 // What SelectFiles() chose.
 struct Selection {
   // Positions in the list, in list order, each once.
@@ -79,9 +75,11 @@ struct Selection {
 
 // Applies --all, --record and --name of args to files. A file is chosen when
 // any of them picks it. A --name pattern with a '\' or '/' in it is matched
-// against the whole path, otherwise against the name alone.
+// against the whole path, otherwise against the name alone. matcher decides
+// when two names are the same: it folds case through the volume's $UpCase.
 [[nodiscard]] Selection SelectFiles(const std::vector<DeletedFile>& files,
-                                    const Arguments& args);
+                                    const Arguments& args,
+                                    const NameMatcher& matcher);
 
 // Reads a list of numbers a user typed: "1,3 5-8" or "all". count is the
 // number of files listed. Returns the positions, from 0, in the order typed

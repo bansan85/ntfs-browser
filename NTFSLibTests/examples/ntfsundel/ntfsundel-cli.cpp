@@ -19,6 +19,7 @@
 
 #include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/example/ntfsundel/name-matcher.h>
 #include <ntfs-browser/example/ntfsundel/ntfsundel-cli.h>
 #include <ntfs-browser/example/ntfsundel/ntfsundel-core.h>
 #include <ntfs-browser/io/extended-path.h>
@@ -54,9 +55,6 @@ using NoCacheVolume = NtfsVolume<Cache::Strategy::NoCache>;
 // number is checked on its own.
 constexpr std::size_t max_position_digits = 9;
 
-// Highest unit of ASCII.
-constexpr wchar_t ascii_limit = 0x80;
-
 // What one recovery came to.
 enum class Outcome : std::uint8_t {
   // The file is in the output folder.
@@ -66,24 +64,6 @@ enum class Outcome : std::uint8_t {
   // The file was left out on purpose or could not be recovered.
   Failed
 };
-
-// Reports whether character is an ASCII letter in lower case.
-bool IsAsciiLower(wchar_t character) {
-  return character >= L'a' && character <= L'z';
-}
-
-// character with an ASCII letter in lower case. Every other unit is as it is.
-wchar_t FoldAscii(wchar_t character) {
-  return (character >= L'A' && character <= L'Z')
-             ? static_cast<wchar_t>(character - L'A' + L'a')
-             : character;
-}
-
-// Reports whether a and b are the same unit, ASCII letters apart from case.
-bool SameUnit(wchar_t a, wchar_t b) {
-  return a == b || (a < ascii_limit && b < ascii_limit &&
-                    IsAsciiLower(FoldAscii(a)) && FoldAscii(a) == FoldAscii(b));
-}
 
 // Parses text as a number of decimal digits. Nothing for an empty text, a
 // character that is no digit, or a value that does not fit.
@@ -192,15 +172,15 @@ bool ParseOwnOption(int argc, wchar_t* argv[], int& index, Arguments& args,
 }
 
 // Reports whether path is inside the folder inside, a path with '\' between
-// the parts and no end separator. Case does not count for ASCII letters. A
-// path with no folder part, or a path outside, is not inside.
-bool IsInsideFolder(std::wstring_view path, std::wstring_view inside) {
+// the parts and no end separator. Case does not count, as the volume has it.
+// A path with no folder part, or a path outside, is not inside.
+bool IsInsideFolder(std::wstring_view path, std::wstring_view inside,
+                    const NameMatcher& matcher) {
   if (inside.empty()) {
     return true;
   }
   const std::wstring prefix = L"\\" + std::wstring(inside) + L"\\";
-  return path.size() > prefix.size() &&
-         std::ranges::equal(path.substr(0, prefix.size()), prefix, SameUnit);
+  return path.size() > prefix.size() && matcher.StartsWith(path, prefix);
 }
 
 // The path of file with '/' written as '\', so one pattern fits both.
@@ -213,14 +193,15 @@ std::wstring BackslashPath(std::wstring_view path) {
 // Reports whether pattern selects file. A pattern with a separator is matched
 // against the path: from the root when it starts with one, else from any
 // folder. Any other pattern is matched against the name.
-bool PatternSelects(std::wstring_view pattern, const DeletedFile& file) {
+bool PatternSelects(std::wstring_view pattern, const DeletedFile& file,
+                    const NameMatcher& matcher) {
   if (pattern.find_first_of(L"\\/") == std::wstring_view::npos) {
-    return WildcardMatch(pattern, file.name);
+    return matcher.Matches(pattern, file.name);
   }
   const std::wstring wanted = BackslashPath(pattern);
   return wanted.starts_with(L'\\')
-             ? WildcardMatch(wanted, file.full_path)
-             : WildcardMatch(L"*\\" + wanted, file.full_path);
+             ? matcher.Matches(wanted, file.full_path)
+             : matcher.Matches(L"*\\" + wanted, file.full_path);
 }
 
 // Writes text to stream as UTF-8.
@@ -375,6 +356,7 @@ struct Listing {
 std::optional<Listing>
     BuildListing(NtfsVolume<Cache::Strategy::FullCache>& scan_volume,
                  NoCacheVolume& state_volume, std::wstring_view inside) {
+  const NameMatcher matcher(scan_volume.GetUpCaseTable());
   SearchControl control;
   if (!inside.empty()) {
     // The folder is applied after the scan, so the cut must not hide a match.
@@ -389,7 +371,7 @@ std::optional<Listing>
   Listing listing;
   listing.truncated = found->truncated;
   for (DeletedFile& file : found->files) {
-    if (!IsInsideFolder(file.full_path, inside)) {
+    if (!IsInsideFolder(file.full_path, inside, matcher)) {
       continue;
     }
     listing.states.push_back(DescribeFile(state_volume, file.reference));
@@ -446,9 +428,10 @@ std::string UsageText() {
       "  --all                recover every listed file\n"
       "  --record N           recover the file of MFT record N (repeatable)\n"
       "  --name PATTERN       recover the files whose name matches PATTERN,\n"
-      "                       with * and ?, ASCII letters without case\n"
-      "                       (repeatable). A pattern with a slash is matched\n"
-      "                       against the whole path.\n"
+      "                       with * and ?. Case does not count: letters of\n"
+      "                       any script are folded through the $UpCase table\n"
+      "                       of the volume. Repeatable. A pattern with a\n"
+      "                       slash is matched against the whole path.\n"
       "  With none of them and a terminal on input, the list is numbered and\n"
       "  the numbers to recover are read from the input.\n"
       "\n"
@@ -530,43 +513,16 @@ std::optional<Arguments> ParseArguments(int argc, wchar_t* argv[],
   return args;
 }
 
-bool WildcardMatch(std::wstring_view pattern, std::wstring_view text) {
-  std::size_t p = 0;
-  std::size_t t = 0;
-  // The last '*' met, and the text position it resumes from.
-  std::size_t star = std::wstring_view::npos;
-  std::size_t resume = 0;
-  while (t < text.size()) {
-    if (p < pattern.size() && pattern[p] == L'*') {
-      star = p++;
-      resume = t;
-    } else if (p < pattern.size() &&
-               (pattern[p] == L'?' || SameUnit(pattern[p], text[t]))) {
-      ++p;
-      ++t;
-    } else if (star != std::wstring_view::npos) {
-      p = star + 1;
-      t = ++resume;
-    } else {
-      return false;
-    }
-  }
-  while (p < pattern.size() && pattern[p] == L'*') {
-    ++p;
-  }
-  return p == pattern.size();
-}
-
 Selection SelectFiles(const std::vector<DeletedFile>& files,
-                      const Arguments& args) {
+                      const Arguments& args, const NameMatcher& matcher) {
   Selection selection;
   for (std::size_t i = 0; i < files.size(); i++) {
     const DeletedFile& file = files[i];
     const bool by_record =
         std::ranges::find(args.records, file.reference) != args.records.end();
     const bool by_name =
-        std::ranges::any_of(args.names, [&file](const std::wstring& pattern) {
-          return PatternSelects(pattern, file);
+        std::ranges::any_of(args.names, [&](const std::wstring& pattern) {
+          return PatternSelects(pattern, file, matcher);
         });
     if (args.all || by_record || by_name) {
       selection.positions.push_back(i);
@@ -766,7 +722,8 @@ int UndelTarget(const Arguments& args, const Environment& env) {
 
   std::vector<std::size_t> positions;
   if (args.HasSelection()) {
-    const Selection selection = SelectFiles(listing->files, args);
+    const NameMatcher matcher(scan.volume->GetUpCaseTable());
+    const Selection selection = SelectFiles(listing->files, args, matcher);
     for (const std::uint64_t record : selection.missing_records) {
       Say(env.err, std::format(L"Record {} is not in the list\n", record));
     }
