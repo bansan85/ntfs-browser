@@ -4,6 +4,7 @@
 
 #include <ntfs-browser/win-types.h>
 
+#include <array>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
@@ -43,6 +44,13 @@ constexpr std::uint64_t json_format = 1;
 // the fixture's run list holds for about 4000 slots.
 constexpr std::uint64_t default_records = 4000;
 constexpr std::uint64_t fragment_clusters = 250;
+
+// The shape "tree" of --shape, meant for --write-image, to measure a search on
+// names: 30 folders in each of 3 levels, 10 files in each of the last: 270 000
+// files.
+constexpr std::uint64_t default_tree_dirs = 30;
+constexpr std::uint64_t default_tree_levels = 3;
+constexpr std::uint64_t default_tree_files = 10;
 
 // Microseconds in a millisecond, and bytes in a megabyte (decimal, as the
 // disks are sold).
@@ -88,6 +96,56 @@ TestDiskReaders::DiskModel ModelFromArguments(const Arguments& args,
   return model;
 }
 
+// A tree of levels levels of folders: dirs folders under the root, dirs folders
+// in each of those, and so on. Each folder of the last level holds files files,
+// so dirs ^ levels * files files in all. A folder holds only a few dozen names,
+// so the shape grows by levels. The names cycle through four extensions and
+// the sizes (resident, so below 700) through a range, so that a pattern or a
+// size bound picks some of them.
+std::vector<BYTE> BuildTreeImage(std::uint64_t dirs, std::uint64_t levels,
+                                 std::uint64_t files) {
+  // Extensions the names cycle through, and the modulus and step of the sizes.
+  constexpr std::array<const wchar_t*, 4> extensions{L".txt", L".dll", L".log",
+                                                     L".dat"};
+  constexpr std::uint64_t size_modulus = 700;
+  constexpr std::uint64_t size_step = 37;
+  std::vector<TestFakeImage::FakeTreeNode> nodes;
+  // The node index of the first folder of the level before, and how many
+  // folders that level has.
+  std::uint64_t previous_first = 0;
+  std::uint64_t previous_count = 1;
+  for (std::uint64_t level = 0; level < levels; ++level) {
+    const std::uint64_t first = nodes.size();
+    const std::uint64_t count = previous_count * dirs;
+    for (std::uint64_t index = 0; index < count; ++index) {
+      TestFakeImage::FakeTreeNode node{
+          .links = {{.name = L"d" + std::to_wstring(index % dirs)}},
+          .directory = true};
+      if (level > 0) {
+        node.links.front().parent =
+            static_cast<std::size_t>(previous_first + (index / dirs));
+      }
+      nodes.push_back(std::move(node));
+    }
+    previous_first = first;
+    previous_count = count;
+  }
+  for (std::uint64_t leaf = 0; leaf < previous_count; ++leaf) {
+    for (std::uint64_t file = 0; file < files; ++file) {
+      const std::uint64_t number = (leaf * files) + file;
+      nodes.push_back(
+          {.links = {{.name = L"r" + std::to_wstring(leaf) + L"-" +
+                              std::to_wstring(file) +
+                              extensions.at(number % extensions.size()),
+                      .parent =
+                          static_cast<std::size_t>(previous_first + leaf)}},
+           .data_size =
+               static_cast<DWORD>((number * size_step) % size_modulus)});
+    }
+  }
+  return TestFakeImage::BuildFakeNtfsImageWithNameTree(nodes);
+}
+
 // Writes the image to the file named by path. False when it cannot be written.
 bool WriteImageFile(const std::string& path, const std::vector<BYTE>& image) {
   std::ofstream out(
@@ -124,6 +182,12 @@ int SimulateCommand(const Arguments& args) {
   bool malformed = false;
   const std::uint64_t records =
       args.Unsigned("records", default_records, malformed);
+  const std::uint64_t tree_dirs =
+      args.Unsigned("dirs", default_tree_dirs, malformed);
+  const std::uint64_t tree_levels =
+      args.Unsigned("levels", default_tree_levels, malformed);
+  const std::uint64_t tree_files =
+      args.Unsigned("files", default_tree_files, malformed);
   const std::string kind = args.Value("model").value_or("ssd");
   const TestDiskReaders::DiskModel model =
       ModelFromArguments(args, kind, malformed);
@@ -147,8 +211,11 @@ int SimulateCommand(const Arguments& args) {
 
   SilenceLibraryLog();
 
-  std::vector<BYTE> image = TestFakeImage::BuildFakeNtfsImageWithListMftScan(
-      records, fragment_clusters);
+  std::vector<BYTE> image =
+      args.Value("shape").value_or("list") == "tree"
+          ? BuildTreeImage(tree_dirs, tree_levels, tree_files)
+          : TestFakeImage::BuildFakeNtfsImageWithListMftScan(records,
+                                                             fragment_clusters);
   // The image as a file: a volume the tools open without a disk.
   if (const std::optional<std::string> path = args.Value("write-image")) {
     if (!WriteImageFile(*path, image)) {

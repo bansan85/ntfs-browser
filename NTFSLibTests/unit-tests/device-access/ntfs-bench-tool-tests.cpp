@@ -253,6 +253,27 @@ TEST_CASE("NtfsBench simulate --write-image writes a volume the tools open",
   CHECK_FALSE(listed.out.empty());
 }
 
+TEST_CASE("NtfsBench simulate --shape=tree writes a tree the scan counts",
+          "[device-access][ntfsbench][sample]") {
+  const TestDeviceAccess::TempDir dir;
+  const std::filesystem::path image = dir.Path() / "tree.img";
+
+  const SampleRun written =
+      RunBench({L"simulate", L"--shape=tree", L"--dirs=3", L"--levels=2",
+                L"--files=4", Option(L"--write-image", image)});
+
+  REQUIRE(written.exit_code == 0);
+  REQUIRE(std::filesystem::exists(image));
+  // 3 folders, 9 below them, and 4 files in each of those 9.
+  constexpr std::uint64_t expected = 3 + 9 + (9 * 4);
+  const SampleRun listed = TestMft::RunScanBench(
+      {L"--via-scan", L"--engine=fullcache", L"--recursive", image.wstring()});
+  CHECK(listed.exit_code == 0);
+  // The last column of the worker table is what the scan delivered.
+  CHECK_THAT(listed.out,
+             ContainsSubstring(std::to_string(expected) + "\n\nParallelism"));
+}
+
 TEST_CASE("NtfsBench knobs lists the tunable constants",
           "[device-access][ntfsbench][sample]") {
   const SampleRun run = RunBench({L"knobs"});
