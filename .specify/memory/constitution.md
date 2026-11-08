@@ -1,15 +1,20 @@
 <!--
 Sync Impact Report
-Version change: 1.3.0 -> 1.4.0 (MINOR: materially expanded guidance). Awaiting maintainer approval.
+Version change: 1.4.0 -> 1.5.0 (MINOR: materially expanded guidance). Awaiting maintainer approval.
+Modified sections: Principle III (fake image path, namespaces of test code). Technical Constraints
+(Search::Scan is the public entry point; the Linux and Windows-only executable lists; no MFC; the
+header layout and namespaces of tests, tools and examples).
+Reason: NtfsDir2 and NtfsMftList no longer exist. NtfsDir is built on Search::Scan. NtfsScanBench
+lists and benchmarks a volume. NtfsFuzzer is the only Windows-only executable.
+Templates: plan-template.md checked, no change needed.
+Previous: 1.3.0 -> 1.4.0 (MINOR: materially expanded guidance).
 Modified sections: Technical Constraints (public headers MUST NOT include spdlog, except
 include/ntfs-browser/log/spdlog-adapter.h, an opt-in header-only adapter to Log::ISink).
 Reason: consumers customize the log output, through sinks of their own or through their own spdlog
 logger.
 Previous: 1.2.0 -> 1.3.0 (MINOR: materially expanded guidance).
-Modified sections: Technical Constraints (NtfsDir and NtfsMftList MUST build with GCC on Linux;
-the Windows-only list names NtfsDir2, NtfsAttr, NtfsDump, NtfsUndel and NtfsFuzzer).
-Reason: NtfsDir and NtfsMftList run on Linux.
-Templates: plan-template.md checked, no change needed.
+Modified sections: Technical Constraints (NtfsDir and NtfsMftList MUST build with GCC on Linux).
+Reason: NtfsDir and NtfsMftList ran on Linux. Both names changed later, see 1.5.0.
 Previous: 1.1.0 -> 1.2.0 (MINOR: new rule, no function body in a header for a Strategy-only
 template).
 Previous: 1.0.0 -> 1.1.0 (MINOR: new MUST, no `friend` declaration).
@@ -47,8 +52,8 @@ Rationale: the disks this library reads are often damaged, and they are never tr
 
 Every behaviour MUST be covered by a Catch2 test.
 Coverage MUST stay high. A change that adds code without tests MUST NOT merge.
-Tests MUST NOT touch a real disk or device. They MUST use the synthetic images in
-`fake-ntfs-image.h`, or corpus image files reached through `RequireCorpusImage()` and `OpenCorpusImage()`.
+Tests MUST NOT touch a real disk or device. They MUST use the synthetic images built by
+`NTFSLibTests/tools/fake-image/` (`fake-ntfs-image.h`), or corpus image files reached through `RequireCorpusImage()` and `OpenCorpusImage()`.
 Corpus traces come from `NtfsFuzzGen`, which writes them into the build tree. No trace is committed.
 New test scaffolding SHOULD NOT be written when an existing fake disk reader can be extended.
 
@@ -73,10 +78,13 @@ Rationale: a clear scope keeps the parser auditable against the on-disk specific
 
 ## Technical Constraints
 
-- The primary target is C++20 with MSVC on Windows. The library, the unit tests, NtfsDir,
-  NtfsMftList, NtfsAttr, NtfsDump, NtfsUndel, NtfsCompare and NtfsFuzzerAfl MUST also build with
-  GCC on Linux.
-- Windows-only executables MUST be guarded with `if(WIN32)` in CMake. They are NtfsDir2 and NtfsFuzzer.
+- The primary target is C++20 with MSVC on Windows. The library, the unit tests, NtfsAttr, NtfsDump,
+  NtfsUndel, NtfsDir, NtfsScanBench, NtfsCompare, NtfsBench, NtfsFuzzGen and NtfsFuzzerAfl MUST also
+  build with GCC on Linux. The build has no MFC.
+- Windows-only executables MUST be guarded with `if(WIN32)` in CMake. NtfsFuzzer is the only one.
+- `Search::Scan` (`include/ntfs-browser/search/scan.h`) is the public entry point to list a folder or
+  a volume. NtfsDir is built on it. Its two public headers MUST include only the standard library,
+  `namespace.h` and `export.h`.
 - `include/`, `src/` and `NTFSLibTests/` MUST NOT contain a `friend` declaration. A class MUST get
   what it needs from another class through that class's methods, not through friendship.
   `.github/scripts/check-no-friend.py` enforces it in CI.
@@ -96,6 +104,9 @@ Rationale: a clear scope keeps the parser auditable against the on-disk specific
   An internal symbol that tests reach MUST carry `NTFS_BROWSER_EXPORT_TESTS_ONLY`.
 - Public types and functions MUST live in `NTFS_BROWSER_NAMESPACE`, in a sub-namespace per domain.
   Code MUST NOT spell out the namespace name.
+- A header that another test folder includes MUST live in
+  `<module>/include/ntfs-browser/{test,tool,example}/<module>/`, and CMake never installs it.
+  Test code lives in `Test::<Module>`, tools in `Tool::<Name>` and examples in `Example::<Name>`.
 - The library and its logging are single-threaded. `Log::Configure()`, `Log::SetSinks()` and every log message
   MUST run on one thread.
 - Every source file MUST be listed explicitly in its folder's `CMakeLists.txt`. Globbing MUST NOT be used.
@@ -136,4 +147,4 @@ PATCH for wording, typo fixes and clarifications that change no obligation.
 Development Workflow and Quality Gates. A violated MUST MUST be fixed, or justified in the
 pull request description. Complexity beyond what a principle requires MUST be justified in the same way.
 
-**Version**: 1.4.0 | **Ratified**: 2026-10-17 | **Last Amended**: 2026-10-20
+**Version**: 1.5.0 | **Ratified**: 2026-10-17 | **Last Amended**: 2026-11-08
