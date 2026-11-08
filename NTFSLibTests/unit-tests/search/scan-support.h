@@ -120,6 +120,26 @@ inline constexpr std::uint64_t reallocated_tail_clusters = 4;
 // of its own.
 [[nodiscard]] std::vector<BYTE> ReallocatedImage();
 
+// The time of the given day of FilterImage(): ticks of 2024-01-01 12:00 UTC
+// plus that many days. The days are far from the changes of summer time, so
+// every engine reads the same ticks back.
+[[nodiscard]] std::uint64_t FilterDay(std::uint32_t day);
+
+// Records and shapes that the filter tests rely on, under the root unless said
+// otherwise. A time is a FilterDay(). Names, record, size, allocated size,
+// attributes, created, modified, mft changed, accessed:
+//   Docs       16  folder, attribute directory, all times day 10
+//   small.txt  17  8, 8, archive, days 10, 40, 40, 100
+//   medium.log 18  100, 104, archive and hidden, days 40, 100, 100, 150
+//   big.dat    19  in Docs, 400, 400, read only, days 100, 150, 150, 200
+//   Sub        20  folder in Docs, hidden, all times day 150
+//   deep.txt   21  in Sub, 100, 104, archive and system, all times day 200
+//   link.txt   22  50, 56, no bit, all times day 250. Also link2.txt in Docs.
+//   gone.txt   23  deleted, 20, 24, archive, all times day 40
+//   temp.bin   24  4, 8, temporary and reparse point, all times day 5
+// The sizes in the index entries equal the ones of the records.
+[[nodiscard]] std::vector<BYTE> FilterImage();
+
 // The record number of the tree node with the given index.
 [[nodiscard]] constexpr std::uint64_t Record(std::size_t node) {
   return NTFS_BROWSER_NAMESPACE::Test::FakeImage::name_tree_first_record + node;

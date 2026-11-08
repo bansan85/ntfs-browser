@@ -201,6 +201,77 @@ std::vector<BYTE> NamesImage() {
   return Fake::BuildFakeNtfsImageWithNameTree(nodes);
 }
 
+std::uint64_t FilterDay(std::uint32_t day) {
+  // 2024-01-01 12:00:00 UTC, in seconds since 1970.
+  constexpr std::int64_t first_day_seconds = 1'704'110'400;
+  constexpr std::int64_t seconds_per_day = 86400;
+  return Lib::Date::FromUnixSeconds(first_day_seconds + (day * seconds_per_day))
+      .ticks;
+}
+
+std::vector<BYTE> FilterImage() {
+  using Fake::FakeTreeNode;
+  using Fake::FakeTreeTimes;
+  const auto times = [](std::uint32_t created, std::uint32_t modified,
+                        std::uint32_t mft_changed, std::uint32_t accessed) {
+    return FakeTreeTimes{.created = FilterDay(created),
+                         .modified = FilterDay(modified),
+                         .mft_changed = FilterDay(mft_changed),
+                         .accessed = FilterDay(accessed)};
+  };
+  const auto same = [&times](std::uint32_t day) {
+    return times(day, day, day, day);
+  };
+  // A file of size bytes, allocated alloc, with the sizes of its index entries
+  // equal to them.
+  const auto file = [](std::wstring name, std::size_t parent, DWORD size,
+                       ULONGLONG alloc, DWORD attributes, FakeTreeTimes when) {
+    return FakeTreeNode{.links = {{.name = std::move(name), .parent = parent}},
+                        .data_size = size,
+                        .index_size = size,
+                        .index_allocated_size = alloc,
+                        .attributes = attributes,
+                        .times = when};
+  };
+  // The nodes that others are filed under: Docs, and Sub in it.
+  constexpr std::size_t docs = 0;
+  constexpr std::size_t sub = 4;
+  std::vector<FakeTreeNode> nodes;
+  nodes.push_back({.links = {{.name = L"Docs"}},
+                   .directory = true,
+                   .attributes = Lib::Attribute::directory,
+                   .times = same(10)});
+  nodes.push_back(file(L"small.txt", Fake::name_tree_root, 8, 8,
+                       Lib::Attribute::archive, times(10, 40, 40, 100)));
+  nodes.push_back(file(L"medium.log", Fake::name_tree_root, 100, 104,
+                       Lib::Attribute::archive | Lib::Attribute::hidden,
+                       times(40, 100, 100, 150)));
+  nodes.push_back(file(L"big.dat", docs, 400, 400, Lib::Attribute::read_only,
+                       times(100, 150, 150, 200)));
+  nodes.push_back({.links = {{.name = L"Sub", .parent = docs}},
+                   .directory = true,
+                   .attributes = Lib::Attribute::hidden,
+                   .times = same(150)});
+  nodes.push_back(file(L"deep.txt", sub, 100, 104,
+                       Lib::Attribute::archive | Lib::Attribute::system,
+                       same(200)));
+  nodes.push_back(
+      {.links = {{.name = L"link.txt"}, {.name = L"link2.txt", .parent = docs}},
+       .data_size = 50,
+       .index_size = 50,
+       .index_allocated_size = 56,
+       .times = same(250)});
+  FakeTreeNode gone = file(L"gone.txt", Fake::name_tree_root, 20, 24,
+                           Lib::Attribute::archive, same(40));
+  gone.in_use = false;
+  gone.keep_entries = true;
+  nodes.push_back(std::move(gone));
+  nodes.push_back(
+      file(L"temp.bin", Fake::name_tree_root, 4, 8,
+           Lib::Attribute::temporary | Lib::Attribute::reparse_point, same(5)));
+  return Fake::BuildFakeNtfsImageWithNameTree(nodes);
+}
+
 std::vector<BYTE> ReallocatedImage() {
   using Fake::FakeDataRun;
   using Fake::FakeTreeNode;
@@ -218,10 +289,12 @@ std::vector<BYTE> ReallocatedImage() {
                      .stream_size = 2ULL * Fake::fake_cluster_size});
     nodes.push_back({.links = {{.name = L"old.bin"}},
                      .in_use = false,
+                     .keep_entries = true,
                      .runs = stream(0, 2),
                      .stream_size = 2ULL * Fake::fake_cluster_size});
     nodes.push_back({.links = {{.name = L"free.bin"}},
                      .in_use = false,
+                     .keep_entries = true,
                      .runs = stream(2, 1),
                      .stream_size = Fake::fake_cluster_size});
     return Fake::BuildFakeNtfsImageWithNameTree(nodes);

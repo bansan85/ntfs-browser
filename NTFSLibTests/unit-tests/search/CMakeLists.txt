@@ -5,6 +5,7 @@ target_sources(
     "name-matcher-tests.cpp"
     "scan-directory-tests.cpp"
     "scan-fake-engine.h"
+    "scan-filter-tests.cpp"
     "scan-mft-list-tests.cpp"
     "scan-pattern-tests.cpp"
     "scan-poll-tests.cpp"
