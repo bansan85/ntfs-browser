@@ -195,33 +195,34 @@ Each public class and function is described in the headers under `include/ntfs-b
 
 ## Changelog
 
-- 2022-08 — Import of the CodeProject [An NTFS Parser Lib](https://www.codeproject.com/Articles/81456/An-NTFS-Parser-Lib), without changes
-- 2022-08 — First C++ cleanup, CMake build, CI with clang-format and clang-tidy
-- 2022-09 — Disk read cache (`FULL_CACHE`) and first unit tests
-- 2023-10 — Portability fixes: shared library on Windows, clang-cl, `Cache::Strategy` as template parameter
-- 2023-11 — Full path support
-- 2023-11 → 2026-08 — Pause, no commits
-- 2026-08 — Start of work with Claude Code: bug fixes and new features from here on
-- 2026-09 — Hardening against corrupted volumes
-- 2026-09 — AFL fuzzer and Linux port
-- 2026-09 — Deleted files recovery
-- 2026-09 — Damaged data recovery
-- 2026-09 — LZNT1 decompression
-- 2026-09 — EFS decryption (AES, 3DES, DESX)
-- 2026-09 — Integration tests on forensic images, `NtfsCompare` metadata cross-check
-- 2026-10 — Sanitizer builds and 32-bit builds
-- 2026-10 — Static analysis fixes and refactoring, namespaces
-- 2026-10 — Bounded `FullCache` memory
-- 2026-10 — Faster `$MFT` reads and optional read-ahead
-- 2026-10 — `NtfsDir` and `NtfsMftList` (now `NtfsScanBench`) run on Linux, on a device or an image file
-- 2026-10 — Custom log destinations and an opt-in spdlog adapter
-- 2026-10 — Cluster allocation from `$Bitmap`
-- 2026-10 — Bad clusters from `$BadClus`
-- 2026-10 — Change journal (`$UsnJrnl`) in recovery mode
-- 2026-11 — `NtfsAttr`, `NtfsDump` and `NtfsUndel` are console tools on Windows and Linux, MFC is gone from the build
-- 2026-11 — `NtfsFuzzGen` builds the fuzz inputs and the corpus traces from code at build time, so no fuzz data is committed and the read order of the library is free
-- 2026-11 — Non-blocking scan of a folder or a volume that reports the files found about every 100 ms, with three ways to walk the volume, search by name, wildcard or regular expression (optional PCRE2), and filters on every field
-- 2026-11 — `NtfsScanBench` replaces `NtfsMftList` and times the three ways to list a volume (`mftlist`, `nocache`, `fullcache`), alone or side by side with `--engine=all`
+- 2022-08: Import of the CodeProject [An NTFS Parser Lib](https://www.codeproject.com/Articles/81456/An-NTFS-Parser-Lib), without changes
+- 2022-08: First C++ cleanup, CMake build, CI with clang-format and clang-tidy
+- 2022-09: Disk read cache (`FULL_CACHE`) and first unit tests
+- 2023-10: Portability fixes for the shared library on Windows and clang-cl, `Cache::Strategy` as template parameter
+- 2023-11: Full path support
+- 2023-11 to 2026-08: Pause, no commits
+- 2026-08: Start of work with Claude Code, with bug fixes and new features from here on
+- 2026-09: Hardening against corrupted volumes
+- 2026-09: AFL fuzzer and Linux port
+- 2026-09: Deleted files recovery
+- 2026-09: Damaged data recovery
+- 2026-09: LZNT1 decompression
+- 2026-09: EFS decryption (AES, 3DES, DESX)
+- 2026-09: Integration tests on forensic images, `NtfsCompare` metadata cross-check
+- 2026-10: Sanitizer builds and 32-bit builds
+- 2026-10: Static analysis fixes and refactoring, namespaces
+- 2026-10: Bounded `FullCache` memory
+- 2026-10: Faster `$MFT` reads and optional read-ahead
+- 2026-10: `NtfsDir` and the volume lister (now `NtfsScanBench`) run on Linux, on a device or an image file
+- 2026-10: Custom log destinations and an opt-in spdlog adapter
+- 2026-10: Cluster allocation from `$Bitmap`
+- 2026-10: Bad clusters from `$BadClus`
+- 2026-10: Change journal (`$UsnJrnl`) in recovery mode
+- 2026-11: `NtfsAttr`, `NtfsDump` and `NtfsUndel` are console tools on Windows and Linux. MFC is gone from the build
+- 2026-11: `NtfsFuzzGen` builds the fuzz inputs and the corpus traces from code at build time. No fuzz data is committed, and the library is free to change its read order
+- 2026-11: `Search::Scan` lists a folder or a volume without blocking. A worker thread finds the files. The caller polls about every 100 ms, or calls `Run()` to poll until the end. Three engines walk the volume. A scan searches by name, wildcard or regular expression (optional PCRE2) and filters on every field
+- 2026-11: `NtfsDir` is built on `Search::Scan` and takes `--engine=` to pick the engine
+- 2026-11: `NtfsScanBench` replaces `NtfsMftList`. It times the three engines (`mftlist`, `nocache`, `fullcache`), alone or side by side with `--engine=all`. `--via-scan` times a run through `Search::Scan` and reports its critical path
 
 ## Credits and licence
 
