@@ -2211,6 +2211,17 @@ void SetRecordLsn(std::vector<BYTE>& image, ULONGLONG idx, ULONGLONG lsn);
 // A tree of names: BuildFakeNtfsImageWithNameTree()
 ////////////////////////////////////////////////////////////////////////////
 
+// $STANDARD_INFORMATION timestamps of every record the builders write, in UTC
+// ticks. The bytes of each are all distinct, so a misplaced field cannot match
+// by accident.
+inline constexpr ULONGLONG std_info_create_time = 0x0102030405060708ULL;
+
+inline constexpr ULONGLONG std_info_alter_time = 0x1112131415161718ULL;
+
+inline constexpr ULONGLONG std_info_mft_time = 0x2122232425262728ULL;
+
+inline constexpr ULONGLONG std_info_read_time = 0x3132333435363738ULL;
+
 // MFT record of the first node BuildFakeNtfsImageWithNameTree() writes. The
 // others follow, one record each.
 inline constexpr ULONGLONG name_tree_first_record = 16;

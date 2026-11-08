@@ -79,16 +79,6 @@ inline constexpr BYTE run_header1_lcn_bytes = 0x11;
 // Alignment the readers need to bind structs onto a record.
 inline constexpr size_t record_alignment = 8;
 
-// $STANDARD_INFORMATION timestamps whose bytes are all distinct, so a
-// misplaced field cannot match by accident.
-inline constexpr ULONGLONG std_info_create_time = 0x0102030405060708ULL;
-
-inline constexpr ULONGLONG std_info_alter_time = 0x1112131415161718ULL;
-
-inline constexpr ULONGLONG std_info_mft_time = 0x2122232425262728ULL;
-
-inline constexpr ULONGLONG std_info_read_time = 0x3132333435363738ULL;
-
 // The file reference of the first fake index entry.
 inline constexpr DWORD first_entry_record = 20;
 
