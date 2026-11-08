@@ -28,6 +28,7 @@ struct Date {
   // Seconds from 1601-01-01 to 1970-01-01, the Unix epoch.
   static constexpr std::uint64_t unix_epoch_seconds = 11'644'473'600;
 
+  // Whether the volume holds a time. False for 0.
   [[nodiscard]] constexpr bool IsSet() const noexcept { return ticks != 0; }
 
   // Seconds since 1970-01-01 UTC, rounded down. Negative before 1970.
@@ -71,19 +72,35 @@ enum class EngineKind : std::uint8_t {
 // with its own.
 namespace Attribute {
 
+// The content cannot be changed.
 inline constexpr std::uint32_t read_only = 0x0001;
+// Left out of a normal listing.
 inline constexpr std::uint32_t hidden = 0x0002;
+// Used by the operating system.
 inline constexpr std::uint32_t system = 0x0004;
+// The entry is a folder.
 inline constexpr std::uint32_t directory = 0x0010;
+// Marked for backup.
 inline constexpr std::uint32_t archive = 0x0020;
+// Reserved by Windows. Only the directory engines see it.
 inline constexpr std::uint32_t device = 0x0040;
+// No other attribute is set. Only the directory engines see it.
 inline constexpr std::uint32_t normal = 0x0080;
+// Kept in memory when possible, and deleted soon. Only the directory engines
+// see it.
 inline constexpr std::uint32_t temporary = 0x0100;
+// The content has holes that take no space.
 inline constexpr std::uint32_t sparse = 0x0200;
+// A link, a mount point or another reparse tag. Only the directory engines see
+// it.
 inline constexpr std::uint32_t reparse_point = 0x0400;
+// The content is stored compressed.
 inline constexpr std::uint32_t compressed = 0x0800;
+// The content lives on slow storage. Only the directory engines see it.
 inline constexpr std::uint32_t offline = 0x1000;
+// Left out of the content index. Only the directory engines see it.
 inline constexpr std::uint32_t not_content_indexed = 0x2000;
+// The content is encrypted (EFS).
 inline constexpr std::uint32_t encrypted = 0x4000;
 
 }  // namespace Attribute
@@ -123,23 +140,44 @@ enum class DataState : std::uint8_t {
 // The condition of one cluster of a file. Same meaning and same values as the
 // library's cluster accounting (a cluster has exactly one value).
 enum class ClusterCondition : std::uint8_t {
+  // The run has no usable cluster address. The clusters it declares are counted
+  // here.
   Invalid,
+  // Listed as bad by the volume.
   Bad,
+  // Past the valid data of the stream: never written, reads as zeros.
   NeverWritten,
+  // Taken by another live file, inside its valid data: the content is lost.
   ReallocatedWritten,
+  // Taken by another live file, beyond its valid data: the old content is
+  // probably still there.
   ReallocatedUnwritten,
+  // Taken by another deleted file that was deleted later.
   OverwrittenThenFreed,
+  // Taken by another deleted file, and nothing tells which one came last.
   Contested,
+  // Marked in use by the volume, but no file the scan read claims it.
   AllocatedUnknownOwner,
+  // The volume cannot say.
   Unknown,
+  // Free, claimed by no other file, not bad: probably intact.
   Intact,
+  // Intact, in a compressed stream whose unit holds a cluster in another state:
+  // the unit no longer decompresses.
   LostWithUnit,
+  // Live file: in use, and claimed by this file only.
   Consistent,
+  // Live file: the volume says the cluster is free.
   FreeButClaimed,
+  // Live file: another live file claims it too.
   CrossLinked,
+  // A hole of a sparse stream. Not a cluster on the disk.
   Sparse,
+  // Probably intact, but the content reads all zeros.
   Zeroed,
+  // Probably intact, but NTFS reused it for its own metadata.
   OverwrittenByMetadata,
+  // Probably intact, and the content looks like data.
   IntactChecked
 };
 
@@ -232,8 +270,7 @@ enum class PatternKind : std::uint8_t {
 // What a Pattern is compared with.
 enum class MatchTarget : std::uint8_t {
   // The file name alone ("report.txt"). A record with hard links gives one
-  // entry
-  // for each of its names, and each name is tested on its own.
+  // entry for each of its names, and each name is tested on its own.
   Name,
   // The full path of the entry ("\Docs\report.txt"), as Entry::path holds it.
   // The scan then builds the path whatever Options::full_path says, and every

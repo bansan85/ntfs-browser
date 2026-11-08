@@ -76,10 +76,9 @@
 // that does not open, a pattern or a filter that cannot be used (a regular
 // expression that does not compile, or one when the library has no regex
 // support, a range with its minimum above its maximum, a field that the engine
-// does not give), a damaged
-// folder or an unreadable record goes to the library log (Log::Error,
-// Log::Warn). An exception in the worker is caught, logged, and ends the scan
-// as Failed. GetState() tells that the scan failed.
+// does not give), a damaged folder or an unreadable record goes to the library
+// log (Log::Error, Log::Warn). An exception in the worker is caught, logged,
+// and ends the scan as Failed. GetState() tells that the scan failed.
 
 #include <functional>
 #include <memory>
@@ -95,6 +94,16 @@ namespace NTFS_BROWSER_NAMESPACE::Search {
 // on. A scan with a regular expression ends as Failed when it returns false.
 [[nodiscard]] NTFS_BROWSER_EXPORT bool RegexAvailable() noexcept;
 
+// MSVC warns (C4251, at /W4) that the exported class holds a std::unique_ptr
+// of a type it does not export. The member is private and Impl is never seen
+// by a client, so the warning has nothing to tell.
+#ifdef _MSC_VER
+  #pragma warning(push)
+  #pragma warning(disable : 4251)
+#endif
+
+// A scan of one NTFS volume or folder, run on a worker thread of its own. One
+// object scans once. See the top of this file for the use and the rules.
 class NTFS_BROWSER_EXPORT Scan {
  public:
   // Receives the entries found since the previous call of Poll(). Called by
@@ -133,11 +142,13 @@ class NTFS_BROWSER_EXPORT Scan {
   // end of the scan, which always gets a batch with last set.
   State Poll();
 
-  // Asks the worker to stop. Returns at once. The next Poll() calls deliver
-  // what was found and the last of them ends with the state Cancelled. Does
-  // nothing once the scan is over.
+  // Asks the worker to stop. Returns at once. The next calls of Poll() deliver
+  // what was found, and the last batch ends the scan with the state Cancelled.
+  // Does nothing once the scan is over.
   void Cancel() noexcept;
 
+  // The state of the scan. It stays Running until the Poll() that delivers the
+  // last batch, then becomes Finished, Cancelled or Failed.
   [[nodiscard]] State GetState() const noexcept;
 
   // Whether the scan is over: Finished, Cancelled or Failed, and the last
@@ -147,5 +158,9 @@ class NTFS_BROWSER_EXPORT Scan {
   // Where the scan stands, as of the last Poll().
   [[nodiscard]] Progress GetProgress() const noexcept;
 };  // Scan
+
+#ifdef _MSC_VER
+  #pragma warning(pop)
+#endif
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Search
