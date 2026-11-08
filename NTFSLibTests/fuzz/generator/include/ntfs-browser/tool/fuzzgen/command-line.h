@@ -21,12 +21,19 @@ struct Options {
     // --out DIR: write the files under DIR.
     Out,
     // --verify DIR: compare the files with the ones under DIR.
-    Verify
+    Verify,
+    // --predict LAYERS INTERVALS OUT: write what the layers file gives for the
+    // byte ranges of the intervals file. For the tool that makes the residue.
+    Predict
   };
 
   Mode mode = Mode::Help;
   // The folder of --out or --verify.
   std::filesystem::path folder;
+  // The layers file, the intervals file and the output file of --predict.
+  std::filesystem::path layers;
+  std::filesystem::path intervals;
+  std::filesystem::path output;
   // The folder of the extracted resource archives (--resources).
   std::filesystem::path resources;
   // The scenarios named by --only. Empty means all of them.

@@ -2,13 +2,21 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <exception>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <ostream>
 #include <set>
+#include <span>
+#include <stdexcept>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <vector>
+
+#include <gsl/narrow>
 
 #include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
@@ -19,6 +27,7 @@
 #include <ntfs-browser/tool/fuzzgen/resource-locator.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
 #include <ntfs-browser/tool/fuzzgen/scenario.h>
+#include <ntfs-browser/tool/fuzzgen/sparse-image.h>
 #include <ntfs-browser/tool/fuzzgen/stream-comparator.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
@@ -31,6 +40,9 @@ int GeneratorApp::Run(const Options& options) const {
   if (options.mode == Options::Mode::Help) {
     CommandLine::Usage(*err_);
     return 1;
+  }
+  if (options.mode == Options::Mode::Predict) {
+    return Predict(options);
   }
   std::vector<const Scenario*> selected;
   if (!Select(options, selected)) {
@@ -45,9 +57,45 @@ int GeneratorApp::Run(const Options& options) const {
     case Options::Mode::Verify:
       return Verify(options, selected);
     case Options::Mode::Help:
+    case Options::Mode::Predict:
       break;
   }
   return 1;
+}
+
+int GeneratorApp::Predict(const Options& options) const {
+  try {
+    const ResourceLocator resources(options.resources);
+    std::ifstream layers_file(options.layers, std::ios::binary);
+    if (!layers_file) {
+      throw std::runtime_error("cannot read " + options.layers.string());
+    }
+    const std::string layers((std::istreambuf_iterator<char>(layers_file)),
+                             std::istreambuf_iterator<char>());
+    const SparseImage image =
+        SparseImage::Load(layers, {}, [&resources](std::string_view name) {
+          return resources.Read(name);
+        });
+
+    std::ifstream intervals(options.intervals);
+    if (!intervals) {
+      throw std::runtime_error("cannot read " + options.intervals.string());
+    }
+    std::vector<BYTE> predicted;
+    ULONGLONG start = 0;
+    ULONGLONG end = 0;
+    while (intervals >> start >> end) {
+      const std::size_t before = predicted.size();
+      predicted.resize(before + gsl::narrow<std::size_t>(end - start));
+      image.Read(start, std::span<BYTE>(predicted).subspan(before));
+    }
+    const ByteWriter writer(options.output.parent_path());
+    writer.Write(options.output.filename().generic_string(), predicted);
+  } catch (const std::exception& error) {
+    *err_ << error.what() << "\n";
+    return 1;
+  }
+  return 0;
 }
 
 bool GeneratorApp::Select(const Options& options,

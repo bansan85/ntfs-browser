@@ -56,6 +56,22 @@ std::optional<Options>
       ok = set_mode(Options::Mode::Out, index);
     } else if (arg == "--verify") {
       ok = set_mode(Options::Mode::Verify, index);
+    } else if (arg == "--predict") {
+      if (options.mode != Options::Mode::Help) {
+        err << "only one of --list, --out, --verify and --predict is "
+               "allowed\n";
+        return std::nullopt;
+      }
+      constexpr std::size_t predict_operands = 3;
+      if (index + predict_operands >= args.size()) {
+        err << "--predict needs a layers file, an intervals file and an "
+               "output file\n";
+        return std::nullopt;
+      }
+      options.mode = Options::Mode::Predict;
+      options.layers = args[++index];
+      options.intervals = args[++index];
+      options.output = args[++index];
     } else if (arg == "--resources") {
       if (index + 1 >= args.size()) {
         err << "--resources needs a folder\n";
@@ -88,6 +104,8 @@ void CommandLine::Usage(std::ostream& out) {
          "  --out DIR    write the generated files under DIR\n"
          "  --verify DIR compare the generated files with the ones under DIR\n"
          "               (exit 1 if one differs or is missing)\n"
+         "  --predict    write the bytes that a layers file gives for the\n"
+         "               ranges of an intervals file (lines \"START END\")\n"
          "  --only NAME  restrict the run to the named scenarios\n"
          "  --resources  the folder of the extracted resource archives\n";
 }

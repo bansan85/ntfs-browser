@@ -28,6 +28,10 @@ class GeneratorApp {
   [[nodiscard]] bool Select(const Options& options,
                             std::vector<const Scenario*>& selected) const;
 
+  // Writes the bytes that the layers file of options gives for each range of
+  // the intervals file. Returns the exit code.
+  [[nodiscard]] int Predict(const Options& options) const;
+
   // Prints the name of each scenario, sorted.
   void List(const std::vector<const Scenario*>& selected) const;
 
