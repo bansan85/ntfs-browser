@@ -21,4 +21,9 @@ void UtcToLocalFileTime(ULONGLONG utc, FILETIME& local) noexcept {
   local.dwHighDateTime = static_cast<DWORD>(utc >> dword_bits);
 }
 
+ULONGLONG LocalToUtcTicks(const FILETIME& local) noexcept {
+  return (static_cast<ULONGLONG>(local.dwHighDateTime) << dword_bits) |
+         local.dwLowDateTime;
+}
+
 }  // namespace NTFS_BROWSER_NAMESPACE::Util
