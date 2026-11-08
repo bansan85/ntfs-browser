@@ -142,7 +142,8 @@ struct Report {
   // Events kept in the log, and those dropped past the cap.
   std::uint64_t events_logged{0};
   std::uint64_t events_dropped{0};
-  // CPU time of the whole process, and of the main thread.
+  // CPU time of the whole process from Start() to Stop(), and of the main
+  // thread.
   std::uint64_t process_user_ns{0};
   std::uint64_t process_kernel_ns{0};
   std::vector<PhaseStat> phases;

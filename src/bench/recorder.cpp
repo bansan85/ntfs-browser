@@ -72,6 +72,9 @@ struct State {
   std::uint64_t start_unix_ns{0};
   std::uint64_t main_user_begin{0};
   std::uint64_t main_kernel_begin{0};
+  // CPU time of the process at Start(): the report counts from there.
+  std::uint64_t process_user_begin{0};
+  std::uint64_t process_kernel_begin{0};
   SessionOptions options;
   Report report;
   ReadLog log;
@@ -454,6 +457,8 @@ void Start(const SessionOptions& options) {
   state.report.start_unix_ns = state.start_unix_ns;
   state.log.start_unix_ns = state.start_unix_ns;
   std::tie(state.main_user_begin, state.main_kernel_begin) = ThreadTimes();
+  std::tie(state.process_user_begin, state.process_kernel_begin) =
+      ProcessTimes();
   if (options.keep_log) {
     state.log.events.reserve(
         (std::min)(options.max_events, std::size_t{1} << 16U));
@@ -486,8 +491,8 @@ Report Stop() {
   }
 
   const auto [user, kernel] = ProcessTimes();
-  report.process_user_ns = user;
-  report.process_kernel_ns = kernel;
+  report.process_user_ns = user - state.process_user_begin;
+  report.process_kernel_ns = kernel - state.process_kernel_begin;
   const auto [thread_user, thread_kernel] = ThreadTimes();
   report.threads.push_back(
       {.role = ThreadRole::Main,
