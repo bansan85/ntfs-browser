@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <bit>
 #include <cstddef>
+#include <cstring>
 #include <limits>
 #include <optional>
 #include <span>
@@ -357,6 +358,7 @@ BootSectorParse ParseBootSector(std::span<const BYTE> boot_sector,
         bpb.total_sectors == 0
             ? 0
             : VolumeBytes(bpb, parse.geometry) / parse.geometry.cluster_size;
+    std::memcpy(&parse.geometry.serial, bpb.volume_sn, sizeof(bpb.volume_sn));
   }
   return parse;
 }

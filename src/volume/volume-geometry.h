@@ -30,6 +30,9 @@ struct Geometry {
   // cluster size. 0 when the count is null, which only recover mode accepts, or
   // when the parse is rejected.
   ULONGLONG cluster_count{0};
+  // The volume serial number of the boot sector, as 64 bits. 0 when the parse
+  // is rejected.
+  ULONGLONG serial{0};
 };
 
 // Result of ParseBootSector(). geometry keeps every field decoded before the

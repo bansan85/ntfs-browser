@@ -178,6 +178,7 @@ class DirectoryWalk {
          attribute_bits) |
         (entry.is_directory ? Attribute::directory : 0U);
     entry.standing = standing;
+    entry.volume = volume_.GetSerialNumber();
     return entry;
   }
 

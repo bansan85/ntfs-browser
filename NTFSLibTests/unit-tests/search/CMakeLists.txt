@@ -3,6 +3,12 @@ target_sources(
   PRIVATE
     "entry-buffer-tests.cpp"
     "name-matcher-tests.cpp"
+    "reader-attribute-tests.cpp"
+    "reader-content-tests.cpp"
+    "reader-handle-tests.cpp"
+    "reader-special-tests.cpp"
+    "reader-support.cpp"
+    "reader-support.h"
     "scan-directory-tests.cpp"
     "scan-fake-engine.h"
     "scan-filter-tests.cpp"

@@ -82,6 +82,9 @@ class NTFS_BROWSER_EXPORT NtfsVolume {
   [[nodiscard]] DWORD GetFileRecordSize() const noexcept;
   [[nodiscard]] DWORD GetIndexBlockSize() const noexcept;
   [[nodiscard]] ULONGLONG GetMFTAddr() const noexcept;
+  // The volume serial number of the boot sector, as 64 bits. It tells two
+  // volumes apart: a copy of a volume keeps it.
+  [[nodiscard]] ULONGLONG GetSerialNumber() const noexcept;
 
   [[nodiscard]] std::span<BYTE> GetClusterBuffer() const noexcept;
 

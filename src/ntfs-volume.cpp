@@ -253,6 +253,11 @@ ULONGLONG NtfsVolume<S>::GetMFTAddr() const noexcept {
 }
 
 template <Cache::Strategy S>
+ULONGLONG NtfsVolume<S>::GetSerialNumber() const noexcept {
+  return impl_->geometry.serial;
+}
+
+template <Cache::Strategy S>
 std::span<BYTE> NtfsVolume<S>::GetClusterBuffer() const noexcept {
   return {impl_->cluster_buffer.data(), impl_->cluster_buffer.size()};
 }

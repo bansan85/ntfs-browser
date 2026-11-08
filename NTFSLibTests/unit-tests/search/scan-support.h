@@ -59,6 +59,7 @@ struct Row {
   NTFS_BROWSER_NAMESPACE::Search::DataState data_state{
       NTFS_BROWSER_NAMESPACE::Search::DataState::NotChecked};
   bool has_clusters{false};
+  NTFS_BROWSER_NAMESPACE::Search::Handle handle;
 
   [[nodiscard]] bool operator==(const Row&) const = default;
 };

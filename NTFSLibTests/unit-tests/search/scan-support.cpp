@@ -48,7 +48,8 @@ Row RowOf(const Lib::Entry& entry) {
           .standing = entry.standing,
           .link_count = entry.link_count,
           .data_state = entry.data_state,
-          .has_clusters = entry.clusters != nullptr};
+          .has_clusters = entry.clusters != nullptr,
+          .handle = entry.GetHandle()};
 }
 
 }  // namespace

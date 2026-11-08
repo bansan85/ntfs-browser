@@ -197,6 +197,43 @@ struct ClusterSummary {
   }
 };
 
+// The stable name of one file on one volume, as a Scan gives it and as a Reader
+// takes it. It is plain values: copy it, keep it after the callback that gave
+// it, store it. It holds no view and no pointer.
+//
+// A handle names a record of the $MFT at one moment of its life: the record
+// number and the times the record was reused (the sequence number). It also
+// names which of the names of the record the entry came from. A Reader checks
+// the record against the handle and fails when the record is another file's
+// now, or is gone. A handle only means something for the volume that gave it:
+// the volume serial number is part of it, and a Reader of another volume
+// refuses it.
+struct Handle {
+  // The value of name_index when the engine did not know which name of the
+  // record the entry came from. The directory engines see one name at a time
+  // and do not read the record.
+  static constexpr std::uint16_t unknown_name = 0xFFFF;
+
+  // $MFT record number of the file.
+  std::uint64_t record{0};
+  // The sequence number the record had when the entry was made. 0 accepts any.
+  std::uint16_t sequence{0};
+  // Position of the name among the $FILE_NAME attributes of the record that
+  // have a name, in the order of the record, DOS aliases included. See
+  // Reader::GetFileNames(). unknown_name when the engine did not know.
+  std::uint16_t name_index{unknown_name};
+  // The directory this name is filed under. With unknown_name it picks the name
+  // of the record that is filed under that directory.
+  std::uint64_t parent_record{0};
+  // Whether the entry named a deleted file. A record that is in use again is
+  // then another file: the Reader refuses the handle.
+  bool deleted{false};
+  // The serial number of the volume, from its boot sector.
+  std::uint64_t volume{0};
+
+  [[nodiscard]] constexpr bool operator==(const Handle&) const = default;
+};
+
 // One file or directory that a scan found. Every view in it points into a
 // buffer that the Scan owns: it is valid only during the callback that
 // received it. Copy what you keep.
@@ -246,10 +283,27 @@ struct Entry {
   // out. The directory engines never do: they only give data_state.
   const ClusterSummary* clusters{nullptr};
 
+  // Which $FILE_NAME of the record this entry is: see Handle::name_index. Only
+  // the MftList engine knows. Handle::unknown_name for the others.
+  std::uint16_t name_index{Handle::unknown_name};
+  // The serial number of the volume the entry comes from.
+  std::uint64_t volume{0};
+
   // Whether the entry names a deleted file: a freed record, or a record that
   // another file reused.
   [[nodiscard]] constexpr bool IsDeleted() const noexcept {
     return standing == Standing::Deleted || standing == Standing::Reused;
+  }
+
+  // The stable name of this entry, which a Reader takes. Plain values: it stays
+  // good after the views of the entry are gone.
+  [[nodiscard]] constexpr Handle GetHandle() const noexcept {
+    return {.record = record,
+            .sequence = sequence,
+            .name_index = name_index,
+            .parent_record = parent_record,
+            .deleted = IsDeleted(),
+            .volume = volume};
   }
 };
 

@@ -232,8 +232,12 @@ std::optional<ULONGLONG>
 class TreeListing {
  public:
   TreeListing(const Mft::MftTree& tree, const Options& options, EntrySink& sink,
-              std::stop_token stop)
-      : tree_(tree), options_(options), sink_(sink), stop_(std::move(stop)) {}
+              std::stop_token stop, std::uint64_t volume_serial)
+      : tree_(tree),
+        options_(options),
+        sink_(sink),
+        stop_(std::move(stop)),
+        volume_serial_(volume_serial) {}
 
   // Lists the records of the tree, in record order. With a filter, only the
   // names it accepts.
@@ -268,6 +272,7 @@ class TreeListing {
         continue;
       }
       Entry entry = Describe(record, name, links);
+      entry.name_index = static_cast<std::uint16_t>(i);
       if (deleted) {
         entry.standing = Standing::Deleted;
         if (options_.deleted_data_state && record.data_state) {
@@ -303,6 +308,7 @@ class TreeListing {
     entry.attributes = AttributesOf(record);
     entry.is_directory = record.directory;
     entry.link_count = links;
+    entry.volume = volume_serial_;
     return entry;
   }
 
@@ -323,6 +329,7 @@ class TreeListing {
   const Options& options_;
   EntrySink& sink_;
   std::stop_token stop_;
+  std::uint64_t volume_serial_;
 
   // Scratch for the entry being built: the sink copies them.
   std::u16string name_;
@@ -370,7 +377,8 @@ bool MftListEngine::Run(EntrySink& sink, std::stop_token stop) {
     return true;
   }
 
-  TreeListing listing(tree, options_, *selected, std::move(stop));
+  TreeListing listing(tree, options_, *selected, std::move(stop),
+                      opened.volume->GetSerialNumber());
   if (folder) {
     FolderFilter filter(tree, *folder, options_.recursive);
     listing.Run(&filter);
