@@ -146,4 +146,27 @@ std::optional<DeviceTarget> SplitDeviceTarget(std::wstring_view target) {
   return std::nullopt;
 }
 
+std::optional<std::filesystem::path> TargetSource(std::wstring_view target) {
+  if (const std::optional<DeviceTarget> split = SplitDeviceTarget(target)) {
+    return split->device;
+  }
+#ifdef _WIN32
+  if (target.size() >= 2 && target[1] == L':' &&
+      ((target[0] >= L'a' && target[0] <= L'z') ||
+       (target[0] >= L'A' && target[0] <= L'Z')) &&
+      (target.size() == 2 || target[2] == L'\\' || target[2] == L'/')) {
+    return std::filesystem::path(std::wstring{target[0], L':', L'\\'});
+  }
+#endif
+  return std::nullopt;
+}
+
+std::wstring ExtendedPath(std::wstring_view path) {
+  return NTFS_BROWSER_NAMESPACE::Io::ToExtendedLengthPath(path);
+}
+
+std::filesystem::path ExtendedFsPath(const std::filesystem::path& path) {
+  return NTFS_BROWSER_NAMESPACE::Io::ToExtendedLengthFsPath(path);
+}
+
 }  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess

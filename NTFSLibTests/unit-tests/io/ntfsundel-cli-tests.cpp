@@ -9,6 +9,7 @@
 #include <initializer_list>
 #include <iterator>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -17,7 +18,6 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/example/ntfsundel/name-matcher.h>
 #include <ntfs-browser/example/ntfsundel/ntfsundel-cli.h>
 #include <ntfs-browser/example/ntfsundel/ntfsundel-core.h>
 #include <ntfs-browser/namespace.h>
@@ -29,7 +29,6 @@
 #include <ntfs-browser/tool/device-access/text-convert.h>
 
 #include "sample-dump-support.h"
-#include "upcase/upcase.h"
 
 namespace TestIo = NTFS_BROWSER_NAMESPACE::Test::Io;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
@@ -233,83 +232,28 @@ TEST_CASE("NtfsUndel usage names every option", "[ntfsundel][cli][arguments]") {
   }
 }
 
-TEST_CASE("NtfsUndel wildcard matches * and ? without case for ASCII",
-          "[ntfsundel][cli][selection]") {
-  const ExampleNtfsUndel::NameMatcher matcher(
-      NTFS_BROWSER_NAMESPACE::UpCase::Table::BuiltIn());
-  const auto matches = [&](std::wstring_view pattern, std::wstring_view text) {
-    return matcher.Matches(pattern, text);
-  };
-  CHECK(matches(L"*", L""));
-  CHECK(matches(L"*", L"anything"));
-  CHECK(matches(L"*.doc", L"report.DOC"));
-  CHECK(matches(L"r?port.*", L"Report.txt"));
-  CHECK(matches(L"a*b*c", L"aXXbYYc"));
-  CHECK(matches(L"a*b*c", L"abc"));
-  CHECK(matches(L"**a", L"ba"));
-  CHECK(matches(L"exact", L"EXACT"));
-  CHECK_FALSE(matches(L"*.doc", L"report.docx"));
-  CHECK_FALSE(matches(L"?", L""));
-  CHECK_FALSE(matches(L"?", L"ab"));
-  CHECK_FALSE(matches(L"a*c", L"abd"));
-  CHECK_FALSE(matches(L"", L"a"));
-  CHECK(matches(L"", L""));
-}
-
-TEST_CASE("NtfsUndel wildcard folds the case of every script",
-          "[ntfsundel][cli][selection]") {
-  const ExampleNtfsUndel::NameMatcher matcher(
-      NTFS_BROWSER_NAMESPACE::UpCase::Table::BuiltIn());
-  CHECK(matcher.Matches(L"caf\u00E9", L"caf\u00C9"));
-  CHECK(matcher.Matches(L"CAF\u00C9*", L"caf\u00E9.txt"));
-  CHECK(matcher.Matches(L"\u03B1\u03B2?", L"\u0391\u0392\u0393"));
-  CHECK(matcher.Matches(L"\u0434\u043E\u043C", L"\u0414\u041E\u041C"));
-  CHECK_FALSE(matcher.Matches(L"caf\u00E9", L"cafe"));
-  CHECK_FALSE(matcher.Matches(L"\u03B1", L"\u0430"));
-}
-
-TEST_CASE("NtfsUndel wildcard compares unpaired surrogates as they are",
-          "[ntfsundel][cli][selection]") {
-  const ExampleNtfsUndel::NameMatcher matcher(
-      NTFS_BROWSER_NAMESPACE::UpCase::Table::BuiltIn());
-  CHECK(matcher.Matches(L"\xD83D", L"\xD83D"));
-  CHECK_FALSE(matcher.Matches(L"\xD83D", L"\xD83E"));
-}
-
-TEST_CASE("NtfsUndel prefix test folds case through the table",
-          "[ntfsundel][cli][selection]") {
-  const ExampleNtfsUndel::NameMatcher matcher(
-      NTFS_BROWSER_NAMESPACE::UpCase::Table::BuiltIn());
-  CHECK(matcher.StartsWith(L"\\Caf\u00E9\\a", L"\\CAF\u00C9\\"));
-  CHECK(matcher.StartsWith(L"abc", L""));
-  CHECK_FALSE(matcher.StartsWith(L"ab", L"abc"));
-  CHECK_FALSE(matcher.StartsWith(L"abd", L"abc"));
-}
-
 TEST_CASE("NtfsUndel selects by --all, record and name",
           "[ntfsundel][cli][selection]") {
   const std::vector<DeletedFile> files = SampleFiles();
-  const ExampleNtfsUndel::NameMatcher matcher(
-      NTFS_BROWSER_NAMESPACE::UpCase::Table::BuiltIn());
   using Positions = std::vector<std::size_t>;
+  const std::set<std::uint64_t> none;
 
   SECTION("all") {
-    CHECK(ExampleNtfsUndel::SelectFiles(files, MustParse({L"x", L"--all"}),
-                                        matcher)
-              .positions == Positions{0, 1, 2, 3});
+    CHECK(
+        ExampleNtfsUndel::SelectFiles(files, MustParse({L"x", L"--all"}), none)
+            .positions == Positions{0, 1, 2, 3});
   }
 
   SECTION("a record, and one the list does not hold") {
     const ExampleNtfsUndel::Selection selection = ExampleNtfsUndel::SelectFiles(
-        files, MustParse({L"x", L"--record", L"21", L"--record", L"99"}),
-        matcher);
+        files, MustParse({L"x", L"--record", L"21", L"--record", L"99"}), none);
     CHECK(selection.positions == Positions{2});
     CHECK(selection.missing_records == std::vector<std::uint64_t>{99});
   }
 
-  SECTION("a name, without case") {
+  SECTION("the records that the name patterns found") {
     CHECK(ExampleNtfsUndel::SelectFiles(
-              files, MustParse({L"x", L"--name", L"*.doc"}), matcher)
+              files, MustParse({L"x", L"--name", L"*.doc"}), {21})
               .positions == Positions{2});
   }
 
@@ -318,24 +262,12 @@ TEST_CASE("NtfsUndel selects by --all, record and name",
               files,
               MustParse({L"x", L"--name", L"old*", L"--record", L"19",
                          L"--record", L"22"}),
-              matcher)
+              {19, 20})
               .positions == Positions{0, 1, 3});
   }
 
-  SECTION("a pattern with a slash is matched against the path") {
-    CHECK(ExampleNtfsUndel::SelectFiles(
-              files, MustParse({L"x", L"--name", L"Docs/*"}), matcher)
-              .positions == Positions{0, 1});
-    CHECK(ExampleNtfsUndel::SelectFiles(
-              files, MustParse({L"x", L"--name", L"\\Docs\\old.*"}), matcher)
-              .positions == Positions{0});
-    CHECK(ExampleNtfsUndel::SelectFiles(
-              files, MustParse({L"x", L"--name", L"\\old.*"}), matcher)
-              .positions.empty());
-  }
-
   SECTION("nothing asked, nothing chosen") {
-    CHECK(ExampleNtfsUndel::SelectFiles(files, MustParse({L"x"}), matcher)
+    CHECK(ExampleNtfsUndel::SelectFiles(files, MustParse({L"x"}), none)
               .positions.empty());
   }
 }
@@ -412,7 +344,7 @@ TEST_CASE("NtfsUndel formats one line per file", "[ntfsundel][cli][list]") {
     const std::wstring line = ExampleNtfsUndel::FormatListLine(3, file, state);
     CHECK(line.starts_with(L"   3        19            16  intact"));
     CHECK(line.ends_with(L"  \\Docs\\old.tmp"));
-    CHECK(line.find(ExampleNtfsUndel::FormatWriteTime(0)) !=
+    CHECK(line.find(ExampleNtfsUndel::FormatLocalTime(0)) !=
           std::wstring::npos);
   }
 
@@ -455,7 +387,7 @@ TEST_CASE("NtfsUndel lists the deleted files of an image without --output",
   CHECK(out.find("\\Docs\\old.tmp\n") != std::string::npos);
   CHECK(out.find("\\Docs\\OldDir\n") != std::string::npos);
   CHECK(out.find("  no-data      ") != std::string::npos);
-  CHECK(out.find("  stale.txt\n") != std::string::npos);
+  CHECK(out.find("\\<lost>\\stale.txt\n") != std::string::npos);
   CHECK(run.err.find("4 deleted files") != std::string::npos);
 }
 
@@ -480,7 +412,7 @@ TEST_CASE("NtfsUndel restricts the list to a folder inside the volume",
   });
 
   CHECK(run.exit_code == 0);
-  CHECK(std::ranges::count(run.out, '\n') == 2);
+  CHECK(std::ranges::count(run.out, '\n') == 3);
   CHECK(run.out.find("old.tmp") != std::string::npos);
   CHECK(run.out.find("OldDir") != std::string::npos);
   CHECK(run.out.find("stale.txt") == std::string::npos);
@@ -496,7 +428,7 @@ TEST_CASE("NtfsUndel reports a target that is not a volume",
 
   CHECK(run.exit_code == ExampleNtfsUndel::failure_exit_code);
   CHECK(run.out.empty());
-  CHECK(run.err.find("Cannot get NTFS BPB") != std::string::npos);
+  CHECK(run.err.find("Cannot read an NTFS volume") != std::string::npos);
 }
 
 TEST_CASE("NtfsUndel recovers the files that --record picks",

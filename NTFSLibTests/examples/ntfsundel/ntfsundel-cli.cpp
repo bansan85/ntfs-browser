@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -10,6 +8,7 @@
 #include <istream>
 #include <limits>
 #include <optional>
+#include <set>
 #include <span>
 #include <string>
 #include <string_view>
@@ -17,16 +16,12 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/example/ntfsundel/name-matcher.h>
 #include <ntfs-browser/example/ntfsundel/ntfsundel-cli.h>
 #include <ntfs-browser/example/ntfsundel/ntfsundel-core.h>
-#include <ntfs-browser/io/extended-path.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/search/reader.h>
+#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/tool/device-access/device-path.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
 #include <ntfs-browser/tool/device-access/tool-support.h>
 #include <ntfs-browser/tool/device-access/volume-identity.h>
@@ -38,17 +33,13 @@
   #include <unistd.h>
 #endif
 
-using namespace NTFS_BROWSER_NAMESPACE;
+namespace Lib = NTFS_BROWSER_NAMESPACE::Search;
 
 namespace NTFS_BROWSER_NAMESPACE::Example::NtfsUndel {
 
 namespace {
 
 namespace Device = Tool::DeviceAccess;
-
-// The volume the recovery reads, opened without a cache: the strategy that
-// copies a file chunk by chunk.
-using NoCacheVolume = NtfsVolume<Cache::Strategy::NoCache>;
 
 // Digits a record number or a list position may have. Nine always fit a
 // 32-bit value, so the parse needs no overflow test for a position. A record
@@ -171,39 +162,6 @@ bool ParseOwnOption(int argc, wchar_t* argv[], int& index, Arguments& args,
   return true;
 }
 
-// Reports whether path is inside the folder inside, a path with '\' between
-// the parts and no end separator. Case does not count, as the volume has it.
-// A path with no folder part, or a path outside, is not inside.
-bool IsInsideFolder(std::wstring_view path, std::wstring_view inside,
-                    const NameMatcher& matcher) {
-  if (inside.empty()) {
-    return true;
-  }
-  const std::wstring prefix = L"\\" + std::wstring(inside) + L"\\";
-  return path.size() > prefix.size() && matcher.StartsWith(path, prefix);
-}
-
-// The path of file with '/' written as '\', so one pattern fits both.
-std::wstring BackslashPath(std::wstring_view path) {
-  std::wstring text(path);
-  std::ranges::replace(text, L'/', L'\\');
-  return text;
-}
-
-// Reports whether pattern selects file. A pattern with a separator is matched
-// against the path: from the root when it starts with one, else from any
-// folder. Any other pattern is matched against the name.
-bool PatternSelects(std::wstring_view pattern, const DeletedFile& file,
-                    const NameMatcher& matcher) {
-  if (pattern.find_first_of(L"\\/") == std::wstring_view::npos) {
-    return matcher.Matches(pattern, file.name);
-  }
-  const std::wstring wanted = BackslashPath(pattern);
-  return wanted.starts_with(L'\\')
-             ? matcher.Matches(wanted, file.full_path)
-             : matcher.Matches(L"*\\" + wanted, file.full_path);
-}
-
 // Writes text to stream as UTF-8.
 void Say(std::FILE* stream, const std::wstring& text) {
   Device::WriteText(stream, text);
@@ -214,12 +172,9 @@ std::wstring Shown(const std::filesystem::path& path) {
   return Device::WideFromPath(path);
 }
 
-// What a failed OpenDeletedFile() tells the user.
-std::wstring OpenFailureText(RecoverError error, std::uint64_t reference) {
-  return error == RecoverError::RecordParse
-             ? std::format(L"Cannot read record {}", reference)
-             : std::format(L"Cannot parse the attributes of record {}",
-                           reference);
+// What a record that the Reader cannot read tells the user.
+std::wstring OpenFailureText(std::uint64_t reference) {
+  return std::format(L"Cannot read record {}", reference);
 }
 
 // What a failed CreateRecoveryFile() tells the user.
@@ -251,12 +206,11 @@ std::wstring_view ChangeNote(NameChange change) {
 
 // Recovers the unnamed stream of file into directory. state is what
 // DescribeFile() found for the same record.
-Outcome RecoverOne(NoCacheVolume& volume, const DeletedFile& file,
+Outcome RecoverOne(Lib::Reader& reader, const DeletedFile& file,
                    const FileState& state, const Arguments& args,
                    std::wstring_view directory, const Environment& env) {
-  const OpenedRecord opened = OpenDeletedFile(volume, file.reference);
-  if (opened.error != RecoverError::None) {
-    Say(env.err, OpenFailureText(opened.error, file.reference) + L"\n");
+  if (!state.readable) {
+    Say(env.err, OpenFailureText(file.reference) + L"\n");
     return Outcome::Failed;
   }
   if (!state.has_data) {
@@ -266,7 +220,7 @@ Outcome RecoverOne(NoCacheVolume& volume, const DeletedFile& file,
   }
 
   const bool go_on =
-      ShouldRecover(*opened.record, [&](const RecoveryCheck& check) {
+      ShouldRecover(state.check, [&](const RecoveryCheck& check) {
         const std::wstring message = RecoveryMessage(check);
         if (check.advice == RecoveryAdvice::Warn || args.include_doubtful) {
           Say(env.err, std::format(L"Warning, record {} ({}): {}\n",
@@ -299,14 +253,15 @@ Outcome RecoverOne(NoCacheVolume& volume, const DeletedFile& file,
 
   RecoveryFile& target = *created.file;
   const CopyResult copied = CopyUnnamedData(
-      *opened.record, [](std::uint64_t) { return true; },
-      [&target](std::span<const BYTE> chunk) { return target.Write(chunk); });
-  if (copied.error == RecoverError::Read ||
-      copied.error == RecoverError::Write) {
+      reader, file.handle, [](std::uint64_t) { return true; },
+      [&target](std::span<const std::uint8_t> chunk) {
+        return target.Write(chunk);
+      });
+  if (copied.error != RecoverError::None) {
     Say(env.err,
         std::format(L"{} while recovering record {} to {}\n",
-                    copied.error == RecoverError::Read ? L"Read data error"
-                                                       : L"Write data error",
+                    copied.error == RecoverError::Write ? L"Write data error"
+                                                        : L"Read data error",
                     file.reference, target.Path()));
     return Outcome::Failed;
   }
@@ -351,19 +306,13 @@ struct Listing {
   bool truncated = false;
 };
 
-// Scans the volume for freed files, keeps those under inside, and describes
-// each one. Nothing when the scan cannot run.
-std::optional<Listing>
-    BuildListing(NtfsVolume<Cache::Strategy::FullCache>& scan_volume,
-                 NoCacheVolume& state_volume, std::wstring_view inside) {
-  const NameMatcher matcher(scan_volume.GetUpCaseTable());
-  SearchControl control;
-  if (!inside.empty()) {
-    // The folder is applied after the scan, so the cut must not hide a match.
-    control.max_listed = std::numeric_limits<std::size_t>::max();
-  }
+// Scans the volume for deleted files, and describes each one. Nothing when the
+// scan cannot run.
+std::optional<Listing> BuildListing(Lib::Reader& reader,
+                                    std::wstring_view target,
+                                    bool recover_errors) {
   std::optional<SearchResult> found =
-      SearchDeletedFiles(scan_volume, L"", control);
+      ListDeletedFiles(target, recover_errors, SearchControl{});
   if (!found) {
     return std::nullopt;
   }
@@ -371,10 +320,7 @@ std::optional<Listing>
   Listing listing;
   listing.truncated = found->truncated;
   for (DeletedFile& file : found->files) {
-    if (!IsInsideFolder(file.full_path, inside, matcher)) {
-      continue;
-    }
-    listing.states.push_back(DescribeFile(state_volume, file.reference));
+    listing.states.push_back(DescribeFile(reader, file));
     listing.files.push_back(std::move(file));
   }
   return listing;
@@ -382,12 +328,11 @@ std::optional<Listing>
 
 // Recovers the files at positions into the folder output.
 int RecoverFiles(const Listing& listing,
-                 const std::vector<std::size_t>& positions,
-                 NoCacheVolume& volume, const Arguments& args,
-                 const std::filesystem::path& output, const Environment& env) {
+                 const std::vector<std::size_t>& positions, Lib::Reader& reader,
+                 const Arguments& args, const std::filesystem::path& output,
+                 const Environment& env) {
   std::error_code error;
-  std::filesystem::create_directories(Io::ToExtendedLengthFsPath(output),
-                                      error);
+  std::filesystem::create_directories(Device::ExtendedFsPath(output), error);
   if (error) {
     Say(env.err, L"Cannot create the folder " + Shown(output) + L"\n");
     return failure_exit_code;
@@ -398,7 +343,7 @@ int RecoverFiles(const Listing& listing,
   std::size_t failed = 0;
   for (const std::size_t position : positions) {
     const Outcome outcome =
-        RecoverOne(volume, listing.files.at(position),
+        RecoverOne(reader, listing.files.at(position),
                    listing.states.at(position), args, directory, env);
     recovered += outcome == Outcome::Recovered ? 1 : 0;
     failed += outcome == Outcome::Failed ? 1 : 0;
@@ -514,16 +459,14 @@ std::optional<Arguments> ParseArguments(int argc, wchar_t* argv[],
 }
 
 Selection SelectFiles(const std::vector<DeletedFile>& files,
-                      const Arguments& args, const NameMatcher& matcher) {
+                      const Arguments& args,
+                      const std::set<std::uint64_t>& named) {
   Selection selection;
   for (std::size_t i = 0; i < files.size(); i++) {
     const DeletedFile& file = files[i];
     const bool by_record =
         std::ranges::find(args.records, file.reference) != args.records.end();
-    const bool by_name =
-        std::ranges::any_of(args.names, [&](const std::wstring& pattern) {
-          return PatternSelects(pattern, file, matcher);
-        });
+    const bool by_name = named.contains(file.reference);
     if (args.all || by_record || by_name) {
       selection.positions.push_back(i);
     }
@@ -607,18 +550,20 @@ std::optional<std::vector<std::size_t>> ParseNumberList(std::string_view line,
   return positions;
 }
 
-FileState DescribeFile(NoCacheVolume& volume, std::uint64_t reference) {
-  const OpenedRecord opened = OpenDeletedFile(volume, reference);
-  if (opened.error != RecoverError::None) {
+FileState DescribeFile(Lib::Reader& reader, const DeletedFile& file) {
+  const auto streams = reader.GetStreams(file.handle);
+  if (!streams) {
     return {};
   }
   FileState state;
   state.readable = true;
-  const Attr::AttrBase<Cache::Strategy::NoCache>* data =
-      opened.record->FindStream({});
-  state.has_data = data != nullptr;
-  state.size = data != nullptr ? data->GetDataSize() : 0;
-  state.check = AssessRecovery(*opened.record);
+  const auto unnamed =
+      std::ranges::find_if(streams.value, [](const Lib::StreamInfo& stream) {
+        return stream.name.empty();
+      });
+  state.has_data = unnamed != streams.value.end();
+  state.size = state.has_data ? unnamed->size : 0;
+  state.check = AssessRecovery(reader, file.handle);
   return state;
 }
 
@@ -646,7 +591,7 @@ std::wstring FormatListLine(std::size_t number, const DeletedFile& file,
                             const FileState& state) {
   return std::format(L"{:>4}  {:>8}  {:>12}  {:<11}  {}  {}", number,
                      file.reference, state.size, StateName(state),
-                     FormatWriteTime(file.write_time), file.full_path);
+                     FormatLocalTime(file.write_time), file.full_path);
 }
 
 std::wstring CheckOutputVolume(const std::filesystem::path& source,
@@ -672,36 +617,35 @@ std::wstring CheckOutputVolume(const std::filesystem::path& source,
 }
 
 int UndelTarget(const Arguments& args, const Environment& env) {
-  VolumeOptions options = args.common.volume_options;
-  // A deleted-file finder needs to see freed records.
-  options.include_deleted = true;
+  const bool recover_errors = args.common.volume_options.recover_errors;
 
-  auto scan = Device::OpenVolumeFromTarget<Cache::Strategy::FullCache>(
-      args.target, options);
-  if (!scan.volume) {
-    Say(env.err, scan.error + L"\n");
+  const std::optional<std::filesystem::path> source =
+      Device::TargetSource(args.target);
+  if (!source) {
+    Say(env.err,
+        L"Cannot find a device or image file in " + args.target + L"\n");
     return failure_exit_code;
   }
 
   const std::filesystem::path output = Device::PathFromWide(args.output);
   if (!args.output.empty()) {
     const std::wstring refusal =
-        CheckOutputVolume(scan.source, output, env.volume_id);
+        CheckOutputVolume(*source, output, env.volume_id);
     if (!refusal.empty()) {
       Say(env.err, refusal + L"\n");
       return failure_exit_code;
     }
   }
 
-  auto reader = Device::OpenVolumeFromTarget<Cache::Strategy::NoCache>(
-      args.target, options);
-  if (!reader.volume) {
-    Say(env.err, reader.error + L"\n");
+  Lib::Reader reader(
+      {.target = ToUtf16(args.target), .recover_errors = recover_errors});
+  if (!reader.IsOpen()) {
+    Say(env.err, L"Cannot read an NTFS volume from " + Shown(*source) + L"\n");
     return failure_exit_code;
   }
 
   const std::optional<Listing> listing =
-      BuildListing(*scan.volume, *reader.volume, scan.inside);
+      BuildListing(reader, args.target, recover_errors);
   if (!listing) {
     Say(env.err, L"The scan failed\n");
     return failure_exit_code;
@@ -722,8 +666,17 @@ int UndelTarget(const Arguments& args, const Environment& env) {
 
   std::vector<std::size_t> positions;
   if (args.HasSelection()) {
-    const NameMatcher matcher(scan.volume->GetUpCaseTable());
-    const Selection selection = SelectFiles(listing->files, args, matcher);
+    std::set<std::uint64_t> named;
+    for (const std::wstring& pattern : args.names) {
+      const std::optional<std::set<std::uint64_t>> found =
+          FindNamedFiles(args.target, recover_errors, pattern);
+      if (!found) {
+        Say(env.err, L"The scan failed\n");
+        return failure_exit_code;
+      }
+      named.insert(found->begin(), found->end());
+    }
+    const Selection selection = SelectFiles(listing->files, args, named);
     for (const std::uint64_t record : selection.missing_records) {
       Say(env.err, std::format(L"Record {} is not in the list\n", record));
     }
@@ -745,7 +698,7 @@ int UndelTarget(const Arguments& args, const Environment& env) {
     return failure_exit_code;
   }
 
-  return RecoverFiles(*listing, positions, *reader.volume, args, output, env);
+  return RecoverFiles(*listing, positions, reader, args, output, env);
 }
 
 int RunNtfsUndel(int argc, wchar_t* argv[]) {
@@ -763,7 +716,7 @@ int RunNtfsUndel(int argc, wchar_t* argv[]) {
 
   // Names print as UTF-8: a console shows them right with its code page set.
   const Device::Utf8ConsoleOutput console;
-  if (!Log::Configure(args->common.log_config)) {
+  if (!Device::ConfigureLog(args->common.log_config)) {
     Device::ReportLogFileError(args->common.log_config);
   }
   const Environment environment{.out = stdout,

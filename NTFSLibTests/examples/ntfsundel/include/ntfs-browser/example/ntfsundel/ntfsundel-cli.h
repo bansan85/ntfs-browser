@@ -11,15 +11,14 @@
 #include <functional>
 #include <istream>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
 
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/example/ntfsundel/name-matcher.h>
 #include <ntfs-browser/example/ntfsundel/ntfsundel-core.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/search/reader.h>
 #include <ntfs-browser/tool/device-access/volume-target.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Example::NtfsUndel {
@@ -38,8 +37,7 @@ struct Arguments {
   // --record N, once per record: select the listed file of that MFT record.
   std::vector<std::uint64_t> records;
   // --name PATTERN, once per pattern: select the listed files whose name
-  // matches, with case folded through the volume's $UpCase table. See
-  // NameMatcher::Matches().
+  // matches. See FindNamedFiles().
   std::vector<std::wstring> names;
   // --output DIR: the folder the recovered files go into. Empty means list
   // only.
@@ -74,12 +72,12 @@ struct Selection {
 };
 
 // Applies --all, --record and --name of args to files. A file is chosen when
-// any of them picks it. A --name pattern with a '\' or '/' in it is matched
-// against the whole path, otherwise against the name alone. matcher decides
-// when two names are the same: it folds case through the volume's $UpCase.
+// any of them picks it. named holds the record numbers that the --name patterns
+// found: the volume decides when two names are the same, so the scan does the
+// matching, see FindNamedFiles().
 [[nodiscard]] Selection SelectFiles(const std::vector<DeletedFile>& files,
                                     const Arguments& args,
-                                    const NameMatcher& matcher);
+                                    const std::set<std::uint64_t>& named);
 
 // Reads a list of numbers a user typed: "1,3 5-8" or "all". count is the
 // number of files listed. Returns the positions, from 0, in the order typed
@@ -106,11 +104,10 @@ struct FileState {
   }
 };
 
-// Opens the freed record of reference and reads its state. Reads no data.
+// Asks reader for the state of the deleted file. Reads no data.
 [[nodiscard]] FileState
-    DescribeFile(NTFS_BROWSER_NAMESPACE::NtfsVolume<
-                     NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>& volume,
-                 std::uint64_t reference);
+    DescribeFile(NTFS_BROWSER_NAMESPACE::Search::Reader& reader,
+                 const DeletedFile& file);
 
 // The word a listing shows for state: "intact", "reallocated", "bad",
 // "unchecked", "no-data" or "unreadable".

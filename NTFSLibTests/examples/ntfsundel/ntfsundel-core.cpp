@@ -1,26 +1,22 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <array>
 #include <chrono>
-#include <cwctype>
 #include <format>
-#include <map>
-#include <regex>
+#include <limits>
 #include <set>
 #include <string>
+#include <thread>
 #include <utility>
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/example/ntfsundel/ntfsundel-core.h>
-#include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/io/extended-path.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/search/reader.h>
+#include <ntfs-browser/search/scan.h>
+#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/tool/device-access/device-path.h>
+#include <ntfs-browser/tool/device-access/local-time.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
 
 #ifdef _WIN32
@@ -32,38 +28,17 @@
   #include <unistd.h>
 #endif
 
-using namespace NTFS_BROWSER_NAMESPACE;
+namespace Lib = NTFS_BROWSER_NAMESPACE::Search;
 
 namespace NTFS_BROWSER_NAMESPACE::Example::NtfsUndel {
 
 namespace {
 
-// Records between two pump checks. Keeps the modulo test the only per-record
-// cost. kPumpTimeInterval caps how often the pump actually runs.
-constexpr std::uint64_t kPumpRecordInterval = 5000;
+namespace Device = Tool::DeviceAccess;
 
-// Minimum time between two pumps. Bounds worst-case Stop latency on a slow
-// disk.
-constexpr std::chrono::milliseconds kPumpTimeInterval(100);
-
-// FILETIME ticks in one second: they count 100 ns.
-constexpr std::uint64_t kTicksPerSecond = 10'000'000;
-
-// Seconds in one day. A FILETIME knows no leap second.
-constexpr std::uint64_t kSecondsPerDay = 86400;
-
-// Days from 0000-03-01 to 1601-01-01, the FILETIME epoch.
-constexpr std::uint64_t kDaysToFiletimeEpoch = 584694;
-
-// Days in 400 years, a full cycle of the Gregorian calendar.
-constexpr std::uint64_t kDaysPerEra = 146097;
-
-// Largest time FileTimeToSystemTime() takes: the signed 64-bit range. Past it
-// the date prints as zeros, the way the Win32 call fails.
-constexpr std::uint64_t kMaxSystemTimeTicks = 0x7FFFFFFFFFFFFFFFULL;
-
-// Filter that matches every name. Used when the user leaves the box empty.
-constexpr std::wstring_view kMatchAllFilter = L".*";
+// Time between two polls of the scan, which are also two looks at the stop
+// request. Short, so that a small volume does not wait: Poll() never blocks.
+constexpr std::chrono::milliseconds kPollInterval(5);
 
 // What the user is told when the data of a freed file probably belongs to
 // another file now.
@@ -82,210 +57,168 @@ constexpr std::wstring_view kUncheckedMessage =
     L"The allocation of the clusters of this file could not be checked. The "
     L"recovered data may be wrong.";
 
-// Trims blanks off the filter. An empty filter becomes the match-all pattern.
-std::wstring NormalizeFilter(std::wstring_view filter) {
-  if (filter.empty()) {
-    return std::wstring(kMatchAllFilter);
-  }
-  const auto is_blank = [](wchar_t c) { return std::iswspace(c) != 0; };
-  const auto first = std::find_if_not(filter.begin(), filter.end(), is_blank);
-  const auto last =
-      std::find_if_not(filter.rbegin(), filter.rend(), is_blank).base();
-  if (first >= last) {
-    return {};
-  }
-  return std::wstring(first, last);
+// Largest time that a Windows FILETIME takes: the signed 64-bit range. Past it
+// the date prints as zeros.
+constexpr std::uint64_t kMaxSystemTimeTicks = 0x7FFFFFFFFFFFFFFFULL;
+
+// The units of the high surrogates of UTF-16, and of the low ones. A code point
+// above U+FFFF is written with a pair.
+constexpr char32_t high_surrogate_base = 0xD800;
+constexpr char32_t low_surrogate_base = 0xDC00;
+
+// The first code point that UTF-16 writes as a pair.
+constexpr char32_t first_supplementary = 0x10000;
+
+// Mask of the ten bits that each half of a surrogate pair carries.
+constexpr char32_t surrogate_bits = 0x3FF;
+
+// Bits that a half of a surrogate pair holds.
+constexpr unsigned surrogate_shift = 10;
+
+// The options of a scan of the deleted files of target.
+Lib::Options DeletedScanOptions(std::wstring_view target, bool recover_errors) {
+  Lib::Options options;
+  options.target = ToUtf16(target);
+  options.engine = Lib::EngineKind::MftList;
+  options.include_deleted = true;
+  options.recover_errors = recover_errors;
+  // A folder in the target lists everything below it.
+  options.recursive = true;
+  options.full_path = true;
+  options.deleted_data_state = true;
+  options.filter.deleted = Lib::DeletedFilter::OnlyDeleted;
+  return options;
 }
 
-// Packs a FILETIME into one 64-bit tick count.
-std::uint64_t ToTicks(const FILETIME& ft) {
-  return (static_cast<std::uint64_t>(ft.dwHighDateTime) << 32U) |
-         ft.dwLowDateTime;
-}
-
-// Record handle the search parses into, one per pass.
-using FullRecord = Io::FileRecord<Cache::Strategy::FullCache>;
-
-// Parent record number of every directory entry the scan saw, by child.
-using ParentMap = std::map<ULONGLONG, ULONGLONG>;
-
-// What the record pass collected for the listing pass.
-struct ScanResult {
-  ParentMap id_to_parent;
-  std::set<ULONGLONG> freed;
-};
-
-// Parses record ref with only the attributes in mask. False if either step
-// fails.
-bool ParseWithMask(FullRecord& fr, ULONGLONG ref, Attr::Mask mask) {
-  fr.SetAttrMask(mask);
-  return fr.ParseFileRecord(ref) && fr.ParseAttrs();
-}
-
-// True once the record pass has reached its record limit or a stop request.
-bool ScanMustEnd(const SearchControl& control, ULONGLONG record) {
-  return record == control.max_records ||
-         (control.stop_requested && control.stop_requested());
-}
-
-// True when the pass should pump messages now: on a record interval, and at
-// most once per kPumpTimeInterval. Records the pump time when it returns true.
-bool PumpDue(ULONGLONG record,
-             std::chrono::steady_clock::time_point& last_pump) {
-  if (record % kPumpRecordInterval != 0) {
-    return false;
-  }
-  const auto now = std::chrono::steady_clock::now();
-  if (now - last_pump < kPumpTimeInterval) {
-    return false;
-  }
-  last_pump = now;
-  return true;
-}
-
-// Records the parent of each entry fr's index lists, skipping its own
-// self entry.
-void RecordChildren(const FullRecord& fr, ParentMap& id_to_parent) {
-  fr.TraverseSubEntries(
-      [&fr, &id_to_parent](const IndexEntryView& ie, void* context) {
-        if (ie.GetFileReference() == *fr.GetFileReference()) {
-          return;
-        }
-        id_to_parent.insert({ie.GetFileReference(), *fr.GetFileReference()});
-      },
-      nullptr);
-}
-
-// Walks every record from the first user-visible one, and collects the
-// directory parents and the freed records.
-ScanResult ScanRecords(NtfsVolume<Cache::Strategy::FullCache>& volume,
-                       const SearchControl& control,
-                       std::chrono::steady_clock::time_point begin) {
-  ScanResult scan;
-  FullRecord fr(volume);
-  auto last_pump = begin;
-
-  // Only parse Standard Information and File Name attributes
-  // StdInfo will always be parsed
-  const Attr::Mask scan_mask = Attr::Mask::FileName | Attr::Mask::IndexRoot |
-                               Attr::Mask::IndexAllocation;
-
-  for (auto i = static_cast<ULONGLONG>(Mft::Idx::Mft);
-       i < volume.GetRecordsCount(); i++) {
-    if (ScanMustEnd(control, i)) {
-      break;
-    }
-    if (PumpDue(i, last_pump) && control.pump_messages &&
-        !control.pump_messages()) {
-      break;
-    }
-    if (!ParseWithMask(fr, i, scan_mask) || fr.GetFileName().empty()) {
-      continue;
-    }
-
-    // Directories also feed id_to_parent; a freed one stays a candidate.
-    if (fr.IsDirectory()) {
-      RecordChildren(fr, scan.id_to_parent);
-    }
-
-    // Only deleted records are candidates for recovery
-    if (fr.IsDeleted()) {
-      scan.freed.insert(*fr.GetFileReference());
+// The text of UTF-16 units as a wide string. A surrogate pair becomes one
+// wchar_t where wchar_t holds a code point.
+std::wstring Utf16ToWide(std::u16string_view units) {
+  std::wstring text;
+  text.reserve(units.size());
+  for (std::size_t i = 0; i < units.size(); ++i) {
+    const char32_t unit = units[i];
+    const bool pair = unit >= high_surrogate_base &&
+                      unit < low_surrogate_base && i + 1 < units.size() &&
+                      units[i + 1] >= low_surrogate_base &&
+                      units[i + 1] <= low_surrogate_base + surrogate_bits;
+    if (sizeof(wchar_t) > sizeof(char16_t) && pair) {
+      const char32_t low = units[++i];
+      text.push_back(static_cast<wchar_t>(
+          first_supplementary +
+          (((unit - high_surrogate_base) & surrogate_bits) << surrogate_shift) +
+          (low - low_surrogate_base)));
+    } else {
+      text.push_back(static_cast<wchar_t>(unit));
     }
   }
-  return scan;
+  return text;
 }
 
-// Path of record ref: its name at the end, each directory the scan linked
-// above it before that. A walk that reaches the root starts with a separator.
-// A name no directory entry links stays bare. Stops at the first parent that
-// does not parse, and at the first parent already on the path: a corrupt
-// index can name a loop, and the walk must still end.
-std::wstring BuildFullPath(FullRecord& fr, const ParentMap& id_to_parent,
-                           ULONGLONG ref, std::wstring name) {
-  std::set<ULONGLONG> on_path{ref};
-  auto id = id_to_parent.find(ref);
-  while (id != id_to_parent.end()) {
-    // The root's own name is not a component. On a real volume it is ".".
-    if (id->second == static_cast<ULONGLONG>(Mft::Idx::Root)) {
-      return L"\\" + name;
-    }
-    // Seen before on this walk: the entries form a loop.
-    if (!on_path.insert(id->second).second) {
-      break;
-    }
-    if (!ParseWithMask(fr, id->second, Attr::Mask::FileName)) {
-      break;
-    }
-    name = std::wstring{fr.GetFileName()} + L"\\" + name;
-    id = id_to_parent.find(id->second);
-  }
-  return name;
-}
-
-// The listing row of freed record ref, or nullopt when it does not parse or
-// its name does not match pattern.
-std::optional<DeletedFile> MatchDeleted(FullRecord& fr, ULONGLONG ref,
-                                        const std::wregex& pattern,
-                                        const ParentMap& id_to_parent) {
-  if (!ParseWithMask(fr, ref, Attr::Mask::FileName)) {
-    return std::nullopt;
-  }
-  const std::wstring name{fr.GetFileName()};
-  if (!std::regex_match(name, pattern)) {
-    return std::nullopt;
-  }
-
-  FILETIME ft{};
-  fr.GetFileTime(&ft, nullptr, nullptr);
-  return DeletedFile{.reference = ref,
-                     .name = name,
-                     .full_path = BuildFullPath(fr, id_to_parent, ref, name),
-                     .write_time = ToTicks(ft)};
-}
-
-// The filter as a regex, or nullopt when it does not compile.
-std::optional<std::wregex> CompileFilter(const std::wstring& pattern) {
-  try {
-    return std::wregex(pattern);
-  } catch (const std::regex_error&) {
-    return std::nullopt;
-  }
+// The row of the listing that entry makes.
+DeletedFile MakeRow(const Lib::Entry& entry) {
+  return {.handle = entry.GetHandle(),
+          .reference = entry.record,
+          .name = Utf16ToWide(entry.name),
+          .full_path = Utf16ToWide(entry.path),
+          .write_time = entry.modified.ticks};
 }
 
 }  // namespace
 
+std::u16string ToUtf16(std::wstring_view text) {
+  std::u16string units;
+  units.reserve(text.size());
+  for (const wchar_t character : text) {
+    const auto code = static_cast<char32_t>(character);
+    if (code < first_supplementary) {
+      units.push_back(static_cast<char16_t>(code));
+      continue;
+    }
+    const char32_t offset = code - first_supplementary;
+    units.push_back(static_cast<char16_t>(
+        high_surrogate_base + ((offset >> surrogate_shift) & surrogate_bits)));
+    units.push_back(
+        static_cast<char16_t>(low_surrogate_base + (offset & surrogate_bits)));
+  }
+  return units;
+}
+
 std::optional<SearchResult>
-    SearchDeletedFiles(NtfsVolume<Cache::Strategy::FullCache>& volume,
-                       std::wstring_view filter, const SearchControl& control) {
-  const std::optional<std::wregex> pattern =
-      CompileFilter(NormalizeFilter(filter));
-  if (!pattern) {
-    return std::nullopt;
+    ListDeletedFiles(std::wstring_view target, bool recover_errors,
+                     const SearchControl& control,
+                     const std::optional<Lib::Pattern>& pattern) {
+  Lib::Options options = DeletedScanOptions(target, recover_errors);
+  if (pattern) {
+    options.pattern = *pattern;
   }
 
   SearchResult result;
-  const auto begin = std::chrono::steady_clock::now();
-  const ScanResult scan = ScanRecords(volume, control, begin);
-  const auto end = std::chrono::steady_clock::now();
-  result.scan_us =
-      std::chrono::duration_cast<std::chrono::microseconds>(end - begin)
-          .count();
-
-  FullRecord fr(volume);
-  for (const ULONGLONG ref : scan.freed) {
-    std::optional<DeletedFile> match =
-        MatchDeleted(fr, ref, *pattern, scan.id_to_parent);
-    if (!match) {
-      continue;
+  std::set<std::uint64_t> listed;
+  Lib::Scan scan(options);
+  scan.OnBatch([&](const Lib::Batch& batch) {
+    for (const Lib::Entry& entry : batch.entries) {
+      if (result.truncated) {
+        return;
+      }
+      // A record with several names is one file: its first name stands.
+      if (!listed.insert(entry.record).second) {
+        continue;
+      }
+      result.files.push_back(MakeRow(entry));
+      if (result.files.size() >= control.max_listed) {
+        result.truncated = true;
+        scan.Cancel();
+      }
     }
-    result.files.push_back(*std::move(match));
-    if (result.files.size() >= control.max_listed) {
-      result.truncated = true;
-      break;
+  });
+  scan.Start();
+  while (!scan.Finished()) {
+    if (control.stop_requested && control.stop_requested()) {
+      scan.Cancel();
+    }
+    (void)scan.Poll();
+    if (!scan.Finished()) {
+      std::this_thread::sleep_for(kPollInterval);
     }
   }
+  if (scan.GetState() == Lib::State::Failed) {
+    return std::nullopt;
+  }
   return result;
+}
+
+Lib::Pattern MakeNamePattern(std::wstring_view wildcard) {
+  std::wstring text(wildcard);
+  Lib::Pattern pattern;
+  pattern.kind = Lib::PatternKind::Wildcard;
+  if (text.find_first_of(L"\\/") == std::wstring::npos) {
+    pattern.target = Lib::MatchTarget::Name;
+  } else {
+    pattern.target = Lib::MatchTarget::FullPath;
+    std::ranges::replace(text, L'/', L'\\');
+    if (!text.starts_with(L'\\')) {
+      text.insert(0, L"*\\");
+    }
+  }
+  pattern.text = ToUtf16(text);
+  return pattern;
+}
+
+std::optional<std::set<std::uint64_t>>
+    FindNamedFiles(std::wstring_view target, bool recover_errors,
+                   std::wstring_view wildcard) {
+  SearchControl control;
+  control.max_listed = std::numeric_limits<std::size_t>::max();
+  const std::optional<SearchResult> found = ListDeletedFiles(
+      target, recover_errors, control, MakeNamePattern(wildcard));
+  if (!found) {
+    return std::nullopt;
+  }
+  std::set<std::uint64_t> records;
+  for (const DeletedFile& file : found->files) {
+    records.insert(file.reference);
+  }
+  return records;
 }
 
 std::wstring TooManyFilesMessage() {
@@ -293,104 +226,70 @@ std::wstring TooManyFilesMessage() {
                      kMaxListedFiles);
 }
 
-// NOLINTBEGIN(readability-magic-numbers): the calendar algorithm is made of
-// them.
-std::wstring FormatWriteTime(std::uint64_t ticks) {
-  if (ticks > kMaxSystemTimeTicks) {
+std::wstring FormatLocalTime(std::uint64_t utc_ticks) {
+  const std::optional<Device::LocalTime> time =
+      utc_ticks > kMaxSystemTimeTicks ? std::nullopt
+                                      : Device::UtcTicksToLocalTime(utc_ticks);
+  if (!time) {
     return L"0000-00-00  00:00";
   }
-  const std::uint64_t seconds = ticks / kTicksPerSecond;
-  const std::uint64_t second_of_day = seconds % kSecondsPerDay;
-
-  // The days count from 0000-03-01, so the leap day closes the year. This is
-  // the civil-from-days algorithm of Howard Hinnant.
-  const std::uint64_t days = seconds / kSecondsPerDay + kDaysToFiletimeEpoch;
-  const std::uint64_t era = days / kDaysPerEra;
-  const std::uint64_t day_of_era = days % kDaysPerEra;
-  const std::uint64_t year_of_era = (day_of_era - day_of_era / 1460 +
-                                     day_of_era / 36524 - day_of_era / 146096) /
-                                    365;
-  const std::uint64_t day_of_year =
-      day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
-  const std::uint64_t month_from_march = (5 * day_of_year + 2) / 153;
-  const std::uint64_t day = day_of_year - (153 * month_from_march + 2) / 5 + 1;
-  const std::uint64_t month =
-      month_from_march < 10 ? month_from_march + 3 : month_from_march - 9;
-  const std::uint64_t year = year_of_era + era * 400 + (month <= 2 ? 1 : 0);
-
-  return std::format(L"{:04}-{:02}-{:02}  {:02}:{:02}", year, month, day,
-                     second_of_day / 3600, second_of_day % 3600 / 60);
-}
-
-// NOLINTEND(readability-magic-numbers)
-
-OpenedRecord OpenDeletedFile(NtfsVolume<Cache::Strategy::NoCache>& volume,
-                             std::uint64_t reference) {
-  auto record =
-      std::make_unique<Io::FileRecord<Cache::Strategy::NoCache>>(volume);
-  if (!record->ParseFileRecord(reference)) {
-    return {.record = nullptr, .error = RecoverError::RecordParse};
-  }
-
-  record->SetAttrMask(Attr::Mask::Data);
-  if (!record->ParseAttrs()) {
-    return {.record = nullptr, .error = RecoverError::AttributeParse};
-  }
-  return {.record = std::move(record), .error = RecoverError::None};
+  return std::format(L"{:04}-{:02}-{:02}  {:02}:{:02}", time->year, time->month,
+                     time->day, time->hour, time->minute);
 }
 
 CopyResult CopyUnnamedData(
-    const Io::FileRecord<Cache::Strategy::NoCache>& record,
+    Lib::Reader& reader, const Lib::Handle& handle,
     const std::function<bool(std::uint64_t size)>& confirm_large,
-    const std::function<bool(std::span<const BYTE> chunk)>& write) {
-  // Unnamed Data attribute contains the file data
-  const Attr::AttrBase<Cache::Strategy::NoCache>* data = record.FindStream({});
-  if (data == nullptr) {
+    const std::function<bool(std::span<const std::uint8_t> chunk)>& write) {
+  const auto streams = reader.GetStreams(handle);
+  if (!streams) {
+    return {.error = RecoverError::Unreadable};
+  }
+  const auto unnamed =
+      std::ranges::find_if(streams.value, [](const Lib::StreamInfo& stream) {
+        return stream.name.empty();
+      });
+  if (unnamed == streams.value.end()) {
     return {.error = RecoverError::NoDataStream};
   }
 
-  const ULONGLONG datalen = data->GetDataSize();
-  ULONGLONG remain = datalen;
-
   // Check files with huge size (maybe something is error)
-  if (datalen > kConfirmFileSize && !confirm_large(datalen)) {
+  if (unnamed->size > kConfirmFileSize && !confirm_large(unnamed->size)) {
     return {.error = RecoverError::Declined};
   }
 
-  std::vector<BYTE> vec(kCopyChunkSize, '\0');
-  for (ULONGLONG i = 0; i < datalen; i += kCopyChunkSize) {
-    const std::optional<ULONGLONG> len =
-        data->ReadData(i, {vec.data(), kCopyChunkSize});
-    if (!len || (*len != kCopyChunkSize && *len != remain)) {
-      return {.error = RecoverError::Read};
-    }
-    if (!write({vec.data(), static_cast<std::size_t>(*len)})) {
-      return {.error = RecoverError::Write};
-    }
-    remain -= *len;
+  bool write_failed = false;
+  const auto copied =
+      reader.CopyTo(handle, u"", [&](std::span<const std::uint8_t> chunk) {
+        write_failed = !write(chunk);
+        return !write_failed;
+      });
+  if (!copied) {
+    return {.error = write_failed ? RecoverError::Write : RecoverError::Read};
   }
-  return {.error = RecoverError::None, .bytes = datalen};
+  return {.error = RecoverError::None, .bytes = copied.value};
 }
 
-RecoveryCheck
-    AssessRecovery(const Io::FileRecord<Cache::Strategy::NoCache>& record) {
-  const std::optional<Alloc::DataState> state = record.GetDataState({});
-  if (!state) {
-    return {};
-  }
-  switch (*state) {
-    case Alloc::DataState::Intact:
+RecoveryCheck AssessRecovery(Lib::DataState state) {
+  switch (state) {
+    case Lib::DataState::NotChecked:
+    case Lib::DataState::Intact:
       return {};
-    case Alloc::DataState::Reallocated:
+    case Lib::DataState::Reallocated:
       return {.advice = RecoveryAdvice::Confirm,
               .cause = RecoveryCause::Reallocated};
-    case Alloc::DataState::Bad:
+    case Lib::DataState::Bad:
       return {.advice = RecoveryAdvice::Confirm,
               .cause = RecoveryCause::BadClusters};
-    case Alloc::DataState::Unknown:
+    case Lib::DataState::Unknown:
       break;
   }
   return {.advice = RecoveryAdvice::Warn, .cause = RecoveryCause::Unchecked};
+}
+
+RecoveryCheck AssessRecovery(Lib::Reader& reader, const Lib::Handle& handle) {
+  const auto state = reader.GetDataState(handle);
+  return state ? AssessRecovery(state.value) : RecoveryCheck{};
 }
 
 std::wstring RecoveryMessage(const RecoveryCheck& check) {
@@ -407,9 +306,8 @@ std::wstring RecoveryMessage(const RecoveryCheck& check) {
   return {};
 }
 
-bool ShouldRecover(const Io::FileRecord<Cache::Strategy::NoCache>& record,
+bool ShouldRecover(const RecoveryCheck& check,
                    const std::function<bool(const RecoveryCheck&)>& confirm) {
-  const RecoveryCheck check = AssessRecovery(record);
   return check.advice == RecoveryAdvice::Proceed || confirm(check);
 }
 
@@ -684,7 +582,7 @@ void RecoveryFile::Close() noexcept {
   handle_ = no_file_handle;
 }
 
-bool RecoveryFile::Write(std::span<const BYTE> chunk) {
+bool RecoveryFile::Write(std::span<const std::uint8_t> chunk) {
   if (handle_ == no_file_handle) {
     return false;
   }
@@ -727,7 +625,7 @@ CreatedFile CreateRecoveryFile(std::wstring_view directory,
   for (unsigned copy = 1; copy <= kMaxNameCopies; copy++) {
     const std::wstring candidate = copy == 1 ? safe : NumberedName(safe, copy);
     const std::wstring path = JoinPath(directory, candidate);
-    const std::wstring extended = Io::ToExtendedLengthPath(path);
+    const std::wstring extended = Device::ExtendedPath(path);
     if (extended.size() >= kMaxExtendedPathUnits) {
       return {.file = std::nullopt, .error = CreateError::PathTooLong};
     }

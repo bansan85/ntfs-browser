@@ -51,4 +51,19 @@ enum class TargetKind {
 [[nodiscard]] std::optional<DeviceTarget>
     SplitDeviceTarget(std::wstring_view target);
 
+// The volume source that a Search target names, as OpenVolumeFromTarget()
+// would read it: the image file or device of SplitDeviceTarget() or, on
+// Windows, the root of the drive ("c:\") of a target such as "c:\Users".
+// It opens nothing. Nothing when no rule matches.
+[[nodiscard]] std::optional<std::filesystem::path>
+    TargetSource(std::wstring_view target);
+
+// path as a path Win32 file calls take beyond 260 units: see
+// Io::ToExtendedLengthPath(). Unchanged off Windows.
+[[nodiscard]] std::wstring ExtendedPath(std::wstring_view path);
+
+// Same, for a std::filesystem::path.
+[[nodiscard]] std::filesystem::path
+    ExtendedFsPath(const std::filesystem::path& path);
+
 }  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess

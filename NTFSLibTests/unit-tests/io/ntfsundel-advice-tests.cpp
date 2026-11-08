@@ -12,26 +12,26 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/example/ntfsundel/ntfsundel-core.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/search/reader.h>
 #include <ntfs-browser/test/alloc/alloc-test-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/test/io/ntfsdir-sample-support.h>
 
 namespace ExampleNtfsUndel = NTFS_BROWSER_NAMESPACE::Example::NtfsUndel;
 
 namespace {
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
-namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
+namespace Lib = NTFS_BROWSER_NAMESPACE::Search;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
 using ExampleNtfsUndel::RecoverError;
 using ExampleNtfsUndel::RecoveryAdvice;
 using ExampleNtfsUndel::RecoveryCause;
 using ExampleNtfsUndel::RecoveryCheck;
+using NTFS_BROWSER_NAMESPACE::Test::Io::TempImage;
 using TestFakeImage::FakeDataRun;
 
 // The four freed files of the volume, one per data state.
@@ -88,23 +88,28 @@ std::vector<BYTE> FourStatesImage() {
   return TestAlloc::WithBadClusters(std::move(image), bad_cluster);
 }
 
-using Volume = NTFS_BROWSER_NAMESPACE::NtfsVolume<Cache::Strategy::NoCache>;
-
-// A freed record, parsed with its data attributes.
+// A volume over a temp image, a Reader of it, and the handle of one record.
+// The handle takes any sequence number: the tests name the records by number.
 struct Opened {
-  TestAlloc::Opened<Cache::Strategy::NoCache> volume;
-  ExampleNtfsUndel::OpenedRecord record;
+  std::unique_ptr<TempImage> image;
+  std::unique_ptr<Lib::Reader> reader;
+  Lib::Handle handle;
 };
 
 Opened Open(const std::vector<BYTE>& image, std::uint64_t reference) {
-  Opened opened{.volume =
-                    TestAlloc::OpenVolume<Cache::Strategy::NoCache>(image),
-                .record = {}};
-  opened.record =
-      ExampleNtfsUndel::OpenDeletedFile(*opened.volume.volume, reference);
-  REQUIRE(opened.record.error == RecoverError::None);
-  REQUIRE(opened.record.record != nullptr);
+  Opened opened;
+  opened.image = std::make_unique<TempImage>(image);
+  opened.reader = std::make_unique<Lib::Reader>(Lib::ReaderOptions{
+      .target = ExampleNtfsUndel::ToUtf16(opened.image->path.wstring())});
+  REQUIRE(opened.reader->IsOpen());
+  opened.handle = {.record = reference};
+  REQUIRE(opened.reader->Check(opened.handle));
   return opened;
+}
+
+// What the Reader says of the clusters of the opened file, as advice.
+RecoveryCheck Assess(const Opened& opened) {
+  return ExampleNtfsUndel::AssessRecovery(*opened.reader, opened.handle);
 }
 
 // Whether message holds text.
@@ -125,16 +130,15 @@ struct Copied {
   int large_calls = 0;
 };
 
-Copied Copy(const ExampleNtfsUndel::OpenedRecord& opened,
-            bool accept_large = true) {
+Copied Copy(const Opened& opened, bool accept_large = true) {
   Copied copied;
   copied.result = ExampleNtfsUndel::CopyUnnamedData(
-      *opened.record,
+      *opened.reader, opened.handle,
       [&copied, accept_large](std::uint64_t) {
         ++copied.large_calls;
         return accept_large;
       },
-      [&copied](std::span<const BYTE> chunk) {
+      [&copied](std::span<const std::uint8_t> chunk) {
         copied.bytes.insert(copied.bytes.end(), chunk.begin(), chunk.end());
         return true;
       });
@@ -147,11 +151,10 @@ TEST_CASE("an intact freed file is recovered with no question",
           "[undel][advice]") {
   const Opened opened = Open(FourStatesImage(), intact_ref);
 
-  const RecoveryCheck check =
-      ExampleNtfsUndel::AssessRecovery(*opened.record.record);
+  const RecoveryCheck check = Assess(opened);
   Asked asked;
-  const bool go_on = ExampleNtfsUndel::ShouldRecover(
-      *opened.record.record, [&asked](const RecoveryCheck&) {
+  const bool go_on =
+      ExampleNtfsUndel::ShouldRecover(check, [&asked](const RecoveryCheck&) {
         ++asked.calls;
         return false;
       });
@@ -167,17 +170,16 @@ TEST_CASE("a reallocated freed file asks first, and a refusal stops the copy",
           "[undel][advice]") {
   const Opened opened = Open(FourStatesImage(), reallocated_ref);
 
-  const RecoveryCheck check =
-      ExampleNtfsUndel::AssessRecovery(*opened.record.record);
+  const RecoveryCheck check = Assess(opened);
   Asked asked;
   const bool refused = ExampleNtfsUndel::ShouldRecover(
-      *opened.record.record, [&asked](const RecoveryCheck& seen) {
+      check, [&asked](const RecoveryCheck& seen) {
         ++asked.calls;
         asked.last = seen;
         return false;
       });
   const bool accepted = ExampleNtfsUndel::ShouldRecover(
-      *opened.record.record, [](const RecoveryCheck&) { return true; });
+      check, [](const RecoveryCheck&) { return true; });
 
   CHECK(check.advice == RecoveryAdvice::Confirm);
   CHECK(check.cause == RecoveryCause::Reallocated);
@@ -192,11 +194,10 @@ TEST_CASE("a freed file on a bad cluster asks first, naming the bad clusters",
           "[undel][advice]") {
   const Opened opened = Open(FourStatesImage(), bad_ref);
 
-  const RecoveryCheck check =
-      ExampleNtfsUndel::AssessRecovery(*opened.record.record);
+  const RecoveryCheck check = Assess(opened);
   Asked asked;
   const bool refused = ExampleNtfsUndel::ShouldRecover(
-      *opened.record.record, [&asked](const RecoveryCheck& seen) {
+      check, [&asked](const RecoveryCheck& seen) {
         ++asked.calls;
         asked.last = seen;
         return false;
@@ -214,11 +215,10 @@ TEST_CASE("a freed file whose state is unknown warns and the copy runs",
           "[undel][advice]") {
   const Opened opened = Open(FourStatesImage(), unknown_ref);
 
-  const RecoveryCheck check =
-      ExampleNtfsUndel::AssessRecovery(*opened.record.record);
+  const RecoveryCheck check = Assess(opened);
   Asked asked;
   const bool go_on = ExampleNtfsUndel::ShouldRecover(
-      *opened.record.record, [&asked](const RecoveryCheck& seen) {
+      check, [&asked](const RecoveryCheck& seen) {
         ++asked.calls;
         asked.last = seen;
         return true;
@@ -234,18 +234,25 @@ TEST_CASE("a freed file whose state is unknown warns and the copy runs",
 
 TEST_CASE("a freed record with no unnamed stream goes ahead",
           "[undel][advice]") {
-  const std::vector<BYTE> image = FourStatesImage();
-  Opened opened{.volume =
-                    TestAlloc::OpenVolume<Cache::Strategy::NoCache>(image),
-                .record = {}};
-  opened.record =
-      ExampleNtfsUndel::OpenDeletedFile(*opened.volume.volume, freed_dir_ref);
-  REQUIRE(opened.record.error == RecoverError::None);
+  const Opened opened = Open(FourStatesImage(), freed_dir_ref);
 
-  const RecoveryCheck check =
-      ExampleNtfsUndel::AssessRecovery(*opened.record.record);
+  const RecoveryCheck check = Assess(opened);
 
   CHECK(check.advice == RecoveryAdvice::Proceed);
+}
+
+TEST_CASE("the advice follows the data state", "[undel][advice]") {
+  using Lib::DataState;
+  CHECK(ExampleNtfsUndel::AssessRecovery(DataState::NotChecked).advice ==
+        RecoveryAdvice::Proceed);
+  CHECK(ExampleNtfsUndel::AssessRecovery(DataState::Intact).advice ==
+        RecoveryAdvice::Proceed);
+  CHECK(ExampleNtfsUndel::AssessRecovery(DataState::Reallocated).cause ==
+        RecoveryCause::Reallocated);
+  CHECK(ExampleNtfsUndel::AssessRecovery(DataState::Bad).cause ==
+        RecoveryCause::BadClusters);
+  CHECK(ExampleNtfsUndel::AssessRecovery(DataState::Unknown).advice ==
+        RecoveryAdvice::Warn);
 }
 
 TEST_CASE("after a yes the copy reads exactly what the disk holds",
@@ -255,9 +262,9 @@ TEST_CASE("after a yes the copy reads exactly what the disk holds",
   SECTION("a file on a bad cluster is copied whole, bad cluster included") {
     const Opened opened = Open(image, bad_ref);
     REQUIRE(ExampleNtfsUndel::ShouldRecover(
-        *opened.record.record, [](const RecoveryCheck&) { return true; }));
+        Assess(opened), [](const RecoveryCheck&) { return true; }));
 
-    const Copied copied = Copy(opened.record);
+    const Copied copied = Copy(opened);
 
     CHECK(copied.result.error == RecoverError::None);
     CHECK(copied.result.bytes == file_size);
@@ -270,7 +277,7 @@ TEST_CASE("after a yes the copy reads exactly what the disk holds",
   SECTION("a read the disk cannot serve ends the copy with the read error") {
     const Opened opened = Open(image, unknown_ref);
 
-    const Copied copied = Copy(opened.record);
+    const Copied copied = Copy(opened);
 
     CHECK(copied.result.error == RecoverError::Read);
   }
@@ -288,11 +295,11 @@ TEST_CASE("a large file that is not intact is asked about twice, once each",
 
   Asked asked;
   const bool go_on = ExampleNtfsUndel::ShouldRecover(
-      *opened.record.record, [&asked](const RecoveryCheck&) {
+      Assess(opened), [&asked](const RecoveryCheck&) {
         ++asked.calls;
         return true;
       });
-  const Copied copied = Copy(opened.record, false);
+  const Copied copied = Copy(opened, false);
 
   CHECK(go_on);
   CHECK(asked.calls == 1);

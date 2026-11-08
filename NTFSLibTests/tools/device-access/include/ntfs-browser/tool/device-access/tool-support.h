@@ -42,6 +42,10 @@ class Utf8ConsoleOutput {
   unsigned previous_code_page_{0};
 };
 
+// Applies config to the library log, as Log::Configure() does. Returns false
+// when the log file cannot be opened.
+bool ConfigureLog(const NTFS_BROWSER_NAMESPACE::Log::Config& config);
+
 // Tells stderr that the log file of config could not be opened.
 void ReportLogFileError(const NTFS_BROWSER_NAMESPACE::Log::Config& config);
 

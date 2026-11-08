@@ -63,6 +63,8 @@ Utf8ConsoleOutput::~Utf8ConsoleOutput() = default;
 
 #endif
 
+bool ConfigureLog(const Log::Config& config) { return Log::Configure(config); }
+
 void ReportLogFileError(const Log::Config& config) {
   // Nothing can be done about a failed write to stderr.
   // NOLINTBEGIN(cppcoreguidelines-pro-type-vararg,cert-err33-c)
