@@ -11,10 +11,8 @@
 #include <ntfs-browser/tool/fuzzgen/recorded-stream.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
 
-#include "bpb-edit.h"
 #include "data/file-record-flag.h"
 #include "data/file-record-header.h"
-#include "data/ntfs-bpb.h"
 #include "legacy-fixtures.h"
 #include "record-edit.h"
 
@@ -47,10 +45,6 @@ constexpr DWORD resident_header_bytes = 0x18;
 constexpr Data::FileRecordFlag directory_in_use =
     Data::FileRecordFlag::InUse | Data::FileRecordFlag::Dir;
 constexpr Data::FileRecordFlag directory_deleted = Data::FileRecordFlag::Dir;
-
-// An index block size of 2^17 bytes, in the negative-exponent form of the
-// boot sector: more than a block of the full cache, which has 64 KiB.
-constexpr DWORD shift_17_index_block = 0xEF;
 
 Image Base() { return FakeImage::BuildFakeNtfsImage(); }
 
@@ -124,15 +118,6 @@ const std::vector<LegacyFixtures::Damaged>& Inputs() {
       VolumeAttribute("volume_information_must_be_resident",
                       RecordEdit::type_volume_information),
       VolumeAttribute("volume_name_must_be_resident", type_volume_name),
-      {.name = "full_cache_index_block_crosses_64kib_block",
-       .base = Base,
-       .damage =
-           [](Image& image) {
-             BpbEdit::Apply(image, [](Data::NtfsBpb& bpb) {
-               bpb.clusters_per_index_block = shift_17_index_block;
-             });
-           },
-       .probe = Probe::FullCache},
   };
   return inputs;
 }

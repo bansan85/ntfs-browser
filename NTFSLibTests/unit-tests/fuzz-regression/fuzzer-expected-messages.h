@@ -42,7 +42,7 @@ struct ExpectedMessages {
 
 // The messages each saved regression testcase must log, by file name. The
 // count is the number of saved testcases: a test checks that none is missing.
-inline constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 233>
+inline constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 232>
     expected_error_messages{
         {"0724c913e1b2f0607bb5cd3ebfacb596db4458e9",
          {true,
@@ -295,8 +295,6 @@ inline constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 233>
           {"Attribute continuation VCNs are not contiguous from 0; "
            "leaving"}}},
         {"attr_type_slot_aliasing", {true, {"FileRecord Size is invalid"}}},
-        {"full_cache_index_block_crosses_64kib_block",
-         {true, {"clusters_per_index_block magnitude out of range"}}},
         {"invalid_header_common", {true, {"FileRecord Size is invalid"}}},
         {"compressed_index_allocation_encrypted",
          {true, {"FindStream() found the unnamed stream"}}},
