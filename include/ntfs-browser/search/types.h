@@ -222,9 +222,9 @@ enum class PatternKind : std::uint8_t {
   Exact,
   // The text may hold the wildcards '*' and '?'. See Pattern.
   Wildcard,
-  // The text is a regular expression. Not available yet: a scan that asks for
-  // it
-  // ends as Failed, and the log says "regex support is not compiled in".
+  // The text is a regular expression (PCRE2, Perl syntax). The library MAY be
+  // built without it: see RegexAvailable() in scan.h. A scan that asks for it
+  // then ends as Failed, and the log says "regex support is not compiled in".
   Regex
 };
 
@@ -239,6 +239,15 @@ enum class MatchTarget : std::uint8_t {
   // entry it delivers has its path set.
   FullPath
 };
+
+// The default of Pattern::regex_match_limit. A name is at most 255 units long:
+// a pattern that needs more than a million steps on it is a runaway.
+inline constexpr std::uint32_t default_regex_match_limit = 1000000;
+
+// The default of Pattern::regex_jit_stack_bytes: 256 KiB. The stack of the
+// compiled code grows from 32 KiB up to that, and the matching of a name takes
+// a few KiB.
+inline constexpr std::size_t default_regex_jit_stack_bytes = 256 * 1024;
 
 // A search by name, applied by the scan itself: an entry that does not match is
 // never delivered, never counted, and never takes memory in the buffers of the
@@ -266,6 +275,23 @@ enum class MatchTarget : std::uint8_t {
 // character past it, written as a surrogate pair, is compared as it is. With
 // case_sensitive the units are compared as they are.
 //
+// Regex. The text is a PCRE2 regular expression, compiled once when the scan
+// starts. A text that does not compile ends the scan as Failed: the log gives
+// the PCRE2 message and the position of the error. Regex is optional at build
+// time (RegexAvailable() in scan.h). It is a search: the expression matches
+// when it matches any part of the name, like "contains". Write '^' and '$' to
+// hold it to the start and to the end. There is no other flag. The name, or the
+// path, is matched as UTF-16 text, and \w, \d and \b follow Unicode. Unless
+// case_sensitive is set, the name is first folded through the $UpCase table of
+// the volume, and the expression is matched with PCRE2_CASELESS. So the
+// expression sees a name in capitals: a property like \p{Ll} finds nothing in
+// it. An unpaired surrogate in a name matches nothing, not even '.', so no
+// match spans it. A name on which the engine gives up, because it hit
+// regex_match_limit or the JIT stack, counts as no match. The first such name
+// of a scan gets a warning in the log, and the others none. A text that matches
+// every name, like "x*", is allowed. Nothing in a pattern is tied to the
+// locale.
+//
 // FullPath. The separator '\' is a unit like another: '*' and '?' match it, so
 // "\Docs\*.txt" finds the files of every folder below Docs. The path of an
 // entry that no folder reaches (MftList only) starts with "\<lost>".
@@ -280,6 +306,11 @@ struct Pattern {
   // Compare units as they are, instead of through $UpCase.
   bool case_sensitive{false};
   MatchTarget target{MatchTarget::Name};
+  // Regex only. The most steps PCRE2 spends on one name before it gives up, and
+  // the most memory in bytes of the stack of the compiled code. See Regex
+  // above. 0 is not a valid value: it is replaced by the default.
+  std::uint32_t regex_match_limit{default_regex_match_limit};
+  std::size_t regex_jit_stack_bytes{default_regex_jit_stack_bytes};
 };
 
 // How far a scan has come.

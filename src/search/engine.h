@@ -29,8 +29,8 @@
 //                            the volume, and gives it to its walk. It drops the
 //                            entries that do not match Options::pattern before
 //                            they reach the exchange. A Matcher (ExactMatcher,
-//                            WildcardMatcher, one more for the regular
-//                            expression) does the comparing, built by
+//                            WildcardMatcher, RegexMatcher when the build has
+//                            PCRE2) does the comparing, built by
 //                            MakeMatcher(). The walk of an engine is not
 //                            touched: a directory that does not match is still
 //                            entered.
@@ -51,9 +51,8 @@
 // MftList engine gives its entries to the sink after it read the whole $MFT.
 // The percent moves during the read.
 //
-// Left to do: the regular expression matcher (MakeMatcher() fails on it for
-// now) and the filters on the fields (Options). Both go into MatchingSink and
-// MakeMatcher(), not into an engine. An engine MUST give every entry to the
+// Left to do: the filters on the fields (Options). They go into MatchingSink,
+// not into an engine. An engine MUST give every entry to the
 // MatchingSink it made, and MUST NOT count or test an entry itself.
 
 #include <functional>

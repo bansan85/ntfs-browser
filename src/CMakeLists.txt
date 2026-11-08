@@ -102,6 +102,10 @@ if(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP)
   list(APPEND ${PROJECT_NAME}_SRC "efs/cipher-cryptopp.cpp")
 endif()
 
+if(NTFS_BROWSER_ENABLE_REGEX)
+  list(APPEND ${PROJECT_NAME}_SRC "search/regex-matcher.cpp")
+endif()
+
 # The backend-agnostic EFS machinery beyond fek.cpp - which key-provider-win.cpp
 # needs unconditionally on Windows, so it stays in the base list above - is only
 # needed, and only compiles, when at least one backend is compiled in.
@@ -296,6 +300,7 @@ set(
   "search/match-sink.h"
   "search/matcher.h"
   "search/mft-list-engine.h"
+  "search/regex-matcher.h"
   "search/scan-exchange.h"
   "search/target.h"
   "search/wildcard-matcher.h"
@@ -345,6 +350,14 @@ target_link_libraries(${PROJECT_NAME} PRIVATE frozen::frozen)
 if(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP)
   target_link_libraries(${PROJECT_NAME} PRIVATE cryptopp::cryptopp)
 endif()
+# Private too: PCRE2 is only used by src/search/regex-matcher.cpp.
+if(NTFS_BROWSER_ENABLE_REGEX)
+  if(NTFS_BROWSER_USE_INSTALLED_PCRE2)
+    target_link_libraries(${PROJECT_NAME} PRIVATE PCRE2::16BIT)
+  else()
+    target_link_libraries(${PROJECT_NAME} PRIVATE pcre2-16)
+  endif()
+endif()
 if(WIN32)
   target_link_libraries(${PROJECT_NAME} PRIVATE bcrypt crypt32 ncrypt)
 endif()
@@ -358,7 +371,7 @@ target_include_directories(
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
 )
 target_compile_definitions(${PROJECT_NAME} PUBLIC "_UNICODE" "UNICODE")
-# Feed the three options through as macros to the private .cpp files that test
+# Feed the options through as macros to the private .cpp files that test
 # them with #ifdef/#if defined(...).
 target_compile_definitions(
   ${PROJECT_NAME}
@@ -366,6 +379,7 @@ target_compile_definitions(
     $<$<BOOL:${NTFS_BROWSER_ENABLE_DECOMPRESSION}>:NTFS_BROWSER_ENABLE_DECOMPRESSION>
     $<$<BOOL:${NTFS_BROWSER_ENABLE_EFS_CRYPTOPP}>:NTFS_BROWSER_ENABLE_EFS_CRYPTOPP>
     $<$<BOOL:${NTFS_BROWSER_ENABLE_EFS_BCRYPT}>:NTFS_BROWSER_ENABLE_EFS_BCRYPT>
+    $<$<BOOL:${NTFS_BROWSER_ENABLE_REGEX}>:NTFS_BROWSER_ENABLE_REGEX>
 )
 
 group_src(${${PROJECT_NAME}_SRC} ${${PROJECT_NAME}_H} ${${PROJECT_NAME}_CMAKE})
