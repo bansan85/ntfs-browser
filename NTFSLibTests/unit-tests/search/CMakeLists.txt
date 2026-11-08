@@ -3,6 +3,7 @@ target_sources(
   PRIVATE
     "entry-buffer-tests.cpp"
     "scan-directory-tests.cpp"
+    "scan-mft-list-tests.cpp"
     "scan-poll-tests.cpp"
     "scan-support.cpp"
     "scan-support.h"

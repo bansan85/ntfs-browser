@@ -85,6 +85,24 @@ struct Outcome {
 // (21). Sub holds c.txt (18).
 [[nodiscard]] std::vector<BYTE> TreeImage();
 
+// The volume of the tree nodes below, for the MftList engine. Under the root:
+// Docs (record 16, a folder), one.txt (17, also named two.txt in Docs) and
+// LongName.txt (18, with the DOS alias LONGNA~1.TXT).
+[[nodiscard]] std::vector<BYTE> HardLinkImage();
+
+// Under the root: Keep (16) with k.txt (17), and Gone (18), a deleted folder,
+// with Mid (19) with orphan.txt (20). With no deleted files shown, Mid and
+// orphan.txt have no parent that the volume holds.
+[[nodiscard]] std::vector<BYTE> OrphanImage();
+
+// Clusters at the end of the volume that ReallocatedImage() gives to its files.
+inline constexpr std::uint64_t reallocated_tail_clusters = 4;
+
+// Under the root: live.bin (16) and the deleted old.bin (17) claim the same two
+// clusters, so old.bin lost its data. The deleted free.bin (18) has one cluster
+// of its own.
+[[nodiscard]] std::vector<BYTE> ReallocatedImage();
+
 // The record number of the tree node with the given index.
 [[nodiscard]] constexpr std::uint64_t Record(std::size_t node) {
   return NTFS_BROWSER_NAMESPACE::Test::FakeImage::name_tree_first_record + node;

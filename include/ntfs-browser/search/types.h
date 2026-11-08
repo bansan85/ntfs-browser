@@ -167,8 +167,9 @@ struct Entry {
   std::u16string_view name;
   // The path from the root of the volume, with '\' before each name and a
   // leading '\' ("\Docs\report.txt"). Empty unless Options::full_path is set.
-  // For an entry that no directory reaches (MftList only), the path starts at
-  // the nearest ancestor that is known, with the placeholder name "<lost>".
+  // For an entry that no directory reaches (MftList only), the path starts with
+  // the placeholder "\<lost>" in place of the folders that are lost, and goes
+  // on with the names that are known ("\<lost>\Docs\report.txt").
   std::u16string_view path;
 
   // $MFT record number of the file, and the times that record was reused.
@@ -195,8 +196,9 @@ struct Entry {
   bool is_directory{false};
   Standing standing{Standing::Live};
 
-  // Names the record has, hard links included. 0 when the engine does not
-  // know: the directory engines see one name at a time.
+  // Names the record has, hard links included, DOS aliases left out. 0 when the
+  // engine does not know: the directory engines see one name at a time. The
+  // MftList engine gives one entry for each name, all with this count.
   std::uint16_t link_count{0};
 
   // Only for a deleted entry, and when the engine worked it out.
@@ -280,7 +282,9 @@ struct Options {
   // Fill Entry::path. Costs one string for each entry.
   bool full_path{false};
   // Work out Entry::data_state of the deleted files. Costs a read of the file
-  // record and of $Bitmap for each deleted entry.
+  // record and of $Bitmap for each deleted entry. With the MftList engine it
+  // also gives Entry::clusters: the scan then reads the cluster runs of every
+  // record, which makes it slower and bigger.
   bool deleted_data_state{true};
 
   // Memory the block cache of the DirectoryFullCache engine may hold, in

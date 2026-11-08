@@ -3,6 +3,7 @@
 #include <ntfs-browser/win-types.h>
 
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -111,15 +112,73 @@ std::vector<BYTE> TreeImage() {
                    .data_size = 10,
                    .index_size = 10,
                    .index_allocated_size = 4096});
-  nodes.push_back({.links = link(L"c.txt", 3), .index_size = 5});
-  nodes.push_back({.links = link(L"Sub", 0), .directory = true});
   nodes.push_back(
-      {.links = link(L"root.txt", Fake::name_tree_root), .index_size = 7});
+      {.links = link(L"c.txt", 3), .data_size = 5, .index_size = 5});
+  nodes.push_back({.links = link(L"Sub", 0), .directory = true});
+  nodes.push_back({.links = link(L"root.txt", Fake::name_tree_root),
+                   .data_size = 7,
+                   .index_size = 7});
   nodes.push_back({.links = link(L"gone.txt", 0),
                    .in_use = false,
                    .keep_entries = true,
                    .data_size = 3});
   return Fake::BuildFakeNtfsImageWithNameTree(nodes);
+}
+
+std::vector<BYTE> HardLinkImage() {
+  using Fake::FakeTreeNode;
+  std::vector<FakeTreeNode> nodes;
+  nodes.push_back({.links = {{.name = L"Docs"}}, .directory = true});
+  nodes.push_back(
+      {.links = {{.name = L"one.txt"}, {.name = L"two.txt", .parent = 0}},
+       .data_size = 4});
+  nodes.push_back({.links = {{.name = L"LongName.txt"},
+                             {.name = L"LONGNA~1.TXT", .name_space = 2}},
+                   .data_size = 2});
+  return Fake::BuildFakeNtfsImageWithNameTree(nodes);
+}
+
+std::vector<BYTE> OrphanImage() {
+  using Fake::FakeTreeNode;
+  std::vector<FakeTreeNode> nodes;
+  nodes.push_back({.links = {{.name = L"Keep"}}, .directory = true});
+  nodes.push_back({.links = {{.name = L"k.txt", .parent = 0}}, .data_size = 1});
+  nodes.push_back(
+      {.links = {{.name = L"Gone"}}, .directory = true, .in_use = false});
+  nodes.push_back(
+      {.links = {{.name = L"Mid", .parent = 2}}, .directory = true});
+  nodes.push_back(
+      {.links = {{.name = L"orphan.txt", .parent = 3}}, .data_size = 1});
+  return Fake::BuildFakeNtfsImageWithNameTree(nodes);
+}
+
+std::vector<BYTE> ReallocatedImage() {
+  using Fake::FakeDataRun;
+  using Fake::FakeTreeNode;
+  // The geometry does not depend on the runs: a first image tells where the
+  // volume ends, and the runs go to its last clusters.
+  const auto build = [](std::uint64_t first_lcn) {
+    const auto stream = [first_lcn](std::uint64_t offset,
+                                    std::uint32_t clusters) {
+      return std::vector<FakeDataRun>{
+          {.lcn = first_lcn + offset, .clusters = clusters}};
+    };
+    std::vector<FakeTreeNode> nodes;
+    nodes.push_back({.links = {{.name = L"live.bin"}},
+                     .runs = stream(0, 2),
+                     .stream_size = 2ULL * Fake::fake_cluster_size});
+    nodes.push_back({.links = {{.name = L"old.bin"}},
+                     .in_use = false,
+                     .runs = stream(0, 2),
+                     .stream_size = 2ULL * Fake::fake_cluster_size});
+    nodes.push_back({.links = {{.name = L"free.bin"}},
+                     .in_use = false,
+                     .runs = stream(2, 1),
+                     .stream_size = Fake::fake_cluster_size});
+    return Fake::BuildFakeNtfsImageWithNameTree(nodes);
+  };
+  const std::uint64_t clusters = build(0).size() / Fake::fake_cluster_size;
+  return build(clusters - reallocated_tail_clusters);
 }
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Test::Search

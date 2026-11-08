@@ -9,6 +9,7 @@
 
 #include "log/ntfs-common.h"
 #include "search/directory-engine.h"
+#include "search/mft-list-engine.h"
 #include "search/target.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Search {
@@ -18,11 +19,9 @@ EngineKind ResolveEngine(const Options& options, const TargetParts& parts) {
     return options.engine;
   }
   // A folder is walked through its index. The whole volume is read in $MFT
-  // order, which needs no seek. TODO(MftList engine): return MftList for
-  // parts.inside.empty() once that engine exists. Until then the directory
-  // walk serves the root too.
-  static_cast<void>(parts);
-  return EngineKind::DirectoryFullCache;
+  // order, which needs no seek.
+  return parts.inside.empty() ? EngineKind::MftList
+                              : EngineKind::DirectoryFullCache;
 }
 
 std::unique_ptr<Engine> MakeEngine(const Options& options,
@@ -35,10 +34,11 @@ std::unique_ptr<Engine> MakeEngine(const Options& options,
       return std::make_unique<DirectoryEngine<Cache::Strategy::FullCache>>(
           options, parts);
     case EngineKind::MftList:
+      return std::make_unique<MftListEngine>(options, parts);
     case EngineKind::Auto:
       break;
   }
-  Log::Error("This scan engine is not available yet");
+  Log::Error("This scan engine is not available");
   return nullptr;
 }
 

@@ -12,23 +12,27 @@
 //                            and calls the callback.
 //   Engine (this file)       One way to walk a volume. MakeEngine() picks it
 //                            from Options::engine. ResolveEngine() holds the
-//                            Auto rule: it returns DirectoryFullCache for
-//                            every target until the MftList engine exists.
+//                            Auto rule: MftList for the root of a volume (no
+//                            inside path), DirectoryFullCache for a folder.
 //   DirectoryEngine<S>       The NtfsDir walk, both caches. It fills every
 //                            Entry field except link_count (0), clusters
 //                            (null) and, for a live file, data_state.
+//   MftListEngine            The NtfsMftList walk: every record in $MFT order,
+//                            one Entry for each name of a record, orphans
+//                            included, with link_count, the cluster counts of
+//                            a deleted file and a percent. It builds an
+//                            Mft::MftTree and lists it once the scan is done.
 //   EntryBuffer              Owns the text that the views of an Entry point at.
 //   SplitTarget/OpenVolume   The target string, opened without test code.
 //
 // Entry conventions that every engine MUST keep, so that the engines agree:
 // times are UTC ticks (FileTimesUtc), names are raw UTF-16 units, the path
-// starts with '' and has no trailing one, the system files (record below 16)
+// starts with '\' and has no trailing one, the system files (record below 16)
 // and the DOS alias names are hidden unless Options::include_system_files, a
 // deleted entry has standing Deleted or Reused, and data_state is only set
 // for a deleted entry.
 //
-// Left to do: the MftList engine (fills link_count and clusters, calls
-// SetPercent()), the worker thread, the name matching and the filters on the
+// Left to do: the worker thread, the name matching and the filters on the
 // fields (Options), and the Options of the regular expression.
 
 #include <memory>
@@ -85,8 +89,7 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY Engine {
 [[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY EngineKind
     ResolveEngine(const Options& options, const TargetParts& parts);
 
-// Makes the engine ResolveEngine() chooses. Null for an engine that does not
-// exist yet, after a log line at Error level.
+// Makes the engine ResolveEngine() chooses.
 [[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY std::unique_ptr<Engine>
     MakeEngine(const Options& options, const TargetParts& parts);
 

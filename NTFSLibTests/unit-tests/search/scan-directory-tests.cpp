@@ -233,7 +233,9 @@ TEST_CASE("The two directory engines give the same entries", "[search][scan]") {
   REQUIRE(no_cache.state == Lib::State::Finished);
   CHECK_FALSE(no_cache.rows.empty());
   CHECK(no_cache.rows == full_cache.rows);
-  CHECK(automatic.rows == full_cache.rows);
+  if (!inside.empty()) {
+    CHECK(automatic.rows == full_cache.rows);
+  }
 }
 
 TEST_CASE("A scan keeps a name of unusual UTF-16 as it is", "[search][scan]") {
