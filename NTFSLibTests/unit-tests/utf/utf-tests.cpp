@@ -122,3 +122,29 @@ TEST_CASE("WideToUtf8 keeps a NUL and the text around it", "[utf]") {
   CHECK(NTFS_BROWSER_NAMESPACE::Utf::WideToUtf8(name) ==
         std::string("a\0b", 3));
 }
+
+TEST_CASE("WideToUtf16 undoes Utf16ToWide", "[utf]") {
+  using NTFS_BROWSER_NAMESPACE::Utf::Utf16ToWide;
+  using NTFS_BROWSER_NAMESPACE::Utf::WideToUtf16;
+  const std::vector<std::u16string> names{
+      u"plain",
+      u"café",
+      std::u16string{u'a', static_cast<char16_t>(0xD83D),
+                     static_cast<char16_t>(0xDE00)},
+      std::u16string{static_cast<char16_t>(0xD800), u'x'},
+      std::u16string{static_cast<char16_t>(0xDC00)},
+      std::u16string{u'a', u'\0', u'b'}};
+
+  for (const std::u16string& name : names) {
+    CHECK(WideToUtf16(Utf16ToWide(name)) == name);
+  }
+}
+
+TEST_CASE("WideToUtf16 replaces a value past U+10FFFF", "[utf]") {
+  if constexpr (sizeof(wchar_t) > sizeof(char16_t)) {
+    const std::wstring name{static_cast<wchar_t>(0x110000)};
+
+    CHECK(NTFS_BROWSER_NAMESPACE::Utf::WideToUtf16(name) ==
+          std::u16string{static_cast<char16_t>(0xFFFD)});
+  }
+}

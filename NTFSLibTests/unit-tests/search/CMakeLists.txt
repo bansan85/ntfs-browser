@@ -1,0 +1,11 @@
+target_sources(
+  NtfsBrowserTests
+  PRIVATE
+    "entry-buffer-tests.cpp"
+    "scan-directory-tests.cpp"
+    "scan-poll-tests.cpp"
+    "scan-support.cpp"
+    "scan-support.h"
+    "search-types-tests.cpp"
+    "target-tests.cpp"
+)

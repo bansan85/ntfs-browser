@@ -149,6 +149,8 @@ void FileLinks(std::span<const FakeTreeNode> nodes, std::size_t node,
          .mft_ref = name_tree_first_record + node,
          .directory = tree_node.directory,
          .sequence = tree_sequence,
+         .real_size = tree_node.index_size,
+         .alloc_size = tree_node.index_allocated_size,
          .alter_time = name_tree_write_time,
          .parent_ref = ReferenceOf(link.parent),
          .name_space =

@@ -2254,6 +2254,11 @@ struct FakeTreeNode {
   // Empty: the $DATA is resident.
   std::vector<FakeDataRun> runs;
   ULONGLONG stream_size = 0;
+  // The size and the allocated size that each index entry of the node reports,
+  // as the $FILE_NAME copy a directory keeps. Apart from the record's own
+  // $DATA, they MAY differ from it, as on a real volume.
+  ULONGLONG index_size = 0;
+  ULONGLONG index_allocated_size = 0;
 };
 
 // How BuildFakeNtfsImageWithNameTree() lays the tree out.

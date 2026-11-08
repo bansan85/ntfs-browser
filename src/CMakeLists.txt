@@ -68,6 +68,11 @@ set(
   "ntfs-volume.cpp"
   "record/header.cpp"
   "record/slack-carver.cpp"
+  "search/directory-engine.cpp"
+  "search/engine.cpp"
+  "search/entry-buffer.cpp"
+  "search/scan.cpp"
+  "search/target.cpp"
   "tuning/knobs.cpp"
   "upcase/upcase-loader.cpp"
   "upcase/upcase.cpp"
@@ -120,6 +125,7 @@ else()
     "bench/platform-reader-posix.cpp"
     "bench/process-times-posix.cpp"
     "io/extended-path-posix.cpp"
+    "io/posix-disk-reader.cpp"
     "util/local-file-time-posix.cpp"
   )
 endif()
@@ -153,6 +159,8 @@ set(
   "../include/ntfs-browser/mft/idx.h"
   "../include/ntfs-browser/mft/tree.h"
   "../include/ntfs-browser/record/carved-name.h"
+  "../include/ntfs-browser/search/scan.h"
+  "../include/ntfs-browser/search/types.h"
   "../include/ntfs-browser/ntfs-volume.h"
   "../include/ntfs-browser/cache/stats.h"
   "../include/ntfs-browser/cache/strategy.h"
@@ -270,7 +278,12 @@ set(
   "volume/volume-geometry.h"
   "volume/volume-record-loader.h"
   "io/host-media-kind.h"
+  "io/posix-disk-reader.h"
   "io/win32-disk-reader.h"
+  "search/directory-engine.h"
+  "search/engine.h"
+  "search/entry-buffer.h"
+  "search/target.h"
 )
 
 set(${PROJECT_NAME}_CMAKE "${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt")
