@@ -214,9 +214,78 @@ struct Entry {
   }
 };
 
+// How a Pattern compares its text with a name.
+enum class PatternKind : std::uint8_t {
+  // No search: every entry is delivered. The default.
+  None,
+  // The whole name is equal to the text.
+  Exact,
+  // The text may hold the wildcards '*' and '?'. See Pattern.
+  Wildcard,
+  // The text is a regular expression. Not available yet: a scan that asks for
+  // it
+  // ends as Failed, and the log says "regex support is not compiled in".
+  Regex
+};
+
+// What a Pattern is compared with.
+enum class MatchTarget : std::uint8_t {
+  // The file name alone ("report.txt"). A record with hard links gives one
+  // entry
+  // for each of its names, and each name is tested on its own.
+  Name,
+  // The full path of the entry ("\Docs\report.txt"), as Entry::path holds it.
+  // The scan then builds the path whatever Options::full_path says, and every
+  // entry it delivers has its path set.
+  FullPath
+};
+
+// A search by name, applied by the scan itself: an entry that does not match is
+// never delivered, never counted, and never takes memory in the buffers of the
+// scan. An unset pattern (kind None) delivers everything.
+//
+// Names are raw UTF-16 units, and so is the text. An empty text matches no
+// entry, as no name is empty.
+//
+// Exact. The name, or the path, equals the text on every unit.
+//
+// Wildcard. '*' matches any run of characters, an empty one included. '?'
+// matches exactly one character. Every other unit of the text matches itself.
+// There are no character classes and no escape character: a name that holds a
+// '*' or a '?' is found with the wildcard that stands for it. A character is a
+// code point: a surrogate pair counts as one character for '?' and for '*', and
+// an unpaired surrogate counts as one character too. The other units of the
+// text are compared one unit at a time. The match covers the whole name, not a
+// part of it: "doc" does not find "doc.txt", "doc*" does. The time it takes is
+// linear in the product of the lengths of the text and of the name, whatever
+// the pattern.
+//
+// Case. Unless case_sensitive is set, two units are equal when the $UpCase
+// table of the volume maps them to the same unit. The locale of the process is
+// never used. $UpCase maps the units of the Basic Multilingual Plane: a
+// character past it, written as a surrogate pair, is compared as it is. With
+// case_sensitive the units are compared as they are.
+//
+// FullPath. The separator '\' is a unit like another: '*' and '?' match it, so
+// "\Docs\*.txt" finds the files of every folder below Docs. The path of an
+// entry that no folder reaches (MftList only) starts with "\<lost>".
+//
+// Directories. A directory is an entry like a file: it is delivered when its
+// own name or path matches, and only then. A directory that does not match is
+// still entered when the scan is recursive, so the files below it are found.
+struct Pattern {
+  PatternKind kind{PatternKind::None};
+  // The text to look for. Ignored for kind None.
+  std::u16string text;
+  // Compare units as they are, instead of through $UpCase.
+  bool case_sensitive{false};
+  MatchTarget target{MatchTarget::Name};
+};
+
 // How far a scan has come.
 struct Progress {
-  // Entries found so far, all batches counted.
+  // Entries delivered so far, all batches counted. With a Pattern it counts the
+  // entries that matched: the others are dropped by the worker.
   std::uint64_t entries_found{0};
   // 0 to 100. Set by the MftList engine only. The directory engines cannot
   // know the size of the tree, so they leave it empty and the caller shows the
@@ -245,8 +314,8 @@ enum class State : std::uint8_t {
   Finished,
   // Cancel() stopped the scan. What was found was delivered.
   Cancelled,
-  // The scan could not run: the target does not open, or is no NTFS volume.
-  // The log says why.
+  // The scan could not run: the target does not open, or is no NTFS volume, or
+  // the pattern cannot be used. The log says why.
   Failed
 };
 
@@ -258,8 +327,7 @@ inline constexpr std::uint64_t default_max_cache_bytes =
 // size takes a few tens of MiB, and a poll every 100 ms never sees more.
 inline constexpr std::size_t default_max_pending_entries = 262144;
 
-// What to scan and how. Set a field before Scan() takes the options. Fields
-// of search patterns and filters are added after the ones below.
+// What to scan and how. Set a field before Scan() takes the options.
 struct Options {
   // What to scan. A drive ("c:", "c:\Windows"), an image file or a device,
   // followed by an optional path inside the volume ("c:\image.img\Windows",
@@ -283,7 +351,8 @@ struct Options {
   // They are hidden by default, as NtfsDir hides them.
   bool include_system_files{false};
 
-  // Fill Entry::path. Costs one string for each entry.
+  // Fill Entry::path. Costs one string for each entry. Always on when the
+  // pattern looks at the full path.
   bool full_path{false};
   // Work out Entry::data_state of the deleted files. Costs a read of the file
   // record and of $Bitmap for each deleted entry. With the MftList engine it
@@ -303,6 +372,9 @@ struct Options {
   // waits and the buffer grows with the volume. A caller that stops polling
   // blocks the worker at the limit. Cancel() and the destructor still end it.
   std::size_t max_pending_entries{default_max_pending_entries};
+
+  // The search by name. Unset: every entry is delivered.
+  Pattern pattern;
 };
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Search

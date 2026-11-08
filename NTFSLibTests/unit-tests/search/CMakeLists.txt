@@ -2,6 +2,7 @@ target_sources(
   NtfsBrowserTests
   PRIVATE
     "entry-buffer-tests.cpp"
+    "name-matcher-tests.cpp"
     "scan-directory-tests.cpp"
     "scan-fake-engine.h"
     "scan-mft-list-tests.cpp"
