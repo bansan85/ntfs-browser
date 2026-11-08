@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <optional>
+#include <set>
 #include <span>
 #include <string>
 #include <string_view>
@@ -18,6 +19,10 @@
 #include <ntfs-browser/test/fuzz/fuzz-core.h>
 #include <ntfs-browser/test/fuzz/looping-disk-reader.h>
 #include <ntfs-browser/test/support/test-log-sink.h>
+#include <ntfs-browser/tool/fuzzgen/build-features.h>
+#include <ntfs-browser/tool/fuzzgen/scenario-catalog.h>
+#include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
+#include <ntfs-browser/tool/fuzzgen/scenario.h>
 
 #include "frozen/bits/elsa_std.h"
 #include "frozen/unordered_map.h"
@@ -30,9 +35,31 @@ namespace Fs = std::filesystem;
 
 namespace {
 
+// The scenarios of NtfsFuzzGen, which writes the testcases into
+// NTFS_FUZZ_DATA_DIR when the test target is built.
+const NTFS_BROWSER_NAMESPACE::Tool::FuzzGen::ScenarioRegistry& Scenarios() {
+  static const NTFS_BROWSER_NAMESPACE::Tool::FuzzGen::ScenarioRegistry
+      registry =
+          NTFS_BROWSER_NAMESPACE::Tool::FuzzGen::ScenarioCatalog::Build();
+  return registry;
+}
+
+// The feature that name needs and this build lacks, or Feature::None. The
+// generator writes no file for such a testcase.
+NTFS_BROWSER_NAMESPACE::Tool::FuzzGen::Feature
+    MissingFeature(std::string_view name) {
+  namespace FuzzGen = NTFS_BROWSER_NAMESPACE::Tool::FuzzGen;
+  const FuzzGen::Scenario* const scenario = Scenarios().Find(name);
+  if (scenario == nullptr || FuzzGen::BuildFeatures::Has(scenario->needs)) {
+    return FuzzGen::Feature::None;
+  }
+  return scenario->needs;
+}
+
 // Lists the saved AFL testcases under NTFS_FUZZ_DATA_DIR, sorted.
 std::vector<Fs::path> ListRegressionTestcases() {
   std::vector<Fs::path> files;
+  REQUIRE(Fs::is_directory(Fs::path(NTFS_FUZZ_DATA_DIR)));
   for (const auto& entry :
        Fs::directory_iterator(Fs::path(NTFS_FUZZ_DATA_DIR))) {
     if (entry.is_regular_file()) {
@@ -60,7 +87,15 @@ NTFS_BROWSER_NAMESPACE::Test::Fuzz::BootSectorPatch
 // against that entry's expected messages.
 void RunRegressionTestcase(std::string_view name) {
   const Fs::path file = Fs::path(NTFS_FUZZ_DATA_DIR) / name;
-  REQUIRE(Fs::exists(file));
+  if (!Fs::exists(file)) {
+    namespace FuzzGen = NTFS_BROWSER_NAMESPACE::Tool::FuzzGen;
+    const FuzzGen::Feature missing = MissingFeature(name);
+    if (missing != FuzzGen::Feature::None) {
+      SKIP("NtfsFuzzGen writes no " << name << " without "
+                                    << FuzzGen::BuildFeatures::Name(missing));
+    }
+    FAIL("NtfsFuzzGen did not write " << file.string());
+  }
 
   // Same as NtfsFuzzerAfl: an empty or unreadable testcase runs nothing.
   std::optional<std::vector<BYTE>> data =
@@ -103,7 +138,39 @@ TEST_CASE("saved regression corpus is fully covered by expected_error_messages",
   for (const Fs::path& file : files) {
     CHECK(expected_error_messages.contains(file.filename().string()));
   }
-  CHECK(files.size() == expected_error_messages.size());
+
+  // Every entry is a file here, or a testcase that this build cannot make.
+  std::size_t skipped = 0;
+  for (const auto& entry : expected_error_messages) {
+    if (Fs::exists(Fs::path(NTFS_FUZZ_DATA_DIR) / entry.first)) {
+      continue;
+    }
+    INFO("no file for " << entry.first);
+    CHECK(MissingFeature(entry.first) !=
+          NTFS_BROWSER_NAMESPACE::Tool::FuzzGen::Feature::None);
+    ++skipped;
+  }
+  CHECK(files.size() + skipped == expected_error_messages.size());
+}
+
+TEST_CASE("NtfsFuzzGen makes exactly the testcases of expected_error_messages",
+          "[fuzz][regression]") {
+  std::set<std::string, std::less<>> generated;
+  for (const auto& scenario : Scenarios().All()) {
+    // The corpus traces live in a subfolder and have no expected messages.
+    if (scenario.name.find('/') == std::string::npos) {
+      generated.insert(scenario.name);
+    }
+  }
+  CHECK(generated.size() == expected_error_messages.size());
+  for (const std::string& name : generated) {
+    INFO("scenario " << name);
+    CHECK(expected_error_messages.contains(name));
+  }
+  for (const auto& entry : expected_error_messages) {
+    INFO("table entry " << entry.first);
+    CHECK(generated.contains(entry.first));
+  }
 }
 
 // Registers one ctest-visible TEST_CASE per saved regression testcase, so

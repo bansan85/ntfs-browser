@@ -39,6 +39,7 @@ target_link_libraries(
     ${PROJECT_NAME}
     NtfsFakeImage
     NtfsFuzzCore
+    NtfsFuzzGenCore
     NtfsTestDiskReaders
     Catch2::Catch2WithMain
     spdlog::spdlog
@@ -85,12 +86,16 @@ target_include_directories(
 
 # Avoids hardcoding NtfsFuzzerAfl's build-output path in the test.
 add_dependencies(NtfsBrowserTests NtfsFuzzerAfl)
+
+# The tests read the fuzz inputs and the corpus traces that NtfsFuzzGen writes
+# into the build tree: they must exist before any test runs.
+add_dependencies(NtfsBrowserTests NtfsFuzzGenData)
 target_compile_definitions(
   NtfsBrowserTests
   PRIVATE
     NTFS_FUZZER_AFL_EXE="$<TARGET_FILE:NtfsFuzzerAfl>"
-    NTFS_FUZZ_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../fuzz/data"
-    NTFS_TEST_TRACE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../fuzz/data/corpus-traces"
+    NTFS_FUZZ_DATA_DIR="${NTFS_FUZZGEN_OUTPUT_DIR}/data"
+    NTFS_TEST_TRACE_DIR="${NTFS_FUZZGEN_OUTPUT_DIR}/data/corpus-traces"
     NTFS_EFS_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/efs/data"
 )
 

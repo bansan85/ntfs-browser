@@ -5,7 +5,6 @@
 #include <memory>
 #include <string>
 #include <string_view>
-#include <utility>
 #include <vector>
 
 #include <catch2/catch_message.hpp>
@@ -16,7 +15,6 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/corpus/corpus-test-support.h>
 #include <ntfs-browser/test/disk-readers/partition-disk-reader.h>
-#include <ntfs-browser/test/disk-readers/recording-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/sequential-disk-reader.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Test::Corpus {
@@ -45,20 +43,16 @@ bool EnvIsSet(const char* name) {
 
 // Where a test gets its bytes from.
 enum class Source : unsigned char {
-  Image,      // Reads the image as is.
-  Recording,  // Reads the image, and records a trace of it.
-  Trace       // Replays a trace.
+  Image,  // Reads the image as is.
+  Trace   // Replays a generated trace.
 };
 
 Source SourceOf(const std::filesystem::path& image) {
-  if (EnvIsSet("NTFS_BROWSER_FORCE_TRACES")) {
+  if (EnvIsSet("NTFS_BROWSER_FORCE_TRACES") ||
+      !std::filesystem::exists(image)) {
     return Source::Trace;
   }
-  if (!std::filesystem::exists(image)) {
-    return Source::Trace;
-  }
-  return EnvIsSet("NTFS_BROWSER_RECORD_TRACES") ? Source::Recording
-                                                : Source::Image;
+  return Source::Image;
 }
 
 std::filesystem::path TracePath(std::string_view trace_name) {
@@ -141,10 +135,6 @@ std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader>
   auto reader = std::make_unique<Test::DiskReaders::PartitionDiskReader>(
       partition_offset);
   REQUIRE(reader->Open(image.wstring()));
-  if (source == Source::Recording) {
-    return std::make_unique<Test::DiskReaders::RecordingDiskReader>(
-        std::move(reader), TracePath(trace_name));
-  }
   return reader;
 }
 

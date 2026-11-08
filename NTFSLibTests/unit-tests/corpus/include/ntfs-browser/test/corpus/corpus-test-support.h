@@ -63,22 +63,22 @@ inline const std::filesystem::path& FragmentedMftImage() {
   return path;
 }
 
-// Folder of the recorded read traces, in the fuzzer's data folder. A trace is
-// the bytes a test read from an image, one read after the other and without
-// their address: SequentialDiskReader replays it, so a test can run without
-// the (often huge) image. Set NTFS_BROWSER_RECORD_TRACES to rewrite the
-// traces of every test whose image is present. Set NTFS_BROWSER_FORCE_TRACES
-// to replay them even then, to check that they still match the library's
-// read order.
+// Folder of the read traces that NtfsFuzzGen writes into the build tree. A
+// trace is the bytes a test reads from an image, one read after the other and
+// without their address: SequentialDiskReader replays it, so a test can run
+// without the (often huge) image. The generator makes each trace with the
+// library's current read order. Set NTFS_BROWSER_FORCE_TRACES to replay the
+// traces even when the image is present.
 inline const std::filesystem::path& TraceDir() {
   static const std::filesystem::path path = u8"" NTFS_TEST_TRACE_DIR;
   return path;
 }
 
-// SKIPs the running test when it has neither image nor the trace named
-// trace_name. Under NTFS_BROWSER_REQUIRE_TEST_DATA, FAILs it instead when
-// image is absent: CI fetches every image this guards, so a trace standing in
-// for it there would hide a broken fetch.
+// SKIPs the running test when it has neither image nor the generated trace
+// named trace_name (a build without the feature that a trace needs, such as
+// decompression, does not generate it). Under NTFS_BROWSER_REQUIRE_TEST_DATA,
+// FAILs it instead when image is absent: CI fetches every image this guards, so
+// a trace standing in for it there would hide a broken fetch.
 void RequireCorpusImage(const std::filesystem::path& image,
                         std::string_view trace_name);
 
@@ -107,8 +107,7 @@ std::filesystem::path RequireCorpusFile(const std::filesystem::path& file);
 // 0). NtfsVolume's own path-based constructor - Windows-only, since it goes
 // through Win32DiskReader - is therefore never needed to open a corpus image.
 // Without image, or under NTFS_BROWSER_FORCE_TRACES, it replays the trace
-// named trace_name instead. Under NTFS_BROWSER_RECORD_TRACES, it records that
-// trace while reading image.
+// named trace_name instead.
 [[nodiscard]] std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader>
     OpenCorpusImage(const std::filesystem::path& image,
                     ULONGLONG partition_offset, std::string_view trace_name);

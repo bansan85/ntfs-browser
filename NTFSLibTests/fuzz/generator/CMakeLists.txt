@@ -1,5 +1,5 @@
-# NtfsFuzzGen writes the saved fuzz inputs of NTFSLibTests/fuzz/data from code,
-# and checks the committed ones against what the library reads today.
+# NtfsFuzzGen writes the fuzz inputs and the corpus traces that the unit tests
+# and the AFL fuzzer read, from code, with the library's current read order.
 # Portable C++, so it builds on Linux and Windows alike.
 add_library(
   NtfsFuzzGenCore
@@ -167,8 +167,8 @@ target_compile_definitions(
     $<$<BOOL:${NTFS_BROWSER_ENABLE_EFS_BCRYPT}>:NTFS_BROWSER_ENABLE_EFS_BCRYPT>
 )
 
-# The generated files land in the build tree, never in the source tree.
-set(NTFS_FUZZGEN_OUTPUT_DIR "${CMAKE_BINARY_DIR}/fuzz-generated")
+# The generated files land in the build tree (NTFS_FUZZGEN_OUTPUT_DIR, set in
+# NTFSLibTests/CMakeLists.txt), never in the source tree.
 
 # Where the resource archives are extracted: one subfolder per archive.
 set(NTFS_FUZZGEN_RESOURCES_DIR "${NTFS_FUZZGEN_OUTPUT_DIR}/resources")
@@ -224,22 +224,35 @@ if(stamps)
   add_dependencies(NtfsFuzzGen NtfsFuzzGenResources)
 endif()
 
-# Writes every generated file under the build tree. Not part of ALL.
-add_custom_target(
-  NtfsFuzzGenData
+# Writes every generated file under the build tree, in <output dir>/data
+# (the traces in its corpus-traces subfolder). The stamp makes the run
+# incremental: it happens again only when the generator, the library or an
+# extracted archive changes. The folder is emptied first, so that a scenario
+# that no longer exists leaves no stale file. Test targets that read the files
+# depend on this target.
+set(NTFS_FUZZGEN_DATA_STAMP "${NTFS_FUZZGEN_OUTPUT_DIR}/data.stamp")
+add_custom_command(
+  OUTPUT "${NTFS_FUZZGEN_DATA_STAMP}"
+  COMMAND ${CMAKE_COMMAND} -E rm -rf "${NTFS_FUZZGEN_OUTPUT_DIR}/data"
   COMMAND
     NtfsFuzzGen --out "${NTFS_FUZZGEN_OUTPUT_DIR}/data" --resources
     "${NTFS_FUZZGEN_RESOURCES_DIR}"
+  COMMAND ${CMAKE_COMMAND} -E touch "${NTFS_FUZZGEN_DATA_STAMP}"
+  # The library is a DLL in a shared build: relinking the generator is not
+  # enough to notice that it changed.
+  DEPENDS NtfsFuzzGen ${PROJECT_NAME} ${stamps}
   COMMENT "Generating the fuzz inputs"
   VERBATIM
 )
-add_dependencies(NtfsFuzzGenData NtfsFuzzGen)
+add_custom_target(NtfsFuzzGenData DEPENDS "${NTFS_FUZZGEN_DATA_STAMP}")
 
-# Each scenario the generator has must stay identical to its committed file (or
-# be the start of the stream that the library reads today).
+# Two runs must write the same bytes: a scenario never depends on the clock, on
+# a random seed or on the order of a directory listing.
 add_test(
-  NAME NtfsFuzzGenVerify
+  NAME NtfsFuzzGenDeterminism
   COMMAND
-    NtfsFuzzGen --verify "${CMAKE_CURRENT_SOURCE_DIR}/../data" --resources
-    "${NTFS_FUZZGEN_RESOURCES_DIR}"
+    ${CMAKE_COMMAND} -DGENERATOR=$<TARGET_FILE:NtfsFuzzGen>
+    -DRESOURCES=${NTFS_FUZZGEN_RESOURCES_DIR}
+    -DWORK=${NTFS_FUZZGEN_OUTPUT_DIR}/determinism -P
+    "${CMAKE_CURRENT_SOURCE_DIR}/check-determinism.cmake"
 )
