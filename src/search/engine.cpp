@@ -10,6 +10,7 @@
 
 #include "log/ntfs-common.h"
 #include "search/directory-engine.h"
+#include "search/field-filter.h"
 #include "search/mft-list-engine.h"
 #include "search/target.h"
 
@@ -32,6 +33,16 @@ void SetEngineFactoryForTests(EngineFactory factory) {
 EngineKind ResolveEngine(const Options& options, const TargetParts& parts) {
   if (options.engine != EngineKind::Auto) {
     return options.engine;
+  }
+  // A filter on a field that one kind of engine alone gives decides. When the
+  // filter needs both kinds, no engine can serve it and the scan fails when it
+  // makes its sink.
+  const FilterNeeds needs = NeedsOf(options.filter);
+  if (needs.mft_list_only) {
+    return EngineKind::MftList;
+  }
+  if (needs.directory_only) {
+    return EngineKind::DirectoryFullCache;
   }
   // A folder is walked through its index. The whole volume is read in $MFT
   // order, which needs no seek.

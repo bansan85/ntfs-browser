@@ -15,7 +15,8 @@
 //   Engine (this file)       One way to walk a volume. MakeEngine() picks it
 //                            from Options::engine. ResolveEngine() holds the
 //                            Auto rule: MftList for the root of a volume (no
-//                            inside path), DirectoryFullCache for a folder.
+//                            inside path), DirectoryFullCache for a folder,
+//                            unless the filter needs one kind of engine.
 //   DirectoryEngine<S>       The NtfsDir walk, both caches. It fills every
 //                            Entry field except link_count (0), clusters
 //                            (null) and, for a live file, data_state.
@@ -33,7 +34,16 @@
 //                            PCRE2) does the comparing, built by
 //                            MakeMatcher(). The walk of an engine is not
 //                            touched: a directory that does not match is still
-//                            entered.
+//                            entered. It also holds a FieldFilter, built from
+//                            Options::filter and checked against the engine
+//                            that makes the sink: a field that the engine does
+//                            not give fails the scan. The tests of the fields
+//                            run before the matcher.
+//   FieldFilter              The AND of the tests of Options::filter on an
+//                            Entry. NeedsOf() tells what a filter asks of the
+//                            scan: the MftList engine, a directory engine, the
+//                            data state. ResolveEngine() uses it for Auto, and
+//                            Scan sets deleted_data_state from it.
 //   EntryBuffer              Owns the text that the views of an Entry point at.
 //   SplitTarget/OpenVolume   The target string, opened without test code.
 //
@@ -51,9 +61,10 @@
 // MftList engine gives its entries to the sink after it read the whole $MFT.
 // The percent moves during the read.
 //
-// Left to do: the filters on the fields (Options). They go into MatchingSink,
-// not into an engine. An engine MUST give every entry to the
-// MatchingSink it made, and MUST NOT count or test an entry itself.
+// An engine MUST give every entry to the MatchingSink it made, and MUST NOT
+// count or test an entry itself: the pattern and the filters live there. It
+// MUST pass its own EngineKind to MatchingSink::Make(), and MUST fill every
+// field that a filter can test and that its kind is said to give (see Filter).
 
 #include <functional>
 #include <memory>
@@ -110,7 +121,8 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY Engine {
 [[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY EngineKind
     ResolveEngine(const Options& options, const TargetParts& parts);
 
-// Makes the engine ResolveEngine() chooses.
+// Makes the engine ResolveEngine() chooses. With Auto, a filter on a field that
+// only one kind of engine gives chooses that kind.
 [[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY std::unique_ptr<Engine>
     MakeEngine(const Options& options, const TargetParts& parts);
 

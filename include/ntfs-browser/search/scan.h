@@ -58,13 +58,25 @@
 // the delivered entries only. A scan that matches nothing still ends with a
 // last batch that holds no entry. See Pattern for the rules.
 //
+// Filter. Options::filter adds tests on the other fields of an entry: the
+// sizes, the four times, the attributes, the kind (file or folder), live or
+// deleted, the record numbers, the number of names, and for a deleted file the
+// state of its data and the counts of its clusters. The tests are combined with
+// AND, with the pattern as one more. A field that is not set is not tested. The
+// cheap tests run first and the pattern last. A filter on a field that the
+// chosen engine does not give ends the scan as Failed, with a log line naming
+// the field, and EngineKind::Auto picks an engine that gives it. See Filter for
+// every test, its bounds and its engine.
+//
 // Cancel() and the destructor stop the worker through a stop token that every
 // engine looks at between entries. The destructor waits for the thread to end,
 // so no thread outlives the Scan.
 //
 // Errors. Nothing is thrown and the callback has no error result. A target
-// that does not open, a pattern that cannot be used (a regular expression that
-// does not compile, or one when the library has no regex support), a damaged
+// that does not open, a pattern or a filter that cannot be used (a regular
+// expression that does not compile, or one when the library has no regex
+// support, a range with its minimum above its maximum, a field that the engine
+// does not give), a damaged
 // folder or an unreadable record goes to the library log (Log::Error,
 // Log::Warn). An exception in the worker is caught, logged, and ends the scan
 // as Failed. GetState() tells that the scan failed.

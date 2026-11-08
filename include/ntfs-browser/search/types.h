@@ -12,6 +12,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <ntfs-browser/namespace.h>
 
@@ -313,6 +314,155 @@ struct Pattern {
   std::size_t regex_jit_stack_bytes{default_regex_jit_stack_bytes};
 };
 
+// A test on a number or a date: the value must lie between min and max. Both
+// bounds are inclusive. A bound that is not set is not tested, so a range with
+// no bound accepts every value, and a range with only min or only max is open
+// on the other side.
+template <typename T>
+struct Range {
+  std::optional<T> min;
+  std::optional<T> max;
+
+  // Whether at least one bound is set.
+  [[nodiscard]] constexpr bool IsSet() const noexcept {
+    return min.has_value() || max.has_value();
+  }
+
+  // Whether value lies between the bounds that are set, the bounds included.
+  [[nodiscard]] constexpr bool Contains(const T& value) const noexcept {
+    return (!min || !(value < *min)) && (!max || !(*max < value));
+  }
+
+  // Whether both bounds are set and min is above max: no value lies between
+  // them.
+  [[nodiscard]] constexpr bool IsEmpty() const noexcept {
+    return min && max && *max < *min;
+  }
+};
+
+// What Filter::deleted asks of the state of the entries.
+enum class DeletedFilter : std::uint8_t {
+  // Both live and deleted entries pass. The default.
+  Any,
+  // Only the entries with Standing::Live pass. An entry that is Unreadable is
+  // neither live nor deleted: it does not pass.
+  OnlyLive,
+  // Only the entries that Entry::IsDeleted() accepts pass: Deleted and Reused.
+  // The scan has to list them first: set Options::include_deleted.
+  OnlyDeleted
+};
+
+// A test on the clusters of a deleted file: how many of them are in one
+// condition. See Filter::clusters.
+struct ClusterTest {
+  ClusterCondition condition{ClusterCondition::Invalid};
+  // The file has at least this many clusters in the condition. 0 sets no lower
+  // bound.
+  std::uint64_t at_least{0};
+  // The file has at most this many clusters in the condition. Unset: no upper
+  // bound. 0 asks for none at all.
+  std::optional<std::uint64_t> at_most;
+};
+
+// The tests that an entry has to pass, on top of the Pattern. A scan applies
+// them itself, like the Pattern: an entry that fails one is never delivered,
+// never counted and never takes memory in the buffers of the scan.
+//
+// Every test is optional and every field starts unset. An unset field is not
+// tested. The tests are combined with AND, and the Pattern is one more of them:
+// an entry passes when it passes every test that is set. There is no OR and no
+// NOT between tests. A caller that needs one runs two scans, or sets the
+// inverse where a field has one (attributes_none, DeletedFilter::OnlyLive).
+//
+// Bounds. Every bound of a Range is inclusive. A range whose min is above its
+// max can match nothing: the scan then ends as Failed and the log says which
+// field. The same holds for a cluster test with at_most below at_least.
+//
+// Directories. A directory is an entry like a file and meets the same tests:
+// a size range that starts at 1 drops every folder, as their size is 0 or the
+// size of their index. A folder that fails a test is not delivered, and a
+// recursive scan still enters it. Set is_directory to false for files only.
+//
+// Engines. Most fields are given by every engine. Some are not, and a filter on
+// such a field is never left to match nothing or everything by accident:
+//   - link_count and clusters: only the MftList engine knows them.
+//   - the attribute bits device, normal, temporary, reparse_point, offline and
+//     not_content_indexed, in attributes_all or attributes_none: only the
+//     directory engines have them. The MftList engine reads the other bits of
+//     the attributes of the record.
+//   - the standings Reused and Unreadable in standing_in: only the directory
+//     engines report them.
+// A scan whose engine cannot give a field that the filter tests ends as
+// Failed, and the log names the field. With EngineKind::Auto the scan picks the
+// engine that can: MftList when the filter needs one of the fields of the first
+// kind, a directory engine (the folder default) when it needs one of the second
+// or third. A filter that needs both ends as Failed.
+//
+// Data. data_state_in and clusters look at the data of deleted files, which
+// costs a read for each of them (see Options::deleted_data_state). A scan with
+// such a test sets deleted_data_state itself, whatever the option says. Both
+// only ever match a deleted entry that the scan lists: set
+// Options::include_deleted, or nothing passes and the log warns of it. The same
+// warning comes with DeletedFilter::OnlyDeleted.
+//
+// Not tested. The sequence numbers of the record and of the parent: they only
+// tell one use of a record from another and have no meaning on their own. The
+// name and the path have the Pattern.
+struct Filter {
+  // The size of the file, in bytes. See Entry::size.
+  Range<std::uint64_t> size;
+  // The bytes allocated on disk. See Entry::allocated_size.
+  Range<std::uint64_t> allocated_size;
+
+  // The four times of Entry. An entry whose time is not set on the volume
+  // (ticks 0) fails a range on that time, whichever bounds it has.
+  Range<Date> created;
+  Range<Date> modified;
+  Range<Date> mft_changed;
+  Range<Date> accessed;
+
+  // Bits of Attribute:: that the entry MUST all have, and bits that it MUST NOT
+  // have. 0 tests nothing. A bit that is not in Attribute:: ends the scan as
+  // Failed. An entry passes when (attributes & attributes_all) equals
+  // attributes_all and (attributes & attributes_none) is 0. A bit in both masks
+  // can never pass. See Filter for the bits that need a directory engine.
+  std::uint32_t attributes_all{0};
+  std::uint32_t attributes_none{0};
+
+  // Only directories (true) or only files (false). Unset: both.
+  std::optional<bool> is_directory;
+
+  // Live or deleted entries. See DeletedFilter.
+  DeletedFilter deleted{DeletedFilter::Any};
+  // The standings that pass. Empty: not tested. Use it for what `deleted`
+  // cannot say, like Reused or Unreadable.
+  std::vector<Standing> standing_in;
+
+  // The $MFT record number of the file. Unset bounds are not tested.
+  Range<std::uint64_t> record;
+  // The entry is filed under this directory record. Unset: not tested. The
+  // root directory is record 5.
+  std::optional<std::uint64_t> parent_record;
+
+  // Names the record has. See Entry::link_count. Only the MftList engine
+  // knows: with a directory engine the scan ends as Failed.
+  Range<std::uint16_t> link_count;
+
+  // The data states that pass. Empty: not tested. An entry with no state is
+  // DataState::NotChecked, which is a value like another: list it to let live
+  // files pass. Sets Options::deleted_data_state when it lists a state other
+  // than NotChecked.
+  std::vector<DataState> data_state_in;
+
+  // Tests on the cluster counts of a deleted file. Every test has to pass. An
+  // entry with no summary (see Entry::clusters), like every live file, fails
+  // as soon as the list is not empty. Only the MftList engine works the
+  // counts out: with a directory engine the scan ends as Failed. For example,
+  // a file that is deleted and has no cluster that another file took over:
+  // {.condition = ClusterCondition::ReallocatedWritten, .at_most = 0}.
+  std::vector<ClusterTest> clusters;
+};
+
 // How far a scan has come.
 struct Progress {
   // Entries delivered so far, all batches counted. With a Pattern it counts the
@@ -388,7 +538,8 @@ struct Options {
   // Work out Entry::data_state of the deleted files. Costs a read of the file
   // record and of $Bitmap for each deleted entry. With the MftList engine it
   // also gives Entry::clusters: the scan then reads the cluster runs of every
-  // record, which makes it slower and bigger.
+  // record, which makes it slower and bigger. A Filter on the data state or on
+  // the clusters switches it on, whatever this field says.
   bool deleted_data_state{true};
 
   // Memory the block cache of the DirectoryFullCache engine may hold, in
@@ -406,6 +557,10 @@ struct Options {
 
   // The search by name. Unset: every entry is delivered.
   Pattern pattern;
+
+  // The tests on the other fields, joined with the pattern by AND. Unset:
+  // every entry is delivered. See Filter.
+  Filter filter;
 };
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Search

@@ -345,8 +345,8 @@ bool MftListEngine::Run(EntrySink& sink, std::stop_token stop) {
     return false;
   }
 
-  const std::unique_ptr<MatchingSink> selected =
-      MatchingSink::Make(sink, options_, opened.volume->GetUpCaseTable());
+  const std::unique_ptr<MatchingSink> selected = MatchingSink::Make(
+      sink, options_, opened.volume->GetUpCaseTable(), EngineKind::MftList);
   if (!selected) {
     return false;
   }

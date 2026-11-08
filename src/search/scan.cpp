@@ -12,6 +12,7 @@
 
 #include "log/ntfs-common.h"
 #include "search/engine.h"
+#include "search/field-filter.h"
 #include "search/scan-exchange.h"
 #include "search/target.h"
 #include "utf/utf.h"
@@ -110,8 +111,12 @@ class Scan::Impl {
 
  private:
   // options with what the scan needs of itself: a pattern on the full path
-  // needs the paths.
+  // needs the paths, and a filter on the data of deleted files needs the data
+  // state.
   static Options Normalized(Options options) {
+    if (NeedsOf(options.filter).deleted_data_state) {
+      options.deleted_data_state = true;
+    }
     if (options.pattern.kind != PatternKind::None &&
         options.pattern.target == MatchTarget::FullPath) {
       options.full_path = true;

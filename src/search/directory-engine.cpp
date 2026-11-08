@@ -359,8 +359,10 @@ bool DirectoryEngine<S>::Run(EntrySink& sink, std::stop_token stop) {
   }
   const NtfsVolume<S>& volume = *opened.volume;
   volume.SetReadPattern(Tuning::Pattern::DependentSmall);
-  const std::unique_ptr<MatchingSink> selected =
-      MatchingSink::Make(sink, options_, volume.GetUpCaseTable());
+  const std::unique_ptr<MatchingSink> selected = MatchingSink::Make(
+      sink, options_, volume.GetUpCaseTable(),
+      S == Cache::Strategy::FullCache ? EngineKind::DirectoryFullCache
+                                      : EngineKind::DirectoryNoCache);
   if (!selected) {
     return false;
   }
