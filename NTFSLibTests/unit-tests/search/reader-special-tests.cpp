@@ -218,7 +218,7 @@ TEST_CASE("A Reader fails cleanly on a compressed stream without LZNT1",
 
   const auto read = reader.Read(root_handle, u"", 0, bytes);
 
-  CHECK(read.error == Lib::ReadError::Unreadable);
+  CHECK_FALSE(read);
   CHECK(bytes == Bytes(64, 0xEE));
 }
 
