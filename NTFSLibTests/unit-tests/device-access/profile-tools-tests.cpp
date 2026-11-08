@@ -18,7 +18,6 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/device-access/temp-dir.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-#include <ntfs-browser/test/io/ntfsdir-sample-support.h>
 #include <ntfs-browser/test/mft/ntfsmftlist-sample-support.h>
 #include <ntfs-browser/test/support/sample-run.h>
 #include <ntfs-browser/tool/device-access/json.h>
@@ -26,7 +25,6 @@
 
 namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
 
-namespace TestIo = NTFS_BROWSER_NAMESPACE::Test::Io;
 namespace TestMft = NTFS_BROWSER_NAMESPACE::Test::Mft;
 namespace TestDeviceAccess = NTFS_BROWSER_NAMESPACE::Test::DeviceAccess;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
@@ -121,15 +119,13 @@ std::wstring Option(std::wstring_view name, const std::filesystem::path& path) {
 // One tool, as the tests run it: its listing arguments, and how to start it.
 struct Tool {
   std::string name;
-  std::filesystem::path exe;
   // The image and the target the listing names.
   std::filesystem::path image;
   std::wstring target;
-  bool dir{false};
 
   [[nodiscard]] SampleRun Run(std::vector<std::wstring> options) const {
     options.push_back(target);
-    return dir ? TestIo::RunDir(exe, options) : TestMft::RunMftList(options);
+    return TestMft::RunMftList(options);
   }
 };
 
@@ -138,24 +134,14 @@ struct Images {
   TestMft::TempTreeImage mft_list{
       TestFakeImage::BuildFakeNtfsImageWithListMftScan(list_record_count,
                                                        list_fragment_clusters)};
-  TestIo::TempImage dir;
 };
 
 // Every tool of the build, over the image of its listing.
 std::vector<Tool> Tools(const Images& images) {
   std::vector<Tool> tools;
   tools.push_back({.name = "NtfsMftList",
-                   .exe = {},
                    .image = images.mft_list.path,
-                   .target = images.mft_list.path.wstring(),
-                   .dir = false});
-  for (const std::filesystem::path& exe : TestIo::SampleExes()) {
-    tools.push_back({.name = exe.stem().string(),
-                     .exe = exe,
-                     .image = images.dir.path,
-                     .target = TestIo::InImage(images.dir.path, L"Docs"),
-                     .dir = true});
-  }
+                   .target = images.mft_list.path.wstring()});
   return tools;
 }
 
@@ -250,13 +236,8 @@ TEST_CASE(
     CHECK(Count(Member(Member(plain, "tuning"), "mft.window_bytes")) ==
           Tuning::FindKnob("mft.window_bytes")->default_value);
 
-    // The reads they changed. A smaller window reads $MFT in more pieces; a
-    // larger block reads the cache in fewer.
-    if (!tool.dir) {
-      CHECK(RequestedReads(summary) > RequestedReads(plain));
-    } else if (tool.name == "NtfsDir") {
-      CHECK(RequestedReads(summary) != RequestedReads(plain));
-    }
+    // The reads they changed: a smaller window reads $MFT in more pieces.
+    CHECK(RequestedReads(summary) > RequestedReads(plain));
   }
 }
 

@@ -1,694 +1,150 @@
-#include <ntfs-browser/win-types.h>
-
-#include <cerrno>
+#include <chrono>
 #include <cstdio>
-#include <filesystem>
-#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
-#include <unordered_set>
 #include <utility>
-#include <vector>
 
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/bench/bench.h>
-#include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/example/ntfsdir/arguments.h>
 #include <ntfs-browser/example/ntfsdir/ntfsdir-core.h>
-#include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/io/directory-read-ahead.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/io/record-standing.h>
 #include <ntfs-browser/log/log.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tool/device-access/bench-options.h>
-#include <ntfs-browser/tool/device-access/bench-session.h>
+#include <ntfs-browser/search/scan.h>
+#include <ntfs-browser/search/types.h>
 #include <ntfs-browser/tool/device-access/device-path.h>
-#include <ntfs-browser/tool/device-access/local-time.h>
 #include <ntfs-browser/tool/device-access/output.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
 #include <ntfs-browser/tool/device-access/tool-support.h>
-#include <ntfs-browser/tuning/tuning.h>
-#include <ntfs-browser/volume-options.h>
+#include <ntfs-browser/tool/device-access/volume-target.h>
 
-#ifndef _WIN32
-  #include <ntfs-browser/tool/device-access/posix-device-disk-reader.h>
-#endif
+#include "listing-printer.h"
+#include "utf16-convert.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Example::NtfsDir {
 
-void Usage() {
-  printf("Invalid parameter\n");
-  printf(
-      "Usage: ntfsdir [--recursive] [--deleted] [--recover] [--log=...] "
-      "\"path\"\n");
-  printf("  --recursive, -r  also list every subdirectory of path\n");
-  printf("  --deleted        also list deleted files, marked with *\n");
-  printf(
-      "  --recover        salvage damaged directory data (? marks a name "
-      "whose file record cannot be read)\n");
-  printf("  %s\n", std::string(Log::option_usage).c_str());
-#ifdef _WIN32
-  printf("eg. ntfsdir c:\n");
-  printf("eg. ntfsdir c:\\windows\n");
-  printf("eg. ntfsdir \"c:\\program files\\common files\"\n");
-  printf("eg. ntfsdir c:\\image.img\\Windows\n");
-#else
-  printf("eg. ntfsdir /dev/sda1\n");
-  printf("eg. ntfsdir /dev/sda1/Windows\n");
-  printf("eg. ntfsdir \"/dev/sda1/Program Files/Common Files\"\n");
-  printf("eg. ntfsdir ./disk.img/Windows\n");
-#endif
-}
-
-wchar_t Getvolume(wchar_t** ppath) {
-  wchar_t* p = *ppath;
-
-  while (*p == L' ' || *p == L'"') {
-    p++;
-  }
-  if (*p == L'\0') {
-    return L'\0';
-  }
-  const wchar_t volname = *p++;
-
-  while (*p == L' ') {
-    p++;
-  }
-  if (*p != L':') {
-    return L'\0';
-  }
-
-  // Skips the colon and the first directory name, up to a backslash.
-  while (*p != L'\\' && *p != L'\0') {
-    p++;
-  }
-  while (*p == L'\\' || *p == L'"') {
-    p++;
-  }
-
-  *ppath = p;
-  return volname;
-}
-
-std::wstring_view Getpathname(std::wstring_view& ppath) {
-  const auto is_separator = [](wchar_t character) {
-    return character == L'\\' || character == L'"';
-  };
-
-  // The first character belongs to the segment whatever it is.
-  size_t length = ppath.empty() ? 0 : 1;
-  while (length < ppath.size() && !is_separator(ppath[length])) {
-    length++;
-  }
-  const std::wstring_view pathname = ppath.substr(0, length);
-
-  size_t next = length;
-  while (next < ppath.size() && is_separator(ppath[next])) {
-    next++;
-  }
-  // Moves the start of the view: a path of many segments costs no copy.
-  ppath.remove_prefix(next);
-  return pathname;
-}
-
 namespace {
 
-#ifndef _WIN32
-// Bits in a DWORD: where a FILETIME's high half starts.
-constexpr unsigned dword_bits = 32;
-#endif
-
-// Prints message and a newline to stdout, before the listing starts.
-void Say(const std::wstring& message) {
-  Tool::DeviceAccess::WriteText(stdout, message);
-  printf("\n");
-}
-
-// Prints message and a newline in the listing.
-void Report(Tool::DeviceAccess::Output& out, const std::wstring& message) {
-  out.AppendText(message);
-  out.EndLine();
-}
-
-// Reports whether the listing shows ie. Hides system metafiles, DOS alias
-// file names and entries with no name.
-bool IsListed(const IndexEntryView& ie) {
-  // Record numbers below the first user record are system metafiles.
-  if (ie.GetFileReference() < static_cast<ULONGLONG>(Mft::Idx::User)) {
-    return false;
-  }
-
-  // Ignore DOS alias file names
-  if (!ie.IsWin32Name()) {
-    return false;
-  }
-
-  return !ie.GetFilename().empty();
-}
-
-// The modification time of ie in the host's local zone, or nothing for a
-// time the platform cannot show.
-std::optional<Tool::DeviceAccess::LocalTime>
-    LocalWriteTime(const IndexEntryView& ie) {
-  FILETIME ft;
-  ie.GetFileTime(&ft, nullptr, nullptr);
-#ifdef _WIN32
-  // The library already converts the time to local on Windows.
-  SYSTEMTIME st;
-  if (FileTimeToSystemTime(&ft, &st) != TRUE) {
-    return std::nullopt;
-  }
-  return Tool::DeviceAccess::LocalTime{.year = st.wYear,
-                                       .month = st.wMonth,
-                                       .day = st.wDay,
-                                       .hour = st.wHour,
-                                       .minute = st.wMinute};
-#else
-  // The library leaves the time in UTC off Windows.
-  return Tool::DeviceAccess::UtcTicksToLocalTime(
-      (static_cast<ULONGLONG>(ft.dwHighDateTime) << dword_bits) |
-      ft.dwLowDateTime);
-#endif
-}
-
-// Marks an entry in a listing that shows deleted items: ' ' for a file
-// that exists, '*' for a deleted one, '?' for a name whose record cannot be
-// read.
-using Marker = char;
-
-// Prints the modification time, the size or <DIR>, the attribute flags and
-// the name of one entry. time is the entry time in local time. marker is
-// null when the listing has no marker column.
-void PrintLine(Tool::DeviceAccess::Output& out, const IndexEntryView& ie,
-               const Tool::DeviceAccess::LocalTime& time,
-               std::optional<Marker> marker) {
-  out.AppendNumber(time.year, 0);
-  out.Append("-");
-  out.AppendNumber(time.month, 2, '0');
-  out.Append("-");
-  out.AppendNumber(time.day, 2, '0');
-  out.Append("  ");
-  out.AppendNumber(time.hour, 2, '0');
-  out.Append(":");
-  out.AppendNumber(time.minute, 2, '0');
-  out.Append(ie.IsDirectory() ? "\t<DIR>    " : "\t         ");
-
-  if (!ie.IsDirectory()) {
-    out.AppendNumber(ie.GetFileSize(), 0);
-  }
-  out.Append("\t<");
-  out.Append(ie.IsReadOnly() ? "R" : " ");
-  out.Append(ie.IsHidden() ? "H" : " ");
-  out.Append(ie.IsSystem() ? "S" : " ");
-  out.Append(">\t");
-  if (marker) {
-    out.Append(std::string_view(&*marker, 1));
-    out.Append(" ");
-  }
-  out.AppendText(ie.GetFilename());
-  out.EndLine();
-}
-
-// Separates the directory names of a path in the headers of a recursive
-// listing.
-#ifdef _WIN32
-constexpr wchar_t path_separator = L'\\';
-#else
-constexpr wchar_t path_separator = L'/';
-#endif
-
-// The marker column of an entry whose record stands as given.
-Marker MarkerOf(Io::RecordStanding standing) {
-  switch (standing) {
-    case Io::RecordStanding::Live:
-      return ' ';
-    case Io::RecordStanding::Unreadable:
-      return '?';
-    case Io::RecordStanding::Deleted:
-    case Io::RecordStanding::Reused:
-      break;
-  }
-  return '*';
-}
-
-// What one TraverseSubEntriesWithStanding pass over a directory gathers: the
-// tally of its listed entries, and the subdirectories to enter next.
-template <Cache::Strategy S>
-struct DirectoryEntries {
-  struct Child {
-    ULONGLONG reference;
-    std::wstring name;
-  };
-
-  // Where the listing goes.
-  Tool::DeviceAccess::Output* out = nullptr;
-  // Whether the listing has a marker column: only a volume that shows deleted
-  // items does.
-  bool marking = false;
-  // Whether to collect the subdirectories.
-  bool recursive = false;
-  Total total;
-  std::vector<Child> children;
+// What the listing needs to know of the target: how to call the volume in the
+// headers, and whether the scan starts in a folder or at the root.
+struct TargetShape {
+  std::wstring label;
+  bool in_folder = false;
 };
 
-// TraverseSubEntriesWithStanding callback: prints one entry, and tallies it
-// and, in a recursive listing, collects a subdirectory that is still the
-// entry's own.
-template <Cache::Strategy S>
-void VisitEntry(const IndexEntryView& ie, Io::RecordStanding standing,
-                void* context) {
-  if (!IsListed(ie)) {
+#ifdef _WIN32
+
+// Whether character is a letter of the ASCII alphabet.
+bool IsAsciiLetter(wchar_t character) {
+  return (character >= L'a' && character <= L'z') ||
+         (character >= L'A' && character <= L'Z');
+}
+
+#endif
+
+// Splits target the way the scan does, to find its label and its folder.
+TargetShape ShapeOf(std::wstring_view target) {
+  if (const std::optional<Tool::DeviceAccess::DeviceTarget> split =
+          Tool::DeviceAccess::SplitDeviceTarget(target)) {
+    return {.label = Tool::DeviceAccess::WideFromPath(split->device),
+            .in_folder =
+                !Tool::DeviceAccess::SplitInsidePath(split->directory).empty()};
+  }
+#ifdef _WIN32
+  if (target.size() >= 2 && IsAsciiLetter(target[0]) && target[1] == L':') {
+    return {.label = std::wstring{target[0], L':'},
+            .in_folder =
+                !Tool::DeviceAccess::SplitInsidePath(target.substr(2)).empty()};
+  }
+#endif
+  return {};
+}
+
+// The engine of the scan: the one that --engine names. For auto, a folder, and
+// a volume that is not listed recursively, go by folder. The MftList engine
+// covers the whole volume whatever --recursive says, so only a recursive
+// listing of a volume reads it. The layout of the listing depends on the
+// engine, so the program names it to the scan.
+Search::EngineKind ResolveEngine(Search::EngineKind engine, bool in_folder,
+                                 bool recursive) {
+  if (engine != Search::EngineKind::Auto) {
+    return engine;
+  }
+  return in_folder || !recursive ? Search::EngineKind::DirectoryFullCache
+                                 : Search::EngineKind::MftList;
+}
+
+// Writes the percent of the scan to err when it moved to a new whole number.
+void ReportProgress(const Search::Progress& progress, int& shown,
+                    std::FILE* err) {
+  if (!progress.percent) {
     return;
   }
-  auto& entries = *static_cast<DirectoryEntries<S>*>(context);
-
-  if (const std::optional<Tool::DeviceAccess::LocalTime> time =
-          LocalWriteTime(ie)) {
-    PrintLine(*entries.out, ie, *time,
-              entries.marking ? std::optional<Marker>(MarkerOf(standing))
-                              : std::nullopt);
-  }
-
-  if (!ie.IsDirectory()) {
-    entries.total.files++;
-    return;
-  }
-  entries.total.dirs++;
-  if (entries.recursive && standing != Io::RecordStanding::Reused) {
-    entries.children.push_back(
-        {ie.GetFileReference(), std::wstring(ie.GetFilename())});
-  }
-}
-
-// A directory that waits to be listed, as its name and its depth, not as its
-// whole path: the paths of a tree that runs deep grow with its depth, and one
-// for each directory that waits would cost memory that grows with the square
-// of it.
-struct Pending {
-  ULONGLONG reference;
-  std::wstring name;
-  // Levels below the directory the listing starts at.
-  size_t depth;
-};
-
-// Fills upcoming with the record numbers of the next count directories the
-// listing will enter, the next one first: the top of the stack, but the ones
-// already listed, which the listing skips.
-void UpcomingDirectories(const std::vector<Pending>& pending,
-                         const std::unordered_set<ULONGLONG>& listed,
-                         size_t count, std::vector<ULONGLONG>& upcoming) {
-  upcoming.clear();
-  for (auto next = pending.rbegin();
-       next != pending.rend() && upcoming.size() < count; ++next) {
-    if (!listed.contains(next->reference)) {
-      upcoming.push_back(next->reference);
-    }
-  }
-}
-
-// Where a recursive listing stands: the directories that wait, and the path of
-// the one being listed.
-struct TreeWalk {
-  std::vector<Pending> pending;
-  // The path of the directory being listed. Its first lengths[d] units are the
-  // path of its ancestor d levels below the start, so the path of the next
-  // directory is its parent's prefix and its own name.
-  std::wstring path;
-  std::vector<size_t> lengths;
-  size_t depth = 0;
-  // Record numbers of the directories listed so far. An index entry gives a
-  // number with its sequence apart, so a number alone identifies a directory.
-  std::unordered_set<ULONGLONG> listed;
-};
-
-// Makes fr the next pending directory that is new and parses, and reports the
-// ones that are not. Returns false when none is left.
-template <Cache::Strategy S>
-bool EnterNextDirectory(Tool::DeviceAccess::Output& out, Io::FileRecord<S>& fr,
-                        Io::DirectoryReadAhead<S>& ahead, TreeWalk& walk) {
-  while (!walk.pending.empty()) {
-    Pending next = std::move(walk.pending.back());
-    walk.pending.pop_back();
-    // Back to the parent's path: a pending directory is never deeper than
-    // one level below the last one listed, and its parent is on the way.
-    walk.lengths.resize(next.depth);
-    walk.path.resize(walk.lengths.back());
-    walk.path += path_separator;
-    walk.path += next.name;
-    if (walk.listed.contains(next.reference)) {
-      Report(out, L"Skipping " + walk.path + L": directory already listed");
-      ahead.Release(next.reference);
-      continue;
-    }
-    if (fr.ParseFileRecord(next.reference) && fr.ParseAttrs()) {
-      walk.listed.insert(next.reference);
-      walk.lengths.push_back(walk.path.size());
-      walk.depth = next.depth;
-      return true;
-    }
-    Report(out, L"Cannot read directory " + walk.path);
-    ahead.Release(next.reference);
-  }
-  return false;
-}
-
-// Lists the directory fr holds and every directory below it, depth first.
-// root names that directory in the header of its block. A directory that
-// cannot be read is reported and skipped. So is one already listed: NTFS
-// allows no hard link to a directory, so an entry that leads back to one is a
-// loop or a corruption. marking says whether the listing has a marker column.
-// Returns the totals of the tree. Unless walk.read_ahead_dirs is 0, the records
-// and the index blocks of the next directories are read together ahead of the
-// listing, and fr takes them from there: the lines, their order and the reads
-// that are not held stay as they are.
-template <Cache::Strategy S>
-Total ListTree(Tool::DeviceAccess::Output& out, Io::FileRecord<S>& fr,
-               bool marking, const std::wstring& root) {
-  Total tree;
-  TreeWalk walk;
-  walk.path = root;
-  walk.lengths = {root.size()};
-  if (const std::optional<ULONGLONG> start = fr.GetFileReference()) {
-    walk.listed.insert(*start);
-  }
-  Io::DirectoryReadAhead<S> ahead(fr.GetVolume());
-  ahead.Attach(fr);
-  ahead.Begin();
-  std::vector<ULONGLONG> upcoming;
-  do {
-    Report(out, L"\nDirectory of " + walk.path);
-    DirectoryEntries<S> entries;
-    entries.out = &out;
-    entries.marking = marking;
-    entries.recursive = true;
-    fr.TraverseSubEntriesWithStanding(VisitEntry<S>, &entries);
-    tree.files += entries.total.files;
-    tree.dirs += entries.total.dirs;
-    // What was read ahead for this directory is of no use any more.
-    if (const std::optional<ULONGLONG> current = fr.GetFileReference()) {
-      ahead.Release(*current);
-    }
-
-    // The stack pops the last pushed first, so push in reverse to list the
-    // subdirectories in index order.
-    for (auto child = entries.children.rbegin();
-         child != entries.children.rend(); ++child) {
-      walk.pending.push_back({.reference = child->reference,
-                              .name = std::move(child->name),
-                              .depth = walk.depth + 1});
-    }
-    if (ahead.Enabled()) {
-      UpcomingDirectories(walk.pending, walk.listed, ahead.Window(), upcoming);
-      ahead.Plan(upcoming);
-    }
-  } while (EnterNextDirectory(out, fr, ahead, walk));
-  return tree;
-}
-
-// Moves fr into the subdirectory named pathname. Returns false after
-// printing why it cannot.
-template <Cache::Strategy S>
-bool EnterSubdirectory(Io::FileRecord<S>& fr, std::wstring_view pathname) {
-  std::optional<IndexEntry> ie = fr.FindSubEntry(pathname);
-  if (!ie) {
-    Say(L"Cannot find directory " + std::wstring(pathname));
-    return false;
-  }
-
-  if (!ie->IsDirectory()) {
-    Say(std::wstring(pathname) + L" is not a directory");
-    return false;
-  }
-
-  if (!fr.ParseFileRecord(ie->GetFileReference())) {
-    Say(L"Cannot read directory " + std::wstring(pathname));
-    return false;
-  }
-  if (!fr.ParseAttrs()) {
-    printf("Cannot parse attributes\n");
-    return false;
-  }
-  return true;
-}
-
-// Moves fr to the root directory of the volume called label, then to each
-// directory path names in turn. Returns false after printing why it cannot.
-template <Cache::Strategy S>
-bool EnterDirectories(Io::FileRecord<S>& fr, const std::wstring& label,
-                      std::wstring_view path) {
-  if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root))) {
-    Say(L"Cannot read root directory of volume " + label);
-    return false;
-  }
-  if (!fr.ParseAttrs()) {
-    printf("Cannot parse attributes\n");
-    return false;
-  }
-
-  while (true) {
-    const std::wstring_view pathname = Getpathname(path);
-    // An empty segment means the path is used up.
-    if (pathname.empty()) {
-      return true;
-    }
-    if (!EnterSubdirectory(fr, pathname)) {
-      return false;
-    }
+  const int percent = static_cast<int>(*progress.percent);
+  if (percent != shown) {
+    shown = percent;
+    (void)std::fputs((std::to_string(percent) + "%\n").c_str(), err);
   }
 }
 
 }  // namespace
 
-template <Cache::Strategy S>
-int ListFrom(NtfsVolume<S>& volume, const ListTarget& target, bool recursive,
-             std::FILE* stream) {
-  // The listing is printed as the walk goes: the phase holds both.
-  const Bench::PhaseScope walk(Bench::Phase::Walk);
-  if (Bench::StopRequested()) {
-    return 0;
-  }
-  volume.SetReadPattern(Tuning::Pattern::DependentSmall);
-  Io::FileRecord<S> fr(volume);
-  // we only need INDEX_ROOT and INDEX_ALLOCATION
-  // don't waste time and ram to parse unwanted attributes
-  fr.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
-  if (!EnterDirectories(fr, target.label, target.path)) {
-    return -1;
-  }
+int ListTarget(const Arguments& args, std::FILE* out, std::FILE* err) {
+  Search::Options options = args.scan;
+  const TargetShape shape = ShapeOf(FromUtf16(options.target));
+  options.engine =
+      ResolveEngine(options.engine, shape.in_folder, options.recursive);
 
-  // Without --deleted every entry names a file that exists: no marker column.
-  const bool marking = volume.GetOptions().include_deleted;
+  // The directory engines deliver the entries of a folder together, so a
+  // recursive listing comes under a header for each folder. The MftList engine
+  // delivers in $MFT order: each line then names its path.
+  const bool folder_walk = options.engine != Search::EngineKind::MftList;
+  ListingStyle style;
+  style.marker_column = options.include_deleted;
+  style.folder_headers = folder_walk && options.recursive;
+  style.full_paths = !folder_walk;
+  style.volume_label = shape.label;
+  options.full_path = style.folder_headers || style.full_paths;
 
-  Tool::DeviceAccess::Output out(volume.GetOptions().tuning.output.flush_bytes,
-                                 stream);
-  Total total;
-  if (recursive) {
-    total = ListTree(out, fr, marking, target.root);
-  } else {
-    DirectoryEntries<S> entries;
-    entries.out = &out;
-    entries.marking = marking;
-    fr.TraverseSubEntriesWithStanding(VisitEntry<S>, &entries);
-    total = entries.total;
+  Tool::DeviceAccess::Output output(Tool::DeviceAccess::output_flush_bytes,
+                                    out);
+  ListingPrinter printer(output, style);
+  int shown_percent = -1;
+
+  Search::Scan scan(std::move(options));
+  scan.OnBatch([&](const Search::Batch& batch) {
+    printer.Print(batch);
+    if (args.progress) {
+      ReportProgress(batch.progress, shown_percent, err);
+    }
+  });
+  // Waits on this thread and calls the callback about every 100 ms.
+  const Search::State state = scan.Run(std::chrono::milliseconds(100));
+  if (state != Search::State::Finished) {
+    return failure_exit_code;
   }
-  out.PrintLine("Files: {}, Directories: {}", total.files, total.dirs);
+  printer.PrintTotals();
   return 0;
 }
 
-template int ListFrom<Cache::Strategy::FullCache>(
-    NtfsVolume<Cache::Strategy::FullCache>& volume, const ListTarget& target,
-    bool recursive, std::FILE* stream);
-template int ListFrom<Cache::Strategy::NoCache>(
-    NtfsVolume<Cache::Strategy::NoCache>& volume, const ListTarget& target,
-    bool recursive, std::FILE* stream);
-
-namespace {
-
-// Opens the device or image file at device, which label names in messages.
-// Returns null after printing why it cannot.
-template <Cache::Strategy S>
-std::unique_ptr<NtfsVolume<S>>
-    OpenDeviceVolume(const std::filesystem::path& device,
-                     const std::wstring& label, const VolumeOptions& options) {
-#ifdef _WIN32
-  // Win32DiskReader opens a plain file the same way as a device.
-  return std::make_unique<NtfsVolume<S>>(std::wstring_view(label), options);
-#else
-  auto reader = std::make_unique<Tool::DeviceAccess::PosixDeviceDiskReader>();
-  if (!reader->Open(Tool::DeviceAccess::WideFromPath(device))) {
-    const int error = reader->LastError();
-    if (error == EACCES || error == EPERM) {
-      Say(L"Cannot read device " + label + L": read access is needed");
-    } else {
-      Say(L"Cannot open " + label);
-    }
-    return nullptr;
-  }
-  return std::make_unique<NtfsVolume<S>>(std::move(reader), options);
-#endif
-}
-
-// Lists the directory of an image file or device. Returns the exit code.
-template <Cache::Strategy S>
-int ListDevice(const Tool::DeviceAccess::DeviceTarget& target, bool recursive,
-               const VolumeOptions& options) {
-  const std::wstring label = Tool::DeviceAccess::WideFromPath(target.device);
-  const std::unique_ptr<NtfsVolume<S>> volume =
-      OpenDeviceVolume<S>(target.device, label, options);
-  if (!volume) {
-    return -1;
-  }
-  if (!volume->IsVolumeOK()) {
-    Say(L"Cannot get NTFS BPB from boot sector of " + label);
-    return -1;
-  }
-  const std::wstring root = target.directory.empty()
-                                ? label
-                                : label + path_separator + target.directory;
-  return ListFrom(*volume,
-                  {.label = label, .path = target.directory, .root = root},
-                  recursive);
-}
-
-#ifdef _WIN32
-
-// Lists the directory of a drive, from a path such as "c:\windows". Returns
-// the exit code.
-template <Cache::Strategy S>
-int ListDrive(wchar_t* path, bool recursive, const VolumeOptions& options) {
-  const wchar_t volname = Getvolume(&path);
-  if (volname == L'\0') {
-    Usage();
-    return -1;
-  }
-
-  NtfsVolume<S> volume(volname, options);
-  const std::wstring label(1, volname);
-  if (!volume.IsVolumeOK()) {
-    Say(L"Cannot get NTFS BPB from boot sector of volume " + label);
-    return -1;
-  }
-  const std::wstring root = label + L':' + path_separator + path;
-  return ListFrom(volume, {.label = label, .path = path, .root = root},
-                  recursive);
-}
-
-#endif  // _WIN32
-
-// Lists the directory that path names. Returns the exit code.
-template <Cache::Strategy S>
-int ListDirectory(wchar_t* path, bool recursive, const VolumeOptions& options) {
-  if (const std::optional<Tool::DeviceAccess::DeviceTarget> target =
-          Tool::DeviceAccess::SplitDeviceTarget(path)) {
-    return ListDevice<S>(*target, recursive, options);
-  }
-
-#ifdef _WIN32
-  return ListDrive<S>(path, recursive, options);
-#else
-  Say(L"Cannot find a device or image file in " + std::wstring(path));
-  return -1;
-#endif
-}
-
-}  // namespace
-
-namespace {
-
-// Reports whether arg asks for a recursive listing.
-bool IsRecursiveOption(std::wstring_view arg) {
-  return arg == L"--recursive" || arg == L"-r";
-}
-
-// Sets the volume option arg names, and reports whether it names one.
-bool ApplyVolumeOption(std::wstring_view arg, VolumeOptions& options) {
-  if (arg == L"--deleted") {
-    options.include_deleted = true;
-    return true;
-  }
-  if (arg == L"--recover") {
-    options.recover_errors = true;
-    return true;
-  }
-  return false;
-}
-
-}  // namespace
-
-std::optional<Arguments> ParseArguments(int argc, wchar_t* argv[]) {
-  Arguments args;
-  for (int i = 1; i < argc; i++) {
-    args.command_line.push_back(Tool::DeviceAccess::WideToUtf8(argv[i]));
-    std::string error;
-    const Tool::DeviceAccess::OptionResult bench =
-        Tool::DeviceAccess::ParseBenchOption(argv[i], args.bench, error);
-    if (bench == Tool::DeviceAccess::OptionResult::Malformed) {
-      fprintf(stderr, "%s\n", error.c_str());
-      return std::nullopt;
-    }
-    if (bench == Tool::DeviceAccess::OptionResult::Accepted) {
-      continue;
-    }
-    if (Tool::DeviceAccess::IsLogOption(argv[i])) {
-      if (!Tool::DeviceAccess::ParseLogOption(argv[i], args.log_config)) {
-        return std::nullopt;
-      }
-    } else if (IsRecursiveOption(argv[i])) {
-      args.recursive = true;
-    } else if (ApplyVolumeOption(argv[i], args.volume_options)) {
-      continue;
-    } else if (args.path == nullptr) {
-      args.path = argv[i];
-    } else {
-      return std::nullopt;
-    }
-  }
-
-  if (args.path == nullptr) {
-    return std::nullopt;
-  }
-  return args;
-}
-
-template <Cache::Strategy S>
 int RunNtfsDir(int argc, wchar_t* argv[]) {
-  const std::optional<Arguments> args = ParseArguments(argc, argv);
+  std::wstring error;
+  const std::optional<Arguments> args = ParseArguments(argc, argv, error);
   if (!args) {
-    Usage();
-    return -1;
+    Tool::DeviceAccess::WriteText(stderr, L"ntfsdir: " + error + L"\n\n");
+    (void)std::fputs(UsageText().c_str(), stderr);
+    return failure_exit_code;
+  }
+  if (args->common.help) {
+    (void)std::fputs(UsageText().c_str(), stdout);
+    return 0;
   }
 
   // Names print as UTF-8: a console shows them right with its code page set.
   const Tool::DeviceAccess::Utf8ConsoleOutput console;
-  if (!Log::Configure(args->log_config)) {
-    Tool::DeviceAccess::ReportLogFileError(args->log_config);
+  if (!Log::Configure(args->common.log_config)) {
+    Tool::DeviceAccess::ReportLogFileError(args->common.log_config);
   }
-
-  // The profile and --tune settings, before the volume opens: the reader takes
-  // its caps then.
-  VolumeOptions volume_options = args->volume_options;
-  Tool::DeviceAccess::AppliedTuning applied;
-  if (const std::string failure = Tool::DeviceAccess::ApplyTuning(
-          args->bench, args->path, volume_options, applied);
-      !failure.empty()) {
-    fprintf(stderr, "%s\n", failure.c_str());
-    return -1;
-  }
-  if (!args->bench.profile_path.empty() && !applied.section_found) {
-    fprintf(stderr,
-            "The profile has no section for this disk: defaults used\n");
-  }
-  Tool::DeviceAccess::BenchSession session(
-      {S == Cache::Strategy::FullCache ? "NtfsDir" : "NtfsDir2",
-       args->command_line, Tool::DeviceAccess::WideToUtf8(args->path)},
-      args->bench, applied, volume_options);
-
-  return ListDirectory<S>(args->path, args->recursive, volume_options);
+  return ListTarget(*args, stdout, stderr);
 }
-
-template int RunNtfsDir<Cache::Strategy::FullCache>(int argc, wchar_t* argv[]);
-template int RunNtfsDir<Cache::Strategy::NoCache>(int argc, wchar_t* argv[]);
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Example::NtfsDir

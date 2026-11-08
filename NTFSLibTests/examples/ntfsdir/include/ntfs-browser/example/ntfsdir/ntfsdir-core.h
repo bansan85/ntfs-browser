@@ -1,90 +1,27 @@
 #pragma once
 
-// Shared body of the NtfsDir and NtfsDir2 samples. The two differ only in the
-// cache strategy of the volume they open, so RunNtfsDir is instantiated once
-// per strategy in ntfsdir-core.cpp.
+// The ntfsdir command: lists a folder, or a whole volume, with Search::Scan.
+// It shows how to use a Scan: set the Options, hand a callback to Run() and
+// print what the batches hold. Plain C++, so main.cpp only hands over argv and
+// the unit tests drive it without a process.
 
 #include <cstdio>
-#include <optional>
-#include <string>
-#include <string_view>
-#include <vector>
 
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/log/log.h>
+#include <ntfs-browser/example/ntfsdir/arguments.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/tool/device-access/bench-options.h>
-#include <ntfs-browser/volume-options.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Example::NtfsDir {
 
-// Prints command-line usage help.
-void Usage();
+// Runs the scan that args describe and writes the listing to out, as UTF-8.
+// The percent of the scan goes to err, with --progress. The log goes to its
+// own sinks: the caller configures them. Returns 0 when the scan finishes and
+// failure_exit_code otherwise. The totals line comes last, and only when the
+// scan finishes: a scan that fails says why in the log.
+int ListTarget(const Arguments& args, std::FILE* out, std::FILE* err);
 
-// Splits the drive letter off a path such as "c:\windows". Returns the
-// letter, or L'\0' if there is none. On success *ppath moves past the
-// letter and the separators after it.
-wchar_t Getvolume(wchar_t** ppath);
-
-// Splits off and returns the first path segment of ppath (up to the next
-// '\' or '"'), and moves the start of ppath past that segment and the
-// separators after it. Nothing is copied, so a path of tens of thousands of
-// segments costs no more than its length.
-std::wstring_view Getpathname(std::wstring_view& ppath);
-
-// Totals of the entries a listing shows.
-struct Total {
-  int files = 0;
-  int dirs = 0;
-};
-
-// The parsed command line: the --log settings, whether to list every
-// subdirectory, the volume options (--deleted, --recover), and the one path
-// argument.
-struct Arguments {
-  NTFS_BROWSER_NAMESPACE::Log::Config log_config;
-  bool recursive = false;
-  NTFS_BROWSER_NAMESPACE::VolumeOptions volume_options;
-  wchar_t* path = nullptr;
-  // The instrumentation and tuning options (--benchmark, --capture,
-  // --stop-after, --profile, --tune), and the command line as UTF-8.
-  Tool::DeviceAccess::BenchOptions bench;
-  std::vector<std::string> command_line;
-};
-
-// Returns nullopt for a malformed --log option, or unless exactly one path
-// is given. The --log, --recursive (-r), --deleted, --recover and benchmark
-// options may come before or after the path.
-std::optional<Arguments> ParseArguments(int argc, wchar_t* argv[]);
-
-// Lists the directory named on the command line, opening the volume with
-// cache strategy S. The target is a device or image file followed by a
-// directory ("/dev/sda1/Windows", "c:\image.img\Windows"), or on Windows a
-// drive letter ("c:\windows"). With --recursive, every directory below it is
-// listed too, each under a "Directory of" header. With --deleted, a deleted
-// entry is marked with * (and ? when its record cannot be read); with
-// --recover, damaged directory data is salvaged. Returns the exit code.
-template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
+// Parses argv, configures the log, then lists. The usage goes to stdout for
+// --help and to stderr, after the reason, for a bad command line. Returns the
+// exit code.
 int RunNtfsDir(int argc, wchar_t* argv[]);
-
-// What a listing names: the directory and the headers that show it.
-struct ListTarget {
-  // The volume in messages.
-  std::wstring label;
-  // The directory to list, relative to the root of the volume.
-  std::wstring path;
-  // The directory in the headers of a recursive listing.
-  std::wstring root;
-};
-
-// Lists the directory target.path on an open volume, to stream (stdout, or a
-// binary file a test reads back). The volume's tuning decides whether the next
-// directories of a recursive listing are read ahead. Returns the exit code.
-template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
-int ListFrom(NTFS_BROWSER_NAMESPACE::NtfsVolume<S>& volume,
-             const ListTarget& target, bool recursive,
-             std::FILE* stream = stdout);
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Example::NtfsDir

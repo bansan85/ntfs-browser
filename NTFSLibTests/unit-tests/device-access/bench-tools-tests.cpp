@@ -23,7 +23,6 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/device-access/temp-dir.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-#include <ntfs-browser/test/io/ntfsdir-sample-support.h>
 #include <ntfs-browser/test/mft/ntfsmftlist-sample-support.h>
 #include <ntfs-browser/test/support/sample-run.h>
 #include <ntfs-browser/tool/device-access/json.h>
@@ -32,7 +31,6 @@
 namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
 
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
-namespace TestIo = NTFS_BROWSER_NAMESPACE::Test::Io;
 namespace TestMft = NTFS_BROWSER_NAMESPACE::Test::Mft;
 namespace TestDeviceAccess = NTFS_BROWSER_NAMESPACE::Test::DeviceAccess;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
@@ -101,17 +99,6 @@ std::wstring Option(std::wstring_view name, const std::filesystem::path& path) {
 std::vector<BYTE> ListImage() {
   return TestFakeImage::BuildFakeNtfsImageWithListMftScan(
       list_record_count, list_fragment_clusters);
-}
-
-// text with every spelling of path replaced by a placeholder: NtfsDir prints
-// the path it was given, and two images are not at one path.
-std::string WithoutPath(std::string text, const std::filesystem::path& path) {
-  const std::string spelling = path.string();
-  for (size_t at = text.find(spelling); at != std::string::npos;
-       at = text.find(spelling, at)) {
-    text.replace(at, spelling.size(), "<image>");
-  }
-  return text;
 }
 
 // Whether every byte the capture holds is the byte of the original at the same
@@ -230,52 +217,6 @@ TEST_CASE("NtfsMftList on its capture image lists what it listed on the image",
   CHECK(again.exit_code == 0);
   CHECK(again.out == plain.out);
   CHECK(again.err == plain.err);
-}
-
-TEST_CASE("NtfsDir on its capture image lists what it listed on the image",
-          "[device-access][capture][sample]") {
-  const bool deleted = GENERATE(false, true);
-  INFO("deleted " << deleted);
-  const std::vector<BYTE> original =
-      TestFakeImage::BuildFakeNtfsImageWithReportName(
-          L"report.txt", TestFakeImage::dump_broken_alter_time);
-  const TestIo::TempImage image(original);
-  const TestDeviceAccess::TempDir dir;
-  const std::filesystem::path capture = dir.Path() / "capture.img";
-  std::vector<std::wstring> extra{L"--recursive"};
-  if (deleted) {
-    extra.emplace_back(L"--deleted");
-  }
-
-  for (const std::filesystem::path& exe : TestIo::SampleExes()) {
-    INFO("sample " << exe.filename().string());
-    const auto run = [&](const std::filesystem::path& target,
-                         std::vector<std::wstring> more = {}) {
-      std::vector<std::wstring> args = extra;
-      args.insert(args.end(), more.begin(), more.end());
-      args.push_back(target.wstring());
-      return TestIo::RunDir(exe, args);
-    };
-
-    const SampleRun plain = run(image.path);
-    REQUIRE(plain.exit_code == 0);
-    REQUIRE_THAT(plain.out, ContainsSubstring("report.txt"));
-    std::filesystem::remove(capture);
-    const SampleRun captured = run(image.path, {Option(L"--capture", capture)});
-    CHECK(captured.exit_code == 0);
-    CHECK(captured.out == plain.out);
-    CHECK(captured.err == plain.err);
-
-    REQUIRE(std::filesystem::exists(capture));
-    CHECK(std::filesystem::file_size(capture) == original.size());
-    CHECK(CaptureIsASubsetOf(ReadFile(capture), original));
-
-    const SampleRun again = run(capture);
-    CHECK(again.exit_code == 0);
-    CHECK(WithoutPath(again.out, capture) ==
-          WithoutPath(plain.out, image.path));
-    CHECK(again.err == plain.err);
-  }
 }
 
 TEST_CASE("NtfsMftList --benchmark writes a summary that parses",
@@ -427,29 +368,4 @@ TEST_CASE("NtfsMftList --stop-after ends the run after the phase",
   CHECK(PhaseNamed(run_json, "pass2") == nullptr);
   CHECK(PhaseNamed(run_json, "link") == nullptr);
   CHECK(PhaseNamed(run_json, "print") == nullptr);
-}
-
-TEST_CASE("NtfsDir --benchmark walks its phases and keeps its listing",
-          "[device-access][benchmark][sample]") {
-  const TestIo::TempImage image;
-  const TestDeviceAccess::TempDir dir;
-
-  for (const std::filesystem::path& exe : TestIo::SampleExes()) {
-    INFO("sample " << exe.filename().string());
-    const std::filesystem::path summary = dir.Path() / "summary-dir.json";
-    const std::wstring target = TestIo::InImage(image.path, L"Docs");
-    const SampleRun plain = TestIo::RunDir(exe, {target});
-    const SampleRun run =
-        TestIo::RunDir(exe, {Option(L"--benchmark", summary), target});
-
-    REQUIRE(run.exit_code == 0);
-    CHECK(run.out == plain.out);
-    const JsonValue root = LoadSummary(summary);
-    const JsonValue& run_json = Member(root, "run");
-    CHECK(PhaseNamed(run_json, "open") != nullptr);
-    CHECK(PhaseNamed(run_json, "walk") != nullptr);
-    CHECK(Count(Member(Member(run_json, "reads"), "requested")) > 0);
-    CHECK(Count(Member(Member(Member(run_json, "kinds"), "boot"), "reads")) >
-          0);
-  }
 }

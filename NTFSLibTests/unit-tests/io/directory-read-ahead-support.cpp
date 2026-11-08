@@ -27,7 +27,6 @@
 #include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/example/ntfsdir/ntfsdir-core.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/io/directory-read-ahead.h>
 #include <ntfs-browser/io/file-record.h>
@@ -43,6 +42,7 @@
 #include <ntfs-browser/tuning/tuning.h>
 #include <ntfs-browser/volume-options.h>
 
+#include "directory-listing.h"
 #include "io/directory-read-ahead-testing.h"
 #include "log/ntfs-common.h"
 
@@ -242,7 +242,7 @@ Run ListVolume(NtfsVolume<S>& volume,
   REQUIRE(file != nullptr);
 
   Run run;
-  run.exit_code = Example::NtfsDir::ListFrom<S>(
+  run.exit_code = ListFrom<S>(
       volume, {.label = L"image", .path = L"", .root = L"image"}, true, file);
   run.text = ReadAndRemove(file, path);
   run.log = WithoutReadLines(Test::Support::TakeCapturedLog());

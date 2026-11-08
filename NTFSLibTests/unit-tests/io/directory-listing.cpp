@@ -1,0 +1,454 @@
+#include "directory-listing.h"
+
+#include <ntfs-browser/win-types.h>
+
+#include <cstdio>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
+#include <ntfs-browser/attr/mask.h>
+#include <ntfs-browser/cache/strategy.h>
+#include <ntfs-browser/index-entry.h>
+#include <ntfs-browser/io/directory-read-ahead.h>
+#include <ntfs-browser/io/file-record.h>
+#include <ntfs-browser/io/record-standing.h>
+#include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/namespace.h>
+#include <ntfs-browser/ntfs-volume.h>
+#include <ntfs-browser/tool/device-access/local-time.h>
+#include <ntfs-browser/tool/device-access/output.h>
+#include <ntfs-browser/tool/device-access/tool-support.h>
+#include <ntfs-browser/tuning/tuning.h>
+
+namespace NTFS_BROWSER_NAMESPACE::Test::Io {
+
+namespace {
+
+// Totals of the entries a listing shows.
+struct Total {
+  int files = 0;
+  int dirs = 0;
+};
+
+// Splits off and returns the first path segment of ppath (up to the next
+// backslash or double quote), and moves the start of ppath past that segment
+// and the separators after it. Nothing is copied.
+std::wstring_view Getpathname(std::wstring_view& ppath) {
+  const auto is_separator = [](wchar_t character) {
+    return character == L'\\' || character == L'"';
+  };
+
+  // The first character belongs to the segment whatever it is.
+  size_t length = ppath.empty() ? 0 : 1;
+  while (length < ppath.size() && !is_separator(ppath[length])) {
+    length++;
+  }
+  const std::wstring_view pathname = ppath.substr(0, length);
+
+  size_t next = length;
+  while (next < ppath.size() && is_separator(ppath[next])) {
+    next++;
+  }
+  // Moves the start of the view: a path of many segments costs no copy.
+  ppath.remove_prefix(next);
+  return pathname;
+}
+
+#ifndef _WIN32
+// Bits in a DWORD: where a FILETIME's high half starts.
+constexpr unsigned dword_bits = 32;
+#endif
+
+// Prints message and a newline to stdout, before the listing starts.
+void Say(const std::wstring& message) {
+  Tool::DeviceAccess::WriteText(stdout, message);
+  printf("\n");
+}
+
+// Prints message and a newline in the listing.
+void Report(Tool::DeviceAccess::Output& out, const std::wstring& message) {
+  out.AppendText(message);
+  out.EndLine();
+}
+
+// Reports whether the listing shows ie. Hides system metafiles, DOS alias
+// file names and entries with no name.
+bool IsListed(const IndexEntryView& ie) {
+  // Record numbers below the first user record are system metafiles.
+  if (ie.GetFileReference() <
+      static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::User)) {
+    return false;
+  }
+
+  // Ignore DOS alias file names
+  if (!ie.IsWin32Name()) {
+    return false;
+  }
+
+  return !ie.GetFilename().empty();
+}
+
+// The modification time of ie in the host's local zone, or nothing for a
+// time the platform cannot show.
+std::optional<Tool::DeviceAccess::LocalTime>
+    LocalWriteTime(const IndexEntryView& ie) {
+  FILETIME ft;
+  ie.GetFileTime(&ft, nullptr, nullptr);
+#ifdef _WIN32
+  // The library already converts the time to local on Windows.
+  SYSTEMTIME st;
+  if (FileTimeToSystemTime(&ft, &st) != TRUE) {
+    return std::nullopt;
+  }
+  return Tool::DeviceAccess::LocalTime{.year = st.wYear,
+                                       .month = st.wMonth,
+                                       .day = st.wDay,
+                                       .hour = st.wHour,
+                                       .minute = st.wMinute};
+#else
+  // The library leaves the time in UTC off Windows.
+  return Tool::DeviceAccess::UtcTicksToLocalTime(
+      (static_cast<ULONGLONG>(ft.dwHighDateTime) << dword_bits) |
+      ft.dwLowDateTime);
+#endif
+}
+
+// Marks an entry in a listing that shows deleted items: ' ' for a file
+// that exists, '*' for a deleted one, '?' for a name whose record cannot be
+// read.
+using Marker = char;
+
+// Prints the modification time, the size or <DIR>, the attribute flags and
+// the name of one entry. time is the entry time in local time. marker is
+// null when the listing has no marker column.
+void PrintLine(Tool::DeviceAccess::Output& out, const IndexEntryView& ie,
+               const Tool::DeviceAccess::LocalTime& time,
+               std::optional<Marker> marker) {
+  out.AppendNumber(time.year, 0);
+  out.Append("-");
+  out.AppendNumber(time.month, 2, '0');
+  out.Append("-");
+  out.AppendNumber(time.day, 2, '0');
+  out.Append("  ");
+  out.AppendNumber(time.hour, 2, '0');
+  out.Append(":");
+  out.AppendNumber(time.minute, 2, '0');
+  out.Append(ie.IsDirectory() ? "\t<DIR>    " : "\t         ");
+
+  if (!ie.IsDirectory()) {
+    out.AppendNumber(ie.GetFileSize(), 0);
+  }
+  out.Append("\t<");
+  out.Append(ie.IsReadOnly() ? "R" : " ");
+  out.Append(ie.IsHidden() ? "H" : " ");
+  out.Append(ie.IsSystem() ? "S" : " ");
+  out.Append(">\t");
+  if (marker) {
+    out.Append(std::string_view(&*marker, 1));
+    out.Append(" ");
+  }
+  out.AppendText(ie.GetFilename());
+  out.EndLine();
+}
+
+// Separates the directory names of a path in the headers of a recursive
+// listing.
+#ifdef _WIN32
+constexpr wchar_t path_separator = L'\\';
+#else
+constexpr wchar_t path_separator = L'/';
+#endif
+
+// The marker column of an entry whose record stands as given.
+Marker MarkerOf(NTFS_BROWSER_NAMESPACE::Io::RecordStanding standing) {
+  switch (standing) {
+    case NTFS_BROWSER_NAMESPACE::Io::RecordStanding::Live:
+      return ' ';
+    case NTFS_BROWSER_NAMESPACE::Io::RecordStanding::Unreadable:
+      return '?';
+    case NTFS_BROWSER_NAMESPACE::Io::RecordStanding::Deleted:
+    case NTFS_BROWSER_NAMESPACE::Io::RecordStanding::Reused:
+      break;
+  }
+  return '*';
+}
+
+// What one TraverseSubEntriesWithStanding pass over a directory gathers: the
+// tally of its listed entries, and the subdirectories to enter next.
+template <Cache::Strategy S>
+struct DirectoryEntries {
+  struct Child {
+    ULONGLONG reference;
+    std::wstring name;
+  };
+
+  // Where the listing goes.
+  Tool::DeviceAccess::Output* out = nullptr;
+  // Whether the listing has a marker column: only a volume that shows deleted
+  // items does.
+  bool marking = false;
+  // Whether to collect the subdirectories.
+  bool recursive = false;
+  Total total;
+  std::vector<Child> children;
+};
+
+// TraverseSubEntriesWithStanding callback: prints one entry, and tallies it
+// and, in a recursive listing, collects a subdirectory that is still the
+// entry's own.
+template <Cache::Strategy S>
+void VisitEntry(const IndexEntryView& ie,
+                NTFS_BROWSER_NAMESPACE::Io::RecordStanding standing,
+                void* context) {
+  if (!IsListed(ie)) {
+    return;
+  }
+  auto& entries = *static_cast<DirectoryEntries<S>*>(context);
+
+  if (const std::optional<Tool::DeviceAccess::LocalTime> time =
+          LocalWriteTime(ie)) {
+    PrintLine(*entries.out, ie, *time,
+              entries.marking ? std::optional<Marker>(MarkerOf(standing))
+                              : std::nullopt);
+  }
+
+  if (!ie.IsDirectory()) {
+    entries.total.files++;
+    return;
+  }
+  entries.total.dirs++;
+  if (entries.recursive &&
+      standing != NTFS_BROWSER_NAMESPACE::Io::RecordStanding::Reused) {
+    entries.children.push_back(
+        {ie.GetFileReference(), std::wstring(ie.GetFilename())});
+  }
+}
+
+// A directory that waits to be listed, as its name and its depth, not as its
+// whole path: the paths of a tree that runs deep grow with its depth, and one
+// for each directory that waits would cost memory that grows with the square
+// of it.
+struct Pending {
+  ULONGLONG reference;
+  std::wstring name;
+  // Levels below the directory the listing starts at.
+  size_t depth;
+};
+
+// Fills upcoming with the record numbers of the next count directories the
+// listing will enter, the next one first: the top of the stack, but the ones
+// already listed, which the listing skips.
+void UpcomingDirectories(const std::vector<Pending>& pending,
+                         const std::unordered_set<ULONGLONG>& listed,
+                         size_t count, std::vector<ULONGLONG>& upcoming) {
+  upcoming.clear();
+  for (auto next = pending.rbegin();
+       next != pending.rend() && upcoming.size() < count; ++next) {
+    if (!listed.contains(next->reference)) {
+      upcoming.push_back(next->reference);
+    }
+  }
+}
+
+// Where a recursive listing stands: the directories that wait, and the path of
+// the one being listed.
+struct TreeWalk {
+  std::vector<Pending> pending;
+  // The path of the directory being listed. Its first lengths[d] units are the
+  // path of its ancestor d levels below the start, so the path of the next
+  // directory is its parent's prefix and its own name.
+  std::wstring path;
+  std::vector<size_t> lengths;
+  size_t depth = 0;
+  // Record numbers of the directories listed so far. An index entry gives a
+  // number with its sequence apart, so a number alone identifies a directory.
+  std::unordered_set<ULONGLONG> listed;
+};
+
+// Makes fr the next pending directory that is new and parses, and reports the
+// ones that are not. Returns false when none is left.
+template <Cache::Strategy S>
+bool EnterNextDirectory(
+    Tool::DeviceAccess::Output& out,
+    NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>& fr,
+    NTFS_BROWSER_NAMESPACE::Io::DirectoryReadAhead<S>& ahead, TreeWalk& walk) {
+  while (!walk.pending.empty()) {
+    Pending next = std::move(walk.pending.back());
+    walk.pending.pop_back();
+    // Back to the parent's path: a pending directory is never deeper than
+    // one level below the last one listed, and its parent is on the way.
+    walk.lengths.resize(next.depth);
+    walk.path.resize(walk.lengths.back());
+    walk.path += path_separator;
+    walk.path += next.name;
+    if (walk.listed.contains(next.reference)) {
+      Report(out, L"Skipping " + walk.path + L": directory already listed");
+      ahead.Release(next.reference);
+      continue;
+    }
+    if (fr.ParseFileRecord(next.reference) && fr.ParseAttrs()) {
+      walk.listed.insert(next.reference);
+      walk.lengths.push_back(walk.path.size());
+      walk.depth = next.depth;
+      return true;
+    }
+    Report(out, L"Cannot read directory " + walk.path);
+    ahead.Release(next.reference);
+  }
+  return false;
+}
+
+// Lists the directory fr holds and every directory below it, depth first.
+// root names that directory in the header of its block. A directory that
+// cannot be read is reported and skipped. So is one already listed: NTFS
+// allows no hard link to a directory, so an entry that leads back to one is a
+// loop or a corruption. marking says whether the listing has a marker column.
+// Returns the totals of the tree. Unless walk.read_ahead_dirs is 0, the records
+// and the index blocks of the next directories are read together ahead of the
+// listing, and fr takes them from there: the lines, their order and the reads
+// that are not held stay as they are.
+template <Cache::Strategy S>
+Total ListTree(Tool::DeviceAccess::Output& out,
+               NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>& fr, bool marking,
+               const std::wstring& root) {
+  Total tree;
+  TreeWalk walk;
+  walk.path = root;
+  walk.lengths = {root.size()};
+  if (const std::optional<ULONGLONG> start = fr.GetFileReference()) {
+    walk.listed.insert(*start);
+  }
+  NTFS_BROWSER_NAMESPACE::Io::DirectoryReadAhead<S> ahead(fr.GetVolume());
+  ahead.Attach(fr);
+  ahead.Begin();
+  std::vector<ULONGLONG> upcoming;
+  do {
+    Report(out, L"\nDirectory of " + walk.path);
+    DirectoryEntries<S> entries;
+    entries.out = &out;
+    entries.marking = marking;
+    entries.recursive = true;
+    fr.TraverseSubEntriesWithStanding(VisitEntry<S>, &entries);
+    tree.files += entries.total.files;
+    tree.dirs += entries.total.dirs;
+    // What was read ahead for this directory is of no use any more.
+    if (const std::optional<ULONGLONG> current = fr.GetFileReference()) {
+      ahead.Release(*current);
+    }
+
+    // The stack pops the last pushed first, so push in reverse to list the
+    // subdirectories in index order.
+    for (auto child = entries.children.rbegin();
+         child != entries.children.rend(); ++child) {
+      walk.pending.push_back({.reference = child->reference,
+                              .name = std::move(child->name),
+                              .depth = walk.depth + 1});
+    }
+    if (ahead.Enabled()) {
+      UpcomingDirectories(walk.pending, walk.listed, ahead.Window(), upcoming);
+      ahead.Plan(upcoming);
+    }
+  } while (EnterNextDirectory(out, fr, ahead, walk));
+  return tree;
+}
+
+// Moves fr into the subdirectory named pathname. Returns false after
+// printing why it cannot.
+template <Cache::Strategy S>
+bool EnterSubdirectory(NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>& fr,
+                       std::wstring_view pathname) {
+  std::optional<IndexEntry> ie = fr.FindSubEntry(pathname);
+  if (!ie) {
+    Say(L"Cannot find directory " + std::wstring(pathname));
+    return false;
+  }
+
+  if (!ie->IsDirectory()) {
+    Say(std::wstring(pathname) + L" is not a directory");
+    return false;
+  }
+
+  if (!fr.ParseFileRecord(ie->GetFileReference())) {
+    Say(L"Cannot read directory " + std::wstring(pathname));
+    return false;
+  }
+  if (!fr.ParseAttrs()) {
+    printf("Cannot parse attributes\n");
+    return false;
+  }
+  return true;
+}
+
+// Moves fr to the root directory of the volume called label, then to each
+// directory path names in turn. Returns false after printing why it cannot.
+template <Cache::Strategy S>
+bool EnterDirectories(NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>& fr,
+                      const std::wstring& label, std::wstring_view path) {
+  if (!fr.ParseFileRecord(
+          static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root))) {
+    Say(L"Cannot read root directory of volume " + label);
+    return false;
+  }
+  if (!fr.ParseAttrs()) {
+    printf("Cannot parse attributes\n");
+    return false;
+  }
+
+  while (true) {
+    const std::wstring_view pathname = Getpathname(path);
+    // An empty segment means the path is used up.
+    if (pathname.empty()) {
+      return true;
+    }
+    if (!EnterSubdirectory(fr, pathname)) {
+      return false;
+    }
+  }
+}
+
+}  // namespace
+
+template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
+int ListFrom(NtfsVolume<S>& volume, const ListTarget& target, bool recursive,
+             std::FILE* stream) {
+  volume.SetReadPattern(Tuning::Pattern::DependentSmall);
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> fr(volume);
+  // we only need INDEX_ROOT and INDEX_ALLOCATION
+  // don't waste time and ram to parse unwanted attributes
+  fr.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                 NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+  if (!EnterDirectories(fr, target.label, target.path)) {
+    return -1;
+  }
+
+  // Without --deleted every entry names a file that exists: no marker column.
+  const bool marking = volume.GetOptions().include_deleted;
+
+  Tool::DeviceAccess::Output out(volume.GetOptions().tuning.output.flush_bytes,
+                                 stream);
+  Total total;
+  if (recursive) {
+    total = ListTree(out, fr, marking, target.root);
+  } else {
+    DirectoryEntries<S> entries;
+    entries.out = &out;
+    entries.marking = marking;
+    fr.TraverseSubEntriesWithStanding(VisitEntry<S>, &entries);
+    total = entries.total;
+  }
+  out.PrintLine("Files: {}, Directories: {}", total.files, total.dirs);
+  return 0;
+}
+
+template int ListFrom<NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>(
+    NtfsVolume<NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>& volume,
+    const ListTarget& target, bool recursive, std::FILE* stream);
+template int ListFrom<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>(
+    NtfsVolume<NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>& volume,
+    const ListTarget& target, bool recursive, std::FILE* stream);
+
+}  // namespace NTFS_BROWSER_NAMESPACE::Test::Io

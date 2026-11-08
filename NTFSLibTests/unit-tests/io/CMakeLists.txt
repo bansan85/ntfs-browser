@@ -1,6 +1,8 @@
 target_sources(
   NtfsBrowserTests
   PRIVATE
+    "directory-listing.cpp"
+    "directory-listing.h"
     "directory-read-ahead-class-tests.cpp"
     "directory-read-ahead-gain-tests.cpp"
     "directory-read-ahead-lane-digest-tests.cpp"
@@ -19,9 +21,12 @@ target_sources(
     "file-record-extension-source-tests.cpp"
     "held-probe-groups-tests.cpp"
     "long-host-path-tests.cpp"
+    "ntfsdir-arguments-tests.cpp"
+    "ntfsdir-in-process.h"
     "ntfsdir-name-tests.cpp"
     "include/ntfs-browser/test/io/ntfsdir-sample-support.h"
     "ntfsdir-sample-tests.cpp"
+    "ntfsdir-scan-tests.cpp"
     "probe-run-plan-tests.cpp"
     "probe-store-tests.cpp"
     "probe-walk-support.h"
@@ -37,7 +42,7 @@ target_include_directories(
   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
-# The read ahead tests list a fake volume through NtfsDir's own listing code.
+# The tests of the NtfsDir command call its logic.
 target_link_libraries(NtfsBrowserTests PRIVATE NtfsDirCore)
 
 # NtfsAttr, NtfsDump and NtfsUndel run on Windows and Linux. The tests link
@@ -68,8 +73,9 @@ target_compile_definitions(
     NTFS_UNDEL_EXE="$<TARGET_FILE:NtfsUndel>"
 )
 
-# NtfsDir runs on Windows and Linux (examples/CMakeLists.txt). NtfsDir2, the
-# same listing over the other cache strategy, is Windows-only.
+# NtfsDir runs on Windows and Linux (examples/CMakeLists.txt). The tests link
+# its command-line logic (examples/ntfsdir/ntfsdir-core.h, arguments.h) and run
+# the executable.
 add_dependencies(NtfsBrowserTests NtfsDir)
 target_compile_definitions(
   NtfsBrowserTests
@@ -77,12 +83,6 @@ target_compile_definitions(
 )
 
 if(WIN32)
-  add_dependencies(NtfsBrowserTests NtfsDir2)
-  target_compile_definitions(
-    NtfsBrowserTests
-    PRIVATE NTFS_DIR2_EXE="$<TARGET_FILE:NtfsDir2>"
-  )
-
   # Win32DiskReader only exists on Windows.
   target_sources(
     NtfsBrowserTests

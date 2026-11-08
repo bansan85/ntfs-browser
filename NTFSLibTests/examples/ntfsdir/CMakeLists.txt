@@ -1,10 +1,16 @@
-# The listing logic, shared by both samples. Each sample picks the cache
-# strategy of its volume in its own wmain (main on POSIX).
+# The command line and the listing logic, shared with the unit tests
+# (unit-tests/io/ntfsdir-*-tests.cpp). main.cpp only hands over argv.
 add_library(
   NtfsDirCore
   STATIC
+  "include/ntfs-browser/example/ntfsdir/arguments.h"
+  "arguments.cpp"
+  "listing-printer.h"
+  "listing-printer.cpp"
   "include/ntfs-browser/example/ntfsdir/ntfsdir-core.h"
   "ntfsdir-core.cpp"
+  "utf16-convert.h"
+  "utf16-convert.cpp"
 )
 target_include_directories(
   NtfsDirCore
@@ -27,22 +33,4 @@ if(WIN32 AND BUILD_SHARED_LIBS)
       $<TARGET_FILE_DIR:NtfsDir>
     COMMAND_EXPAND_LISTS
   )
-endif()
-
-# NtfsDir2 stays a Windows-only sample.
-if(WIN32)
-  add_executable(NtfsDir2 WIN32 "main2.cpp")
-  target_link_libraries(NtfsDir2 PRIVATE ${PROJECT_NAME} NtfsDirCore)
-  target_sources(NtfsDir2 PRIVATE "${NTFS_BROWSER_LONG_PATH_MANIFEST}")
-  set_target_properties(NtfsDir2 PROPERTIES WIN32_EXECUTABLE 0)
-  if(BUILD_SHARED_LIBS)
-    add_custom_command(
-      TARGET NtfsDir2
-      POST_BUILD
-      COMMAND
-        ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:NtfsDir2>
-        $<TARGET_FILE_DIR:NtfsDir2>
-      COMMAND_EXPAND_LISTS
-    )
-  endif()
 endif()

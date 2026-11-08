@@ -151,7 +151,7 @@ TEST_CASE("NtfsDir --deleted marks no file of the intact NPS ntfs1 image",
 
   const SampleRun run =
       RunSample(NTFS_DIR_EXE,
-                {L"--recursive", L"--deleted",
+                {L"--engine=fullcache", L"--recursive", L"--deleted",
                  NTFS_BROWSER_NAMESPACE::Test::Corpus::ntfs1_image.wstring()});
 
   CHECK(run.exit_code == 0);
@@ -170,11 +170,14 @@ TEST_CASE("NtfsDir --deleted shows a file freed in the NPS ntfs1 image",
   image.Write();
 
   const SampleRun strict =
-      RunSample(NTFS_DIR_EXE, {L"--recursive", image.path.wstring()});
-  const SampleRun deleted = RunSample(
-      NTFS_DIR_EXE, {L"--recursive", L"--deleted", image.path.wstring()});
-  const SampleRun recover = RunSample(
-      NTFS_DIR_EXE, {L"--recursive", L"--recover", image.path.wstring()});
+      RunSample(NTFS_DIR_EXE,
+                {L"--engine=fullcache", L"--recursive", image.path.wstring()});
+  const SampleRun deleted =
+      RunSample(NTFS_DIR_EXE, {L"--engine=fullcache", L"--recursive",
+                               L"--deleted", image.path.wstring()});
+  const SampleRun recover =
+      RunSample(NTFS_DIR_EXE, {L"--engine=fullcache", L"--recursive",
+                               L"--recover", image.path.wstring()});
 
   CHECK(strict.exit_code == 0);
   CHECK(strict.out.ends_with("Files: 18, Directories: 4\n"));

@@ -21,19 +21,9 @@
 // text it prints.
 namespace NTFS_BROWSER_NAMESPACE::Test::Io {
 
-// The samples under test: NtfsDir on every platform, and NtfsDir2, the same
-// listing over the other cache strategy, where it is built.
-inline std::vector<std::filesystem::path> SampleExes() {
-#ifdef _WIN32
-  return {NTFS_DIR_EXE, NTFS_DIR2_EXE};
-#else
-  return {NTFS_DIR_EXE};
-#endif
-}
-
-// Runs one sample with args, after checking that it was built.
-inline Test::Support::SampleRun RunDir(const std::filesystem::path& exe,
-                                       const std::vector<std::wstring>& args) {
+// Runs the NtfsDir sample with args, after checking that it was built.
+inline Test::Support::SampleRun RunDir(const std::vector<std::wstring>& args) {
+  const std::filesystem::path exe = NTFS_DIR_EXE;
   REQUIRE(std::filesystem::exists(exe));
   return Test::Support::RunSample(exe, args);
 }
@@ -64,9 +54,9 @@ struct TempImage final {
 };
 
 // The listing line of an entry of size zero and write time ticks (UTC), as
-// NtfsDir prints it in the host's time zone. Empty where the platform cannot
-// show that time, which leaves the line out. marker is the --deleted column
-// before the name, or empty when the listing has none.
+// NtfsDir prints it in the host's time zone. The time is blank where the
+// platform cannot show it. marker is the --deleted column before the name, or
+// empty when the listing has none.
 inline std::string ListingLine(std::string_view name, bool directory,
                                ULONGLONG ticks, std::string_view marker = {}) {
   const auto local = Tool::DeviceAccess::UtcTicksToLocalTime(ticks);
@@ -103,16 +93,10 @@ inline std::string DirectoryHeader(std::string_view directory) {
   return "\nDirectory of " + std::string(directory) + "\n";
 }
 
-// directory with name below it, as a recursive listing writes a path.
+// directory with name below it, as a recursive listing writes a path. NTFS
+// separates names with a backslash, on every host.
 inline std::string Below(const std::string& directory, std::string_view name) {
-  return directory +
-         static_cast<char>(std::filesystem::path::preferred_separator) +
-         std::string(name);
-}
-
-// The line a recursive listing writes where it does not enter path.
-inline std::string SkipLine(std::string_view path) {
-  return "Skipping " + std::string(path) + ": directory already listed\n";
+  return directory + '\\' + std::string(name);
 }
 
 // The path of image with directory after it, in the form the samples take.

@@ -15,6 +15,7 @@
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include <ntfs-browser/example/ntfsdir/arguments.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/io/ntfsdir-sample-support.h>
@@ -38,16 +39,21 @@ using NTFS_BROWSER_NAMESPACE::Test::Io::InImage;
 using NTFS_BROWSER_NAMESPACE::Test::Io::ListingLine;
 using NTFS_BROWSER_NAMESPACE::Test::Io::RootListing;
 using NTFS_BROWSER_NAMESPACE::Test::Io::RunDir;
-using NTFS_BROWSER_NAMESPACE::Test::Io::SampleExes;
 using NTFS_BROWSER_NAMESPACE::Test::Io::TempImage;
 using NTFS_BROWSER_NAMESPACE::Test::Support::ExoticNames;
 using NTFS_BROWSER_NAMESPACE::Test::Support::FillerName;
 using NTFS_BROWSER_NAMESPACE::Test::Support::LongTempDir;
-using NTFS_BROWSER_NAMESPACE::Test::Support::sample_failure_exit_code;
 using NTFS_BROWSER_NAMESPACE::Test::Support::SampleRun;
 namespace Fs = std::filesystem;
+namespace ExampleNtfsDir = NTFS_BROWSER_NAMESPACE::Example::NtfsDir;
 
 namespace {
+
+// The exit code of a run that fails.
+constexpr int failure = ExampleNtfsDir::failure_exit_code;
+
+// Lists the root by folder: with Auto, a root is read in $MFT order.
+const std::wstring by_folder = L"--engine=fullcache";
 
 // The path of a directory that a recursive listing writes after its image: the
 // names below it, each after a separator.
@@ -84,18 +90,19 @@ std::string Line(std::string_view name, bool directory = false,
 
 }  // namespace
 
-TEST_CASE("NtfsDir prints an accented name as UTF-8", "[io][sample][name]") {
+TEST_CASE("NtfsDir prints an accented name as UTF-8",
+          "[io][sample][name][ntfsdir]") {
   const TempImage image(L"caf\u00E9.txt");
-  const SampleRun run = RunDir(NTFS_DIR_EXE, {InImage(image.path, L"Docs")});
+  const SampleRun run = RunDir({InImage(image.path, L"Docs")});
 
   CHECK(run.exit_code == 0);
   CHECK(run.out == DocsListing("caf\xC3\xA9.txt"));
 }
 
 TEST_CASE("NtfsDir prints an unpaired surrogate in its WTF-8 form",
-          "[io][sample][name]") {
+          "[io][sample][name][ntfsdir]") {
   const TempImage image(std::wstring{static_cast<wchar_t>(0xD800), L'a'});
-  const SampleRun run = RunDir(NTFS_DIR_EXE, {InImage(image.path, L"Docs")});
+  const SampleRun run = RunDir({InImage(image.path, L"Docs")});
 
   CHECK(run.exit_code == 0);
   CHECK(run.out == DocsListing("\xED\xA0\x80"
@@ -103,11 +110,11 @@ TEST_CASE("NtfsDir prints an unpaired surrogate in its WTF-8 form",
 }
 
 TEST_CASE("NtfsDir prints the whole name when the code page lacks a character",
-          "[io][sample][name]") {
+          "[io][sample][name][ntfsdir]") {
   const TempImage image(
       L"ab\u65E5"
       L"c.txt");
-  const SampleRun run = RunDir(NTFS_DIR_EXE, {InImage(image.path, L"Docs")});
+  const SampleRun run = RunDir({InImage(image.path, L"Docs")});
 
   CHECK(run.exit_code == 0);
   CHECK(run.out == DocsListing("ab\xE6\x97\xA5"
@@ -115,27 +122,26 @@ TEST_CASE("NtfsDir prints the whole name when the code page lacks a character",
 }
 
 TEST_CASE("NtfsDir prints a character past the BMP as four bytes",
-          "[io][sample][name]") {
+          "[io][sample][name][ntfsdir]") {
   const TempImage image(
       L"a\U0001F600"
       L"b.txt");
-  const SampleRun run = RunDir(NTFS_DIR_EXE, {InImage(image.path, L"Docs")});
+  const SampleRun run = RunDir({InImage(image.path, L"Docs")});
 
   CHECK(run.exit_code == 0);
   CHECK(run.out == DocsListing("a\xF0\x9F\x98\x80"
                                "b.txt"));
 }
 
-TEST_CASE("NtfsDir prints every kind of exotic name", "[io][sample][name]") {
-  const Fs::path exe = GENERATE_COPY(from_range(SampleExes()));
-  INFO(exe.string());
+TEST_CASE("NtfsDir prints every kind of exotic name",
+          "[io][sample][name][ntfsdir]") {
   std::vector<FakeTreeNode> nodes{
       {.links = {{.name = L"Exotic"}}, .directory = true}};
   for (const auto& exotic : ExoticNames()) {
     nodes.push_back({.links = {{.name = exotic.name, .parent = 0}}});
   }
   const TempImage image(BuildFakeNtfsImageWithNameTree(nodes));
-  const SampleRun run = RunDir(exe, {InImage(image.path, L"Exotic")});
+  const SampleRun run = RunDir({InImage(image.path, L"Exotic")});
 
   CHECK(run.exit_code == 0);
   for (const auto& exotic : ExoticNames()) {
@@ -167,7 +173,7 @@ TEST_CASE(
   const TempImage image(BuildFakeNtfsImageWithNameTree(nodes));
   const std::string root = image.path.string();
 
-  const SampleRun run = RunDir(NTFS_DIR_EXE, {L"-r", image.path.wstring()});
+  const SampleRun run = RunDir({by_folder, L"-r", image.path.wstring()});
 
   // The index keeps names that are equal when upcased by code unit.
   CHECK(run.exit_code == 0);
@@ -189,9 +195,9 @@ TEST_CASE("NtfsDir lists a freed Report.txt next to a live report.txt",
   };
   const TempImage image(BuildFakeNtfsImageWithNameTree(nodes));
 
-  const SampleRun live = RunDir(NTFS_DIR_EXE, {image.path.wstring()});
+  const SampleRun live = RunDir({by_folder, image.path.wstring()});
   const SampleRun deleted =
-      RunDir(NTFS_DIR_EXE, {L"--deleted", image.path.wstring()});
+      RunDir({by_folder, L"--deleted", image.path.wstring()});
 
   CHECK(live.out == Line("report.txt") + "Files: 1, Directories: 0\n");
   CHECK(deleted.out == Line("Report.txt", false, "*") +
@@ -200,7 +206,7 @@ TEST_CASE("NtfsDir lists a freed Report.txt next to a live report.txt",
 }
 
 TEST_CASE("NtfsDir lists a tree whose paths pass 32767 units",
-          "[io][sample][name]") {
+          "[io][sample][name][ntfsdir]") {
   // 150 levels of names of 255 units: the deepest header is a path of 38 400
   // units, and each header names the whole path.
   constexpr std::size_t depth = 150;
@@ -217,7 +223,7 @@ TEST_CASE("NtfsDir lists a tree whose paths pass 32767 units",
   REQUIRE(deepest.size() > 32767);
 
   const SampleRun run =
-      RunDir(NTFS_DIR_EXE, {L"--recursive", image.path.wstring()});
+      RunDir({by_folder, L"--recursive", image.path.wstring()});
 
   CHECK(run.exit_code == 0);
   CHECK_THAT(run.out,
@@ -225,7 +231,8 @@ TEST_CASE("NtfsDir lists a tree whose paths pass 32767 units",
                                "Files: 1, Directories: 150\n"));
 }
 
-TEST_CASE("NtfsDir lists a tree of thousands of levels", "[io][sample][name]") {
+TEST_CASE("NtfsDir lists a tree of thousands of levels",
+          "[io][sample][name][ntfsdir]") {
   constexpr std::size_t depth = 2500;
   const TempImage image(BuildFakeNtfsImageWithNameTree(MakeNameChain(
       depth, [](std::size_t) { return std::wstring(L"d"); }, L"leaf.txt")));
@@ -233,7 +240,7 @@ TEST_CASE("NtfsDir lists a tree of thousands of levels", "[io][sample][name]") {
       RecursivePath(image.path.string(),
                     std::vector<std::wstring>(depth, std::wstring(L"d")));
 
-  const SampleRun run = RunDir(NTFS_DIR_EXE, {L"-r", image.path.wstring()});
+  const SampleRun run = RunDir({by_folder, L"-r", image.path.wstring()});
 
   CHECK(run.exit_code == 0);
   CHECK_THAT(run.out,
@@ -242,7 +249,7 @@ TEST_CASE("NtfsDir lists a tree of thousands of levels", "[io][sample][name]") {
 }
 
 TEST_CASE("NtfsDir walks down to a target deeper than 260 characters",
-          "[io][sample][name]") {
+          "[io][sample][name][ntfsdir]") {
   constexpr std::size_t depth = 5;
   const auto name_of = [](std::size_t level) {
     return FillerName(255, L'n', static_cast<wchar_t>(L'a' + level));
@@ -258,14 +265,14 @@ TEST_CASE("NtfsDir walks down to a target deeper than 260 characters",
   }
   REQUIRE(target.size() > 260 * 4);
 
-  const SampleRun run = RunDir(NTFS_DIR_EXE, {target});
+  const SampleRun run = RunDir({target});
 
   CHECK(run.exit_code == 0);
   CHECK(run.out == Line("leaf.txt") + "Files: 1, Directories: 0\n");
 }
 
 TEST_CASE("NtfsDir walks down to a name that ends with a dot or a space",
-          "[io][sample][name]") {
+          "[io][sample][name][ntfsdir]") {
   const std::vector<FakeTreeNode> nodes{
       {.links = {{.name = L"dot."}}, .directory = true},
       {.links = {{.name = L"space "}}, .directory = true},
@@ -274,9 +281,8 @@ TEST_CASE("NtfsDir walks down to a name that ends with a dot or a space",
   };
   const TempImage image(BuildFakeNtfsImageWithNameTree(nodes));
 
-  const SampleRun dot = RunDir(NTFS_DIR_EXE, {InImage(image.path, L"dot.")});
-  const SampleRun space =
-      RunDir(NTFS_DIR_EXE, {InImage(image.path, L"space ")});
+  const SampleRun dot = RunDir({InImage(image.path, L"dot.")});
+  const SampleRun space = RunDir({InImage(image.path, L"space ")});
 
   CHECK(dot.exit_code == 0);
   CHECK(dot.out == Line("inside dot") + "Files: 1, Directories: 0\n");
@@ -285,7 +291,7 @@ TEST_CASE("NtfsDir walks down to a name that ends with a dot or a space",
 }
 
 TEST_CASE("NtfsDir walks down to a name with a character past the BMP",
-          "[io][sample][name]") {
+          "[io][sample][name][ntfsdir]") {
   const std::vector<FakeTreeNode> nodes{
       {.links = {{.name = L"d\U0001F600"
                           L"r"}},
@@ -294,22 +300,22 @@ TEST_CASE("NtfsDir walks down to a name with a character past the BMP",
   };
   const TempImage image(BuildFakeNtfsImageWithNameTree(nodes));
 
-  const SampleRun run = RunDir(NTFS_DIR_EXE, {InImage(image.path,
-                                                      L"d\U0001F600"
-                                                      L"r")});
+  const SampleRun run = RunDir({InImage(image.path,
+                                        L"d\U0001F600"
+                                        L"r")});
 
   CHECK(run.exit_code == 0);
   CHECK(run.out == Line("inside") + "Files: 1, Directories: 0\n");
 }
 
 TEST_CASE("NtfsDir lists a long name once, whatever its DOS alias",
-          "[io][sample][name]") {
+          "[io][sample][name][ntfsdir]") {
   const std::vector<FakeTreeNode> nodes{
       {.links = {{.name = L"LongName.txt"},
                  {.name = L"LONGNA~1.TXT", .name_space = 2}}}};
   const TempImage image(BuildFakeNtfsImageWithNameTree(nodes));
 
-  const SampleRun run = RunDir(NTFS_DIR_EXE, {image.path.wstring()});
+  const SampleRun run = RunDir({by_folder, image.path.wstring()});
 
   CHECK(run.exit_code == 0);
   CHECK(run.out == Line("LongName.txt") + "Files: 1, Directories: 0\n");
@@ -317,14 +323,12 @@ TEST_CASE("NtfsDir lists a long name once, whatever its DOS alias",
 
 TEST_CASE("NtfsDir opens an image at a path of more than 260 characters",
           "[io][sample][long-path]") {
-  const Fs::path exe = GENERATE_COPY(from_range(SampleExes()));
-  INFO(exe.string());
   const LongTempDir directory(300);
   const Fs::path image = directory.Write("image.img", ReportImage());
   REQUIRE(image.native().size() > 260);
 
-  const SampleRun root = RunDir(exe, {image.wstring()});
-  const SampleRun docs = RunDir(exe, {InImage(image, L"Docs")});
+  const SampleRun root = RunDir({by_folder, image.wstring()});
+  const SampleRun docs = RunDir({InImage(image, L"Docs")});
 
   CHECK(root.exit_code == 0);
   CHECK(root.out == RootListing());
@@ -346,7 +350,7 @@ TEST_CASE("NtfsDir opens an image through every form of a long path",
        {plain, forward, LR"(\\?\)" + plain,
         directory.Directory().wstring() + LR"(\.\image.img)"}) {
     INFO(Fs::path(form).string().substr(0, 80));
-    const SampleRun run = RunDir(NTFS_DIR_EXE, {form});
+    const SampleRun run = RunDir({by_folder, form});
 
     CHECK(run.exit_code == 0);
     CHECK(run.out == RootListing());
@@ -366,7 +370,7 @@ TEST_CASE("NtfsDir opens an image at a UNC path of more than 260 characters",
     SKIP("the administrative share is not reachable");
   }
 
-  const SampleRun run = RunDir(NTFS_DIR_EXE, {unc});
+  const SampleRun run = RunDir({by_folder, unc});
 
   CHECK(run.exit_code == 0);
   CHECK(run.out == RootListing());
@@ -380,11 +384,13 @@ TEST_CASE("NtfsDir reports a path longer than the system takes",
   // path short.
   const std::wstring path = L"/" + std::wstring(5000, L'p') + L"/image.img";
 
-  const SampleRun run = RunDir(NTFS_DIR_EXE, {path});
+  const SampleRun run = RunDir({path});
 
-  CHECK(run.exit_code == sample_failure_exit_code);
-  CHECK(run.out == "Cannot find a device or image file in " +
-                       std::string(path.begin(), path.end()) + "\n");
+  CHECK(run.exit_code == failure);
+  CHECK(run.out.empty());
+  CHECK_THAT(run.err,
+             ContainsSubstring("Cannot find a device or image file in " +
+                               std::string(path.begin(), path.end())));
 }
 
 #endif
