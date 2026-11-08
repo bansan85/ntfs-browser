@@ -14,6 +14,14 @@ from layers and runs the same reads through the library:
        boot, record, indx the boot sector, the file records and the index
                           blocks, from named fields (the structures of the
                           library lay them out, this script reads the values)
+       text ADDR LENGTH file=N
+                          the numbered lines of a log file, from its byte N
+       blob ADDR name=NAME offset=N length=N
+                          bytes of a file that the archive keeps once, in
+                          every trace that reads it
+       lznt1 ADDR file=N count=N [name=NAME]
+                          chunks of a log file or of a blob, compressed with
+                          LZNT1 the way Windows XP did
   3. the residue: the bytes where the real image differs from layers 1 and 2.
 
 The addresses are volume relative, the way the library asks for them. A
@@ -21,7 +29,8 @@ The addresses are volume relative, the way the library asks for them. A
 trace. Make it again when the read order of the library changes: run the
 corpus test with NTFS_BROWSER_RECORD_TRACES=1 and a temporary patch of
 Test::DiskReaders::RecordingDiskReader::ReadInto that prints "addr size" per
-read.
+read. A test that opens the image several times keeps the reads of the last
+open only.
 
 The residue is the difference between the image and what NtfsFuzzGen predicts
 (its --predict mode), so the layers have one implementation, in C++. Build
@@ -63,7 +72,26 @@ INDEX_BLOCK_BYTES = 4096
 # (shared by the volumes of one Windows version) the rest.
 BOOT_AREA_BYTES = 4096
 BOOT_FIELDS_BYTES = 0x50
-BOOT_CODE_RESOURCE = "ntfs-samples/windows-boot-code"
+BOOT_CODE_NAME = "windows-boot-code"
+
+# What a Windows 10 boot sector holds in the bytes that NTFS does not use.
+DEFAULT_UNUSED_MARKER = 0x00800080
+
+# The files of an image whose bytes code cannot make are kept once in the
+# archive, and the layers name them: a file is a "blob". A blob is a run of
+# whole sectors of the image, found in the read set of the trace that reads the
+# file in one piece. Files with a pattern are made by code: the text of a log
+# file is "This is line N." for every N.
+# archive: ([(blob name, address, bytes)], size of the log file)
+FILE_DATA = {
+    "nps": ([("20076517123273.pdf", 244974080, 1001984),
+             ("NISTSP800-88_rev1.pdf", 238139904, 554496),
+             ("NIST_logo.jpg", 258289152, 2560),
+             ("report02-3.pdf", 241542144, 1422336)], 21888890),
+}
+
+# Bytes of text in an LZNT1 chunk.
+CHUNK_BYTES = 4096
 
 # A stamp is a patch that repeats at least this many times, at the same
 # distance.
@@ -103,6 +131,12 @@ TRACES = [
      [("upcase", 12288, 65536), ("ptrn", 204800, 8351744),
       ("ptrn", 351834112, 1011712)], True),
     ("ntfs-samples", "ntfs-2m", "ntfs-2m.raw", 65536, [], True),
+    ("nps", "nps-ntfs1-raw", "ntfs1-gen2.raw", 0,
+     [("upcase", 258452480, 65536)], True),
+    ("nps", "nps-ntfs1-compressed", "ntfs1-gen2.raw", 0,
+     [("upcase", 258452480, 65536)], True),
+    ("nps", "nps-ntfs1-scan-threads", "ntfs1-gen2.raw", 0,
+     [("upcase", 258452480, 65536)], True),
 ]
 
 
@@ -413,12 +447,149 @@ def find_index_blocks(volume):
     return lines
 
 
-def find_boot(volume):
+def counter_text(size):
+    """The first size bytes of the text "This is line N." of the log file."""
+    out = bytearray()
+    number = 0
+    while len(out) < size:
+        out += b"This is line %d.\r\n" % number
+        number += 1
+    return bytes(out[:size])
+
+
+def sector_index(sources):
+    """{sector: [(source, offset)]} for the sectors that the sources hold."""
+    index = {}
+    for key, data in sources:
+        for at in range(0, len(data) - SECTOR_BYTES + 1, SECTOR_BYTES):
+            sector = data[at : at + SECTOR_BYTES]
+            if any(sector):
+                index.setdefault(sector, []).append((key, at))
+    return index
+
+
+def lznt1_plain(raw):
+    """(plain bytes, chunk bytes) of the LZNT1 chunk at raw[0], or None."""
+    header = u16(raw, 0)
+    size = (header & 0x0FFF) + 1
+    if header & 0x7000 != 0x3000 or size + 2 > len(raw):
+        return None
+    body = raw[2 : 2 + size]
+    if not header & 0x8000:
+        return bytes(body), size + 2
+    plain = bytearray()
+    position = 0
+    while position < len(body):
+        flags = body[position]
+        position += 1
+        for bit in range(8):
+            if position >= len(body):
+                break
+            if flags >> bit & 1:
+                if position + 2 > len(body) or not plain:
+                    return None
+                token = u16(body, position)
+                position += 2
+                offset_bits = 4
+                while 1 << offset_bits < len(plain):
+                    offset_bits += 1
+                length = (token & ((1 << (16 - offset_bits)) - 1)) + 3
+                distance = (token >> (16 - offset_bits)) + 1
+                if distance > len(plain):
+                    return None
+                for _ in range(length):
+                    plain.append(plain[-distance])
+            else:
+                plain.append(body[position])
+                position += 1
+    return bytes(plain), size + 2
+
+
+def find_compressed_chunks(volume, index, sources, stem):
+    """Layers lines for the LZNT1 streams of the files that code makes."""
+    data = dict(sources)
+    lines = []
+    for start, end in volume.intervals:
+        address = (start + SECTOR_BYTES - 1) // SECTOR_BYTES * SECTOR_BYTES
+        while address + 2 <= end:
+            here = address
+            address += SECTOR_BYTES
+            raw = volume.get(here, min(end - here, 4098))
+            found = lznt1_plain(raw) if raw[1] & 0x70 == 0x30 else None
+            if found is None or len(found[0]) != CHUNK_BYTES:
+                continue
+            plain, length = found
+            origin = None
+            for key, at in index.get(plain[:SECTOR_BYTES], []):
+                if at % CHUNK_BYTES == 0 and plain == data[key][at : at + CHUNK_BYTES]:
+                    origin = (key, at)
+                    break
+            if origin is None:
+                continue
+            key, at = origin
+            count = 1
+            cursor = here + length
+            while cursor + 2 <= end:
+                nxt = volume.get(cursor, min(end - cursor, 4098))
+                more = lznt1_plain(nxt) if nxt[1] & 0x70 == 0x30 else None
+                wanted = data[key][at + count * CHUNK_BYTES : at + (count + 1) * CHUNK_BYTES]
+                if more is None or more[0] != wanted:
+                    break
+                count += 1
+                cursor += more[1]
+            words = ["lznt1 %d" % here, "file=%d" % at, "count=%d" % count]
+            if key is not None:
+                words.append("name=%s/%s" % (stem, key))
+            lines.append(" ".join(words))
+            address = (cursor + 2 + SECTOR_BYTES - 1) // SECTOR_BYTES * SECTOR_BYTES
+    return lines
+
+
+def find_file_data(volume, image, offset, stem, resources, members):
+    """Layers lines for the sectors that hold the bytes of a known file."""
+    blobs, log_size = FILE_DATA[stem]
+    sources = []
+    for name, address, length in blobs:
+        image.seek(offset + address)
+        data = image.read(length)
+        members[name] = data
+        (resources / stem / name).write_bytes(data)
+        sources.append((name, data))
+    text = counter_text(log_size)
+    sources.append((None, text))
+    index = sector_index(sources)
+    extents = []
+    for start, end in volume.intervals:
+        first = (start + SECTOR_BYTES - 1) // SECTOR_BYTES * SECTOR_BYTES
+        for address in range(first, end - SECTOR_BYTES + 1, SECTOR_BYTES):
+            at = address - start
+            found = index.get(volume.data[start][at : at + SECTOR_BYTES])
+            if found is None:
+                continue
+            last = extents[-1] if extents else None
+            # A sector that several places hold goes where the extent goes on.
+            if last and last[1] + last[3] == address and (
+                    last[0], last[2] + last[3]) in found:
+                last[3] += SECTOR_BYTES
+            else:
+                extents.append([found[0][0], address, found[0][1],
+                                SECTOR_BYTES])
+    lines = []
+    for name, address, at, length in extents:
+        if name is None:
+            lines.append("text %d %d file=%d" % (address, length, at))
+        else:
+            lines.append("blob %d name=%s/%s offset=%d length=%d"
+                         % (address, stem, name, at, length))
+    return lines + find_compressed_chunks(volume, index, sources, stem)
+
+
+def find_boot(volume, stem):
     """(layers line, boot code) for the boot area, or None."""
     real = volume.get(0, BOOT_AREA_BYTES)
     if real is None or real[3:11] != b"NTFS    ":
         return None
-    words = ["boot 0", "code=" + BOOT_CODE_RESOURCE,
+    words = ["boot 0", "code=%s/%s" % (stem, BOOT_CODE_NAME),
              "bps=%d" % u16(real, 11), "spc=%d" % real[13],
              "reserved=%d" % u16(real, 14), "media=" + number(real[21]),
              "spt=%d" % u16(real, 24), "heads=%d" % u16(real, 26),
@@ -426,6 +597,8 @@ def find_boot(volume):
              "mft=%d" % u64(real, 48), "mirror=%d" % u64(real, 56),
              "record=%d" % u32(real, 64), "index=%d" % u32(real, 68),
              "serial=" + real[72:80].hex()]
+    if u32(real, 36) != DEFAULT_UNUSED_MARKER:
+        words.append("unused=" + number(u32(real, 36)))
     return " ".join(words), real[BOOT_FIELDS_BYTES:]
 
 
@@ -550,7 +723,8 @@ def write_archive(archive, members):
             out.addfile(info, io.BytesIO(members[name]))
 
 
-def make_trace(args, members, trace, image_path, offset, layers, structure):
+def make_trace(args, stem, members, trace, image_path, offset, layers,
+               structure):
     """Makes the layers and the residue of one trace. Returns a report line."""
     intervals = read_intervals(trace)
     lines = ["%s %d %d" % layer for layer in layers]
@@ -558,17 +732,21 @@ def make_trace(args, members, trace, image_path, offset, layers, structure):
         volume = Volume(image, offset, intervals)
     with tempfile.TemporaryDirectory() as folder:
         resources = Path(folder)
-        (resources / "ntfs-samples").mkdir()
-        boot = find_boot(volume) if structure else None
+        (resources / stem).mkdir()
+        boot = find_boot(volume, stem) if structure else None
         if boot:
             lines.append(boot[0])
-            (resources / BOOT_CODE_RESOURCE).write_bytes(boot[1])
-            previous = members.get("windows-boot-code")
+            (resources / stem / BOOT_CODE_NAME).write_bytes(boot[1])
+            previous = members.get(BOOT_CODE_NAME)
             if previous not in (None, boot[1]):
                 raise RuntimeError("the boot code differs from the shared one")
-            members["windows-boot-code"] = boot[1]
+            members[BOOT_CODE_NAME] = boot[1]
         if structure:
             lines += find_records(volume) + find_index_blocks(volume)
+        if structure and stem in FILE_DATA:
+            with open(args.images / image_path, "rb") as image:
+                lines += find_file_data(volume, image, offset, stem, resources,
+                                        members)
         text = layer_text(lines)
         expected = predict(args.generator, text, volume, resources)
         residue = make_residue(volume, expected)
@@ -604,8 +782,8 @@ def main():
     for stem, trace, image_path, offset, layers, structure in TRACES:
         if args.only and trace not in args.only:
             continue
-        print(make_trace(args, members[stem], trace, image_path, offset, layers,
-                         structure))
+        print(make_trace(args, stem, members[stem], trace, image_path, offset,
+                         layers, structure))
     for stem, files in members.items():
         archive = HERE / (stem + ".tar.xz")
         write_archive(archive, files)

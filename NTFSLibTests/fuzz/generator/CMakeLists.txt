@@ -176,7 +176,7 @@ set(NTFS_FUZZGEN_RESOURCES_DIR "${NTFS_FUZZGEN_OUTPUT_DIR}/resources")
 # The archives that hold what code cannot compute (file contents, journal data
 # of a forensic image), one .tar.xz per source image, in
 # ${CMAKE_CURRENT_SOURCE_DIR}/resources. make-corpus-residue.py makes them.
-set(NTFS_FUZZGEN_ARCHIVES "dftt.tar.xz" "ntfs-samples.tar.xz")
+set(NTFS_FUZZGEN_ARCHIVES "dftt.tar.xz" "ntfs-samples.tar.xz" "nps.tar.xz")
 
 target_compile_definitions(
   NtfsFuzzGenCore

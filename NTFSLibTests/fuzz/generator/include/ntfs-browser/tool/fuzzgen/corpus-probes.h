@@ -65,6 +65,20 @@ class CorpusProbes {
   // ntfs-2m.
   static void TwoMegabyteClusters(const Opener& open);
 
+  // The five files of the RAW directory of the NPS ntfs1 image, read whole.
+  // The trace is nps-ntfs1-raw.
+  static void NpsRaw(const Opener& open);
+
+  // The same five files of the Compressed directory, which need LZNT1. The
+  // trace is nps-ntfs1-compressed.
+  static void NpsCompressed(const Opener& open);
+
+  // The scan of the NPS ntfs1 image with threads, deleted items shown and
+  // errors recovered. The test scans four times and opens the image each time,
+  // and the file keeps the reads of the last scan: so does this probe. The
+  // trace is nps-ntfs1-scan-threads.
+  static void NpsScanThreads(const Opener& open);
+
  private:
   using Volume = NTFS_BROWSER_NAMESPACE::NtfsVolume<
       NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>;
@@ -84,6 +98,10 @@ class CorpusProbes {
   // Walks dir down from the root, one name at a time.
   static void OpenDirPath(Record& dir,
                           std::initializer_list<std::wstring_view> parts);
+
+  // Reads the five files of the NPS ntfs1 image that dir_name holds.
+  static void ReadNpsDirectory(const Volume& volume,
+                               std::wstring_view dir_name);
 
   // Reads the $Corrupt and $Verify streams of $Extend\$RmMetadata\$Repair.
   static void ReadRepairStreams(const Volume& volume);

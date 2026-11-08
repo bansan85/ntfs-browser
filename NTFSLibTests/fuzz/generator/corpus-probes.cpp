@@ -1,5 +1,6 @@
 #include <ntfs-browser/win-types.h>
 
+#include <array>
 #include <initializer_list>
 #include <optional>
 #include <stdexcept>
@@ -12,6 +13,7 @@
 #include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/mft/idx.h>
+#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/fuzzgen/corpus-probes.h>
 #include <ntfs-browser/volume-options.h>
@@ -55,6 +57,16 @@ constexpr std::initializer_list<ULONGLONG> fragmented_mft_records = {
     34'799'618ULL,
     34'799'619ULL};
 
+// The five files that the RAW and the Compressed directories of the NPS ntfs1
+// image both hold.
+constexpr std::array<std::wstring_view, 5> nps_files = {
+    L"20076517123273.pdf", L"NISTSP800-88_rev1.pdf", L"NIST_logo.jpg",
+    L"report02-3.pdf", L"logfile1.txt"};
+
+// The threads of the scan that the file nps-ntfs1-scan-threads keeps: the last
+// scan of the test, which uses several.
+constexpr unsigned nps_scan_threads = 4;
+
 }  // namespace
 
 void CorpusProbes::Require(bool ok, std::string_view what) {
@@ -84,6 +96,28 @@ void CorpusProbes::OpenDirPath(Record& dir,
   OpenRootDir(dir);
   for (const std::wstring_view part : parts) {
     OpenSubDir(dir, part);
+  }
+}
+
+void CorpusProbes::ReadNpsDirectory(const Volume& volume,
+                                    std::wstring_view dir_name) {
+  Record dir(volume);
+  OpenDirPath(dir, {dir_name});
+  for (const std::wstring_view name : nps_files) {
+    const std::optional<IndexEntry> entry = dir.FindSubEntry(name);
+    Require(entry.has_value(), "a file is missing");
+
+    Record file(volume);
+    file.SetAttrMask(Attr::Mask::Data);
+    Require(file.ParseFileRecord(entry->GetFileReference()),
+            "a file record does not parse");
+    Require(file.ParseAttrs(), "a file has bad attributes");
+
+    const Attr::AttrBase<Cache::Strategy::NoCache>* const stream =
+        file.FindStream({});
+    Require(stream != nullptr, "a file has no data");
+    std::vector<BYTE> data(stream->GetDataSize());
+    Require(stream->ReadData(0, data) == data.size(), "a file is short");
   }
 }
 
@@ -306,6 +340,29 @@ void CorpusProbes::RamSlack(const Opener& open) {
   }
 
   ReadRepairStreams(volume);
+}
+
+void CorpusProbes::NpsRaw(const Opener& open) {
+  const Volume volume(open({}), VolumeOptions{});
+  Require(volume.IsVolumeOK(), "the volume is not ok");
+  ReadNpsDirectory(volume, L"RAW");
+}
+
+void CorpusProbes::NpsCompressed(const Opener& open) {
+  const Volume volume(open({}), VolumeOptions{});
+  Require(volume.IsVolumeOK(), "the volume is not ok");
+  ReadNpsDirectory(volume, L"Compressed");
+}
+
+void CorpusProbes::NpsScanThreads(const Opener& open) {
+  const VolumeOptions options{.include_deleted = true, .recover_errors = true};
+  const Volume volume(open({}), options);
+  Require(volume.IsVolumeOK(), "the volume is not ok");
+
+  Mft::MftTree::ScanOptions scan;
+  scan.threads = nps_scan_threads;
+  const Mft::MftTree tree(volume, scan);
+  Require(!tree.Entries().empty(), "the scan found nothing");
 }
 
 void CorpusProbes::TwoMegabyteClusters(const Opener& open) {

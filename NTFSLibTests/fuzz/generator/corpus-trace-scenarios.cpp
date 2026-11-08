@@ -30,10 +30,13 @@ struct TraceSource {
   std::string_view corpus;
   // The probe that records it.
   CorpusProbes::Probe probe;
+  // The feature that the build MUST have to read the volume.
+  Feature needs = Feature::None;
 };
 
 constexpr std::string_view dftt_corpus = "dftt";
 constexpr std::string_view samples_corpus = "ntfs-samples";
+constexpr std::string_view nps_corpus = "nps";
 
 // The corpus traces of the family, in the order of the test files.
 const std::vector<TraceSource>& Sources() {
@@ -51,6 +54,10 @@ const std::vector<TraceSource>& Sources() {
       {"ntfs", samples_corpus, CorpusProbes::TwoFileTimes},
       {"ntfs-ramslack", samples_corpus, CorpusProbes::RamSlack},
       {"ntfs-2m", samples_corpus, CorpusProbes::TwoMegabyteClusters},
+      {"nps-ntfs1-raw", nps_corpus, CorpusProbes::NpsRaw},
+      {"nps-ntfs1-compressed", nps_corpus, CorpusProbes::NpsCompressed,
+       Feature::Decompression},
+      {"nps-ntfs1-scan-threads", nps_corpus, CorpusProbes::NpsScanThreads},
   };
   return sources;
 }
@@ -65,6 +72,8 @@ std::vector<BYTE> Record(const TraceSource& source,
   const CorpusProbes::Opener open = [&](std::string_view requested)
       -> std::unique_ptr<NTFS_BROWSER_NAMESPACE::IDiskReader> {
     const std::string name(requested.empty() ? source.trace : requested);
+    // A trace file starts again each time the volume is opened.
+    recorded[name].clear();
     const std::string stem = std::string(source.corpus) + "/" + name;
     const std::vector<BYTE> layers = resources.Read(stem + ".layers");
     const std::vector<BYTE> residue = resources.Read(stem + ".residue");
@@ -88,6 +97,7 @@ void CorpusTraceScenarios::Register(ScenarioRegistry& registry) {
   for (const TraceSource& source : Sources()) {
     registry.Add(
         {.name = "corpus-traces/" + std::string(source.trace) + ".trace",
+         .needs = source.needs,
          .make = [&source](const ResourceLocator& resources) {
            return Record(source, resources);
          }});
