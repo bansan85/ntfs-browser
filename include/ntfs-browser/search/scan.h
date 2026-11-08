@@ -20,15 +20,22 @@
 //     // do other work, then wait about 100 ms
 //   }
 //
+// A caller with nothing else to do can let Run() do the waiting. It starts the
+// scan, polls about every 100 ms and returns when the scan is over:
+//
+//   const Search::State state = scan.Run();
+//
 // Threads. Start() makes one worker thread, which opens the volume and runs the
 // scan. Start() returns at once. The caller keeps every call: Start(), Poll(),
-// Cancel(), the destructor and the callback all run on the thread that created
-// the Scan. Poll() never waits for the worker: it takes the lock for a moment,
-// swaps the buffer the worker filled for an empty one, and calls the callback
-// with a view of the full one. The worker fills the other buffer meanwhile, so
-// no name and no path is copied, and the worker never writes to what the
-// callback reads. The batch is valid during the callback only: the buffer is
-// recycled when it returns (a debug build overwrites the text).
+// Run(), the destructor and the callback all run on the thread that created
+// the Scan. Cancel() runs there too, from the callback or anywhere else, and
+// it is the one call that another thread MAY make: see Cancel(). Poll() never
+// waits for the worker: it takes the lock for a moment, swaps the buffer the
+// worker filled for an empty one, and calls the callback with a view of the
+// full one. The worker fills the other buffer meanwhile, so no name and no path
+// is copied, and the worker never writes to what the callback reads. The batch
+// is valid during the callback only: the buffer is recycled when it returns (a
+// debug build overwrites the text).
 //
 // The library and its log are not thread safe, and the Scan keeps to that.
 // Whatever the worker logs, the opening of the volume included, is captured in
@@ -44,6 +51,15 @@
 // caller waits when Options::max_pending_entries entries are pending, so the
 // memory stays bounded. A caller that polls too rarely slows the scan down by
 // that limit and gets large batches: the limit is also the largest batch.
+//
+// Run(). A loop of waits and Poll() calls, on the caller's thread. The wait
+// ends when the interval is over, or earlier when the worker has news (entries,
+// a change of the percent), when the scan ends, or when Cancel() is called.
+// After a batch, news does not wake the loop before one interval has passed, so
+// the batches stay large and the callback runs about once per interval. The end
+// of the scan, Cancel() and a full pending buffer wake it at once. A condition
+// variable in the exchange does the waiting: the worker notifies it, and Run()
+// never spins.
 //
 // Order of delivery. The directory engines deliver while they walk. The MftList
 // engine reads the whole $MFT first and delivers its entries when the read is
@@ -80,6 +96,7 @@
 // log (Log::Error, Log::Warn). An exception in the worker is caught, logged,
 // and ends the scan as Failed. GetState() tells that the scan failed.
 
+#include <chrono>
 #include <functional>
 #include <memory>
 
@@ -142,9 +159,40 @@ class NTFS_BROWSER_EXPORT Scan {
   // end of the scan, which always gets a batch with last set.
   State Poll();
 
+  // Starts the scan if it is not started yet, then waits and calls Poll() until
+  // the scan is over. Returns the final state: Finished, Cancelled or Failed.
+  // The callback and the replayed log lines run on the calling thread, as with
+  // Poll().
+  //
+  // interval is the longest wait between two calls of Poll(). A Poll() in each
+  // round replays the log lines of the worker even when nothing is new. The
+  // wait ends early when the worker has news, but not before one interval has
+  // passed since the last batch. It ends at once when the scan ends, when
+  // Cancel() is called, and when Options::max_pending_entries entries wait: the
+  // batch cannot grow, and the worker is held until the next Poll(). An
+  // interval of 0 waits for the worker with no timeout and polls after each
+  // wake with no delay: a log line then waits for the next news. A negative
+  // interval counts as 0 and one above a day as a day.
+  //
+  // A scan that was started already is not started again. Run() on a scan that
+  // is over returns its state at once. Run() from the callback does nothing and
+  // returns the current state, as Poll() does. An exception of the callback
+  // leaves Run() and the scan can be run again.
+  State
+      Run(std::chrono::milliseconds interval = std::chrono::milliseconds(100));
+
   // Asks the worker to stop. Returns at once. The next calls of Poll() deliver
   // what was found, and the last batch ends the scan with the state Cancelled.
-  // Does nothing once the scan is over.
+  // Does nothing once the scan is over. It also wakes a Run() that waits.
+  //
+  // Thread rule. It is safe from the callback, and from any other thread while
+  // another thread waits in Run() or polls, once the scan is started: Start()
+  // has returned, or Run() has begun and the worker is seen at work. It only
+  // reads atomic flags, asks the stop source and wakes the exchange. A call
+  // before the scan is started makes the worker stop at its first look, and the
+  // state ends Finished, not Cancelled. No other call is safe from a second
+  // thread. The Scan MUST outlive a Cancel() from another thread: do not call
+  // it as the destructor runs.
   void Cancel() noexcept;
 
   // The state of the scan. It stays Running until the Poll() that delivers the

@@ -2,8 +2,10 @@
 
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstddef>
+#include <cstdint>
 #include <mutex>
 #include <optional>
 #include <span>
@@ -35,9 +37,14 @@ namespace NTFS_BROWSER_NAMESPACE::Search {
 // buffer holds that many entries. A request on the stop token given to
 // Prepare() ends the wait.
 //
+// The caller can sleep until the worker has news. Add(), SetPercent() and
+// EndWork() count as news and wake WaitForNews(), and so does Wake(). The count
+// and the flags sit under the same mutex as the buffers.
+//
 // The calls are split by thread. The worker calls BeginWork(), Add(),
 // SetPercent() and EndWork(). The caller calls Prepare(), Take(), ReplayLog(),
-// Release() and Percent(), one after the other and never from two threads.
+// Release(), Percent() and WaitForNews(), one after the other and never from
+// two threads. Wake() is the one call that any thread may make, at any time.
 class NTFS_BROWSER_EXPORT_TESTS_ONLY ScanExchange final : public EntrySink {
  public:
   // What Take() hands over.
@@ -83,6 +90,24 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY ScanExchange final : public EntrySink {
   // and replays all of it.
   void ReplayLog() noexcept;
 
+  using TimePoint = std::chrono::steady_clock::time_point;
+
+  // Sleeps the caller until it has a reason to Take() again, and returns then.
+  // The reasons are, in the order of their strength:
+  //   - the worker ended, Wake() was called, or the buffer holds max_pending
+  //     entries (the batch cannot grow): wakes at once;
+  //   - the deadline: wakes then. No value means no deadline;
+  //   - news since the last Take() (an entry, a percent): wakes, but not before
+  //     news_not_before. A time in the past lets the news wake the call at
+  //     once.
+  // A Wake() that came while nobody waited is kept for the next call.
+  void WaitForNews(TimePoint news_not_before,
+                   std::optional<TimePoint> deadline);
+
+  // Wakes WaitForNews() at once, or the next one if none waits. Callable from
+  // any thread. This is how Cancel() reaches a caller that sleeps.
+  void Wake() noexcept;
+
   // Forgets the entries of the last Take(). Their views die.
   void Release() noexcept;
 
@@ -90,12 +115,18 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY ScanExchange final : public EntrySink {
   [[nodiscard]] std::optional<double> Percent() const noexcept;
 
  private:
+  // Counts one more piece of news and wakes the caller if it sleeps. Call it
+  // with mutex_ held.
+  void NoteNews();
+
   // A percent below zero means the engine reported none.
   static constexpr double no_percent = -1.0;
 
   std::size_t max_pending_;
   std::mutex mutex_;
   std::condition_variable_any filled_;
+  // Signals WaitForNews(). Always used with mutex_.
+  std::condition_variable changed_;
   std::stop_token stop_;
   std::array<EntryBuffer, 2> buffers_;
   // The buffer the worker fills. The caller reads the other one between a
@@ -104,6 +135,17 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY ScanExchange final : public EntrySink {
   // The buffer that Release() clears, or null. Used by the caller only.
   EntryBuffer* reading_{nullptr};
   bool done_{false};
+  // Counts the Add() and SetPercent() calls. Guarded by mutex_.
+  std::uint64_t news_{0};
+  // The value of news_ at the last Take(): news_ above it is not taken yet.
+  // Guarded by mutex_.
+  std::uint64_t taken_news_{0};
+  // WaitForNews() sleeps: the worker only notifies then. Guarded by mutex_.
+  bool waiting_{false};
+  // The buffer the worker fills holds max_pending entries. Guarded by mutex_.
+  bool full_{false};
+  // Wake() was called and no WaitForNews() has consumed it. Guarded by mutex_.
+  bool wake_{false};
   State result_{State::NotStarted};
   std::atomic<double> percent_{no_percent};
   Log::Detail::WorkerLog log_;

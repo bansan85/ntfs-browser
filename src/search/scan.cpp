@@ -1,3 +1,6 @@
+#include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <exception>
 #include <memory>
@@ -21,8 +24,10 @@ namespace NTFS_BROWSER_NAMESPACE::Search {
 
 // The state of a scan. A worker thread runs the engine into exchange_. The
 // caller's thread owns every member that is not part of the exchange: Start(),
-// Poll(), Cancel() and the callback run there. The worker touches the options
-// (read only), the stop source (thread safe) and the exchange.
+// Poll(), Run() and the callback run there. The worker touches the options
+// (read only), the stop source (thread safe) and the exchange. Cancel() is the
+// one call that another thread may make: it reads three atomic flags, asks the
+// stop source and wakes the exchange.
 class Scan::Impl {
  public:
   explicit Impl(Options options)
@@ -77,9 +82,10 @@ class Scan::Impl {
     progress_.percent = percent;
     reported_percent_ = percent;
     if (taken.last) {
-      final_delivered_ = true;
       result_ = taken.result;
+      final_delivered_ = true;
     }
+    ++batches_;
     if (callback_) {
       callback_(Batch{
           .entries = taken.entries, .progress = progress_, .last = taken.last});
@@ -87,11 +93,43 @@ class Scan::Impl {
     return GetState();
   }
 
+  // Polls until the scan is over, starting it first when needed.
+  State RunToEnd(std::chrono::milliseconds interval) {
+    if (polling_) {
+      return GetState();
+    }
+    Start();
+    using Clock = std::chrono::steady_clock;
+    const Clock::duration pace =
+        std::clamp(interval, std::chrono::milliseconds::zero(), max_pace);
+    std::optional<Clock::time_point> last_batch;
+    for (;;) {
+      const std::uint64_t batches = batches_;
+      const State state = Poll();
+      const Clock::time_point now = Clock::now();
+      if (final_delivered_) {
+        return state;
+      }
+      if (batches_ != batches) {
+        last_batch = now;
+      }
+      // News wakes the loop at once after a quiet time. After a batch it waits
+      // for one pace, which keeps the batches large.
+      const Clock::time_point news_from = last_batch ? *last_batch + pace : now;
+      std::optional<Clock::time_point> poll_at;
+      if (pace > Clock::duration::zero()) {
+        poll_at = now + pace;
+      }
+      exchange_.WaitForNews(news_from, poll_at);
+    }
+  }
+
   void Cancel() noexcept {
     if (started_ && !final_delivered_) {
       cancelled_ = true;
     }
     stop_.request_stop();
+    exchange_.Wake();
   }
 
   [[nodiscard]] State GetState() const noexcept {
@@ -191,17 +229,26 @@ class Scan::Impl {
     }
   }
 
+  // The longest pace Run() accepts. A day is far beyond any use, and it keeps
+  // the deadline far from the overflow of the clock.
+  static constexpr std::chrono::milliseconds max_pace{std::chrono::hours(24)};
+
   Options options_;
   BatchCallback callback_;
   std::stop_source stop_;
   ScanExchange exchange_;
 
-  bool started_{false};
-  // How the engine ended, as the last batch reported it.
+  // The three flags are atomic because Cancel() reads and sets them from any
+  // thread.
+  std::atomic<bool> started_{false};
+  // How the engine ended, as the last batch reported it. Written before
+  // final_delivered_ is set.
   State result_{State::NotStarted};
-  bool cancelled_{false};
+  std::atomic<bool> cancelled_{false};
   // Whether Poll() has delivered the batch that has last set.
-  bool final_delivered_{false};
+  std::atomic<bool> final_delivered_{false};
+  // Batches Poll() handed to the callback so far.
+  std::uint64_t batches_{0};
   // A Poll() is running: it is not reentrant.
   bool polling_{false};
   // Entries handed to the callback so far.
@@ -222,6 +269,10 @@ void Scan::OnBatch(BatchCallback callback) {
 }
 
 void Scan::Start() { impl_->Start(); }
+
+State Scan::Run(std::chrono::milliseconds interval) {
+  return impl_->RunToEnd(interval);
+}
 
 State Scan::Poll() { return impl_->Poll(); }
 
