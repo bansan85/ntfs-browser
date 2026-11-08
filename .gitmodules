@@ -17,3 +17,6 @@
 [submodule "3rdparty/frozen"]
 	path = 3rdparty/frozen
 	url = https://github.com/serge-sans-paille/frozen.git
+[submodule "3rdparty/pcre2"]
+	path = 3rdparty/pcre2
+	url = https://github.com/PCRE2Project/pcre2.git

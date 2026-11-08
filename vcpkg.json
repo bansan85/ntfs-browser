@@ -11,13 +11,20 @@
   ],
   "default-features": [
     "tests",
-    "efs-cryptopp"
+    "efs-cryptopp",
+    "regex"
   ],
   "features": {
     "tests": {
       "description": "Pull in Catch2 for NtfsBrowserTests (NTFS_BROWSER_USE_INSTALLED_CATCH2)",
       "dependencies": [
         "catch2"
+      ]
+    },
+    "regex": {
+      "description": "Pull in PCRE2 for regular expression search (NTFS_BROWSER_USE_INSTALLED_PCRE2, NTFS_BROWSER_ENABLE_REGEX)",
+      "dependencies": [
+        "pcre2"
       ]
     },
     "efs-cryptopp": {

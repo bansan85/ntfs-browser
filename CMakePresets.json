@@ -96,6 +96,14 @@
             }
         },
         {
+            "name": "no-regex",
+            "displayName": "Static, regular expression search disabled",
+            "inherits": "static",
+            "cacheVariables": {
+                "NTFS_BROWSER_ENABLE_REGEX": "OFF"
+            }
+        },
+        {
             "name": "vs2026-amd64",
             "displayName": "Visual Studio Community 2026 Release - amd64",
             "generator": "Visual Studio 18 2026",
@@ -164,6 +172,11 @@
         {
             "name": "no-efs",
             "configurePreset": "no-efs",
+            "inherits": "build-base"
+        },
+        {
+            "name": "no-regex",
+            "configurePreset": "no-regex",
             "inherits": "build-base"
         },
         {
@@ -255,6 +268,19 @@
                 {
                     "type": "build",
                     "name": "no-efs"
+                }
+            ]
+        },
+        {
+            "name": "no-regex",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "no-regex"
+                },
+                {
+                    "type": "build",
+                    "name": "no-regex"
                 }
             ]
         },

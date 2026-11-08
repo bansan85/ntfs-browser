@@ -91,6 +91,17 @@ option(
   ON
 )
 
+# The regular expression matcher of Search::Scan uses PCRE2 in its 16 bit form
+# (UTF-16 names). Turning it off drops the matcher and the dependency, and a
+# scan that asks for a regular expression fails. PCRE2 stays an implementation
+# detail: no public header includes it.
+option(NTFS_BROWSER_ENABLE_REGEX "Compile in the PCRE2 regular expressions" ON)
+option(
+  NTFS_BROWSER_USE_INSTALLED_PCRE2
+  "Link an installed PCRE2 instead of the 3rdparty submodule"
+  ${NTFS_BROWSER_USE_INSTALLED_DEFAULT}
+)
+
 # Root C++ namespace of the library. src/CMakeLists.txt writes it into the
 # generated <ntfs-browser/namespace.h>, so consumers need no definition of their
 # own. It must be a plain identifier: it is spliced into `namespace X {`.
@@ -174,6 +185,37 @@ if(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP)
           )
         endforeach()
       endif()
+    endblock()
+  endif()
+endif()
+
+if(NTFS_BROWSER_ENABLE_REGEX)
+  if(NTFS_BROWSER_USE_INSTALLED_PCRE2)
+    find_package(PCRE2 CONFIG REQUIRED COMPONENTS 16BIT)
+  else()
+    # PCRE2 always builds as a static library, whatever BUILD_SHARED_LIBS says:
+    # it ends up inside a shared NtfsBrowser. The block keeps these overrides
+    # out of the rest of the project.
+    block(SCOPE_FOR VARIABLES POLICIES)
+      # PCRE2 sets BUILD_SHARED_LIBS with set(... CACHE). With the new behavior
+      # of CMP0126 that call leaves the normal variable below alone.
+      set(CMAKE_POLICY_DEFAULT_CMP0126 NEW)
+      set(BUILD_SHARED_LIBS OFF)
+      set(BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
+      set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+      # Only the 16 bit code units are used: names are UTF-16.
+      set(PCRE2_BUILD_PCRE2_8 OFF CACHE BOOL "" FORCE)
+      set(PCRE2_BUILD_PCRE2_16 ON CACHE BOOL "" FORCE)
+      set(PCRE2_BUILD_PCRE2_32 OFF CACHE BOOL "" FORCE)
+      set(PCRE2_SUPPORT_UNICODE ON CACHE BOOL "" FORCE)
+      # The JIT is a large speed up. A CPU that sljit does not know makes
+      # pcre2_jit_compile() fail, and the matcher then runs the interpreter.
+      set(PCRE2_SUPPORT_JIT ON CACHE BOOL "" FORCE)
+      # Its program, tests and report are not this project's.
+      set(PCRE2_BUILD_PCRE2GREP OFF CACHE BOOL "" FORCE)
+      set(PCRE2_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+      set(PCRE2_SHOW_REPORT OFF CACHE BOOL "" FORCE)
+      add_subdirectory("3rdparty/pcre2")
     endblock()
   endif()
 endif()
