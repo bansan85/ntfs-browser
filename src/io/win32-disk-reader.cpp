@@ -187,6 +187,13 @@ class Win32DiskReader::Prefetcher {
   // first, then the standing lane.
   void StartReads();
 
+  // Whether a read of bytes, added to the bytes of every read started, stays
+  // within the byte cap of the active caps.
+  [[nodiscard]] bool FitsBytesCap(ULONGLONG bytes) const {
+    return first_.started_bytes + standing_.started_bytes + bytes <=
+           active_->max_bytes;
+  }
+
   // Starts the reads of the standing lane, in its order, under the caps and the
   // share of reads in flight it may take.
   void StartStandingReads();
@@ -384,9 +391,7 @@ void Win32DiskReader::Prefetcher::StartReads() {
     Range& next = first_.ranges.at(first_.started);
     const ULONGLONG bytes = AlignedBytes(next);
     // The first one always starts: the caller is about to wait for it.
-    if (first_.started != 0 &&
-        first_.started_bytes + standing_.started_bytes + bytes >
-            active_->max_bytes) {
+    if (first_.started != 0 && !FitsBytesCap(bytes)) {
       break;
     }
     StartRead(next, Bench::Detail::DiskReadOrigin::ReadAhead);
@@ -440,8 +445,7 @@ void Win32DiskReader::Prefetcher::StartStandingReads() {
     // The lane stops at the first range that does not fit, so that the reads
     // start in the order of the announcements. Alone, a range always fits.
     if (first_.started_bytes + standing_.started_bytes != 0 &&
-        first_.started_bytes + standing_.started_bytes + bytes >
-            active_->max_bytes) {
+        !FitsBytesCap(bytes)) {
       return;
     }
     StartStandingRead(next, bytes);
