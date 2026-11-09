@@ -87,15 +87,75 @@ std::string Quote(std::u16string_view text) {
   return Utf::WideToUtf8(Utf::Utf16ToWide(head)) + (cut ? "..." : "");
 }
 
-}  // namespace
-
-struct RegexMatcher::State {
+// What PCRE2 needs for one pattern.
+struct Engine {
   std::unique_ptr<pcre2_code, CodeFree> code;
   // The stack comes before the context that points at it: the context is freed
   // first.
   std::unique_ptr<pcre2_jit_stack, JitStackFree> jit_stack;
   std::unique_ptr<pcre2_match_context, MatchContextFree> context;
   std::unique_ptr<pcre2_match_data, MatchDataFree> data;
+};
+
+// Compiles the text of the pattern into the code of the engine. Logs and gives
+// false on a syntax error.
+bool CompilePattern(const Pattern& pattern, Engine& engine) {
+  std::vector<PCRE2_UCHAR> text;
+  text.reserve(pattern.text.size());
+  for (const char16_t unit : pattern.text) {
+    text.push_back(static_cast<PCRE2_UCHAR>(unit));
+  }
+  // Names are UTF-16 and may hold an unpaired surrogate: the invalid units
+  // match nothing instead of failing the match. UCP makes \w, \d and \b
+  // follow Unicode.
+  std::uint32_t flags = PCRE2_UTF | PCRE2_MATCH_INVALID_UTF | PCRE2_UCP;
+  if (!pattern.case_sensitive) {
+    flags |= PCRE2_CASELESS;
+  }
+  int error_code = 0;
+  PCRE2_SIZE error_offset = 0;
+  engine.code.reset(pcre2_compile(text.data(), text.size(), flags, &error_code,
+                                  &error_offset, nullptr));
+  if (!engine.code) {
+    Log::Error("Invalid regular expression: {} (at unit {})",
+               ErrorMessage(error_code), error_offset);
+    return false;
+  }
+  return true;
+}
+
+// Makes the match data, the match context with its limits and, when the code
+// runs under the JIT, the JIT stack. Logs and gives false when memory is short.
+bool ConfigureContext(const Pattern& pattern, bool jit, Engine& engine) {
+  engine.context.reset(pcre2_match_context_create(nullptr));
+  engine.data.reset(
+      pcre2_match_data_create_from_pattern(engine.code.get(), nullptr));
+  if (!engine.context || !engine.data) {
+    Log::Error("Not enough memory for the regular expression");
+    return false;
+  }
+  const std::uint32_t match_limit = pattern.regex_match_limit != 0
+                                        ? pattern.regex_match_limit
+                                        : default_regex_match_limit;
+  pcre2_set_match_limit(engine.context.get(), match_limit);
+  pcre2_set_depth_limit(engine.context.get(), depth_limit);
+  if (jit) {
+    const std::size_t stack_max = pattern.regex_jit_stack_bytes != 0
+                                      ? pattern.regex_jit_stack_bytes
+                                      : default_regex_jit_stack_bytes;
+    engine.jit_stack.reset(pcre2_jit_stack_create(
+        std::min(jit_stack_start_bytes, stack_max), stack_max, nullptr));
+    if (engine.jit_stack) {
+      pcre2_jit_stack_assign(engine.context.get(), nullptr,
+                             engine.jit_stack.get());
+    }
+  }
+  return true;
+}
+
+}  // namespace
+
+struct RegexMatcher::State : Engine {
   // The text of the call, as PCRE2 units. Reused from call to call.
   std::vector<PCRE2_UCHAR> subject;
   // Whether the warning of this scan was logged.
@@ -107,54 +167,15 @@ std::unique_ptr<RegexMatcher> RegexMatcher::Make(const Pattern& pattern,
   auto state = std::make_unique<State>();
   // An empty text matches no entry, as with the other kinds. It needs no code.
   if (!pattern.text.empty()) {
-    std::vector<PCRE2_UCHAR> text;
-    text.reserve(pattern.text.size());
-    for (const char16_t unit : pattern.text) {
-      text.push_back(static_cast<PCRE2_UCHAR>(unit));
-    }
-    // Names are UTF-16 and may hold an unpaired surrogate: the invalid units
-    // match nothing instead of failing the match. UCP makes \w, \d and \b
-    // follow Unicode.
-    std::uint32_t flags = PCRE2_UTF | PCRE2_MATCH_INVALID_UTF | PCRE2_UCP;
-    if (!pattern.case_sensitive) {
-      flags |= PCRE2_CASELESS;
-    }
-    int error_code = 0;
-    PCRE2_SIZE error_offset = 0;
-    state->code.reset(pcre2_compile(text.data(), text.size(), flags,
-                                    &error_code, &error_offset, nullptr));
-    if (!state->code) {
-      Log::Error("Invalid regular expression: {} (at unit {})",
-                 ErrorMessage(error_code), error_offset);
+    if (!CompilePattern(pattern, *state)) {
       return nullptr;
     }
-
     // A CPU that the JIT does not know fails here: the interpreter then does
     // the work.
     const bool jit =
         pcre2_jit_compile(state->code.get(), PCRE2_JIT_COMPLETE) == 0;
-    state->context.reset(pcre2_match_context_create(nullptr));
-    state->data.reset(
-        pcre2_match_data_create_from_pattern(state->code.get(), nullptr));
-    if (!state->context || !state->data) {
-      Log::Error("Not enough memory for the regular expression");
+    if (!ConfigureContext(pattern, jit, *state)) {
       return nullptr;
-    }
-    const std::uint32_t match_limit = pattern.regex_match_limit != 0
-                                          ? pattern.regex_match_limit
-                                          : default_regex_match_limit;
-    pcre2_set_match_limit(state->context.get(), match_limit);
-    pcre2_set_depth_limit(state->context.get(), depth_limit);
-    if (jit) {
-      const std::size_t stack_max = pattern.regex_jit_stack_bytes != 0
-                                        ? pattern.regex_jit_stack_bytes
-                                        : default_regex_jit_stack_bytes;
-      state->jit_stack.reset(pcre2_jit_stack_create(
-          std::min(jit_stack_start_bytes, stack_max), stack_max, nullptr));
-      if (state->jit_stack) {
-        pcre2_jit_stack_assign(state->context.get(), nullptr,
-                               state->jit_stack.get());
-      }
     }
     Log::Debug("Regular expression compiled, {}", jit ? "JIT" : "interpreter");
   }
