@@ -733,8 +733,10 @@ TEST_CASE("The bytes equal a plain read, whatever the lanes hold",
   // Standing ranges of mixed sizes, some wide, and reads at any offset,
   // inside them or not, aligned or not.
   for (size_t index = 0; index < 40; index++) {
-    reader->PrefetchStanding(index * 50000 + (random() % 3000),
-                             4096 + (random() % 20000));
+    // Separate statements: the order of two draws in one call is not set.
+    const ULONGLONG shift = random() % 3000;
+    const ULONGLONG length = 4096 + (random() % 20000);
+    reader->PrefetchStanding(index * 50000 + shift, length);
     if (index % 5 == 0) {
       reader->Prefetch(index * 50000, 8192);
     }
@@ -786,8 +788,13 @@ TEST_CASE("The reads started do not depend on how the lane counts its own",
       reader->PrefetchStanding(driver.Announce(RangeAt(driver.Below(64))),
                                range_bytes);
     } else if (kind < 52) {
-      reader->CancelStanding(RangeAt(driver.Below(64)) + driver.Below(3) * 512,
-                             1 + driver.Below(4) * range_stride);
+      // The draws are in separate statements: the order of the arguments of a
+      // call is not set, so the draws could come in another order in each
+      // build.
+      const ULONGLONG cancel_start = RangeAt(driver.Below(64));
+      const ULONGLONG cancel_skew = driver.Below(3) * 512;
+      const ULONGLONG cancel_length = 1 + driver.Below(4) * range_stride;
+      reader->CancelStanding(cancel_start + cancel_skew, cancel_length);
     } else if (kind < 64) {
       reader->Prefetch(driver.Announce(RangeAt(64 + driver.Below(32))),
                        range_bytes);
@@ -801,14 +808,14 @@ TEST_CASE("The reads started do not depend on how the lane counts its own",
 
   // Recorded with the reader that counted the lane's reads by visiting every
   // range it had started.
-  CHECK(driver.ReadsServed() == 50);
-  CHECK(driver.ServedDigest() == 6'341'278'128'170'066'284ULL);
+  CHECK(driver.ReadsServed() == 54);
+  CHECK(driver.ServedDigest() == 2'947'354'879'331'495'164ULL);
   CHECK(report.disk.prefetch_reads == 64);
   CHECK(report.disk.prefetch_bytes == 262144);
   CHECK(report.disk.wasted_bytes == 249856);
-  CHECK(report.disk.standing_reads == 93);
-  CHECK(report.disk.standing_bytes == 380928);
-  CHECK(report.disk.standing_wasted_bytes == 172032);
+  CHECK(report.disk.standing_reads == 91);
+  CHECK(report.disk.standing_bytes == 372736);
+  CHECK(report.disk.standing_wasted_bytes == 155648);
 }
 
 TEST_CASE("The lane starts a read as the ones in flight are over",
