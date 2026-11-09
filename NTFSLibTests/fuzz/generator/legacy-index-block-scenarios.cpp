@@ -120,7 +120,7 @@ constexpr BYTE empty_block_lcn = 0xE6;
 // entries it declares. The block is for the VCN 0.
 void PutEmptyBlock(Image& image, std::size_t lcn, DWORD entries_total) {
   const std::size_t offset = lcn * FakeImage::fake_cluster_size;
-  image.resize(std::max(image.size(), offset + block_bytes));
+  image.resize(std::max(image.size(), offset + std::size_t{block_bytes}));
   RecordEdit::Edit<Data::IndexBlock>(image, offset, [&](auto& block) {
     block.magic = Data::index_block_magic;
     block.offset_of_us = block_array_offset;
@@ -150,7 +150,7 @@ void PutWideIndex(Image& image, ULONGLONG allocation_real_size) {
       image, allocation,
       [&](auto& header) { header.real_size = allocation_real_size; });
   const std::size_t offset = index_block_offset;
-  image.resize(std::max(image.size(), offset + wide_block_bytes));
+  image.resize(std::max(image.size(), offset + std::size_t{wide_block_bytes}));
   BpbEdit::Apply(image, [](Data::NtfsBpb& bpb) {
     bpb.clusters_per_index_block = wide_block_clusters;
   });

@@ -119,8 +119,9 @@ std::vector<BYTE> NestedSubNode(Descent descent) {
       });
   RecordEdit::SetRunList(image, allocation, two_cluster_run);
 
-  image.resize(std::max(image.size(),
-                        second_block_offset + FakeImage::fake_cluster_size));
+  image.resize(
+      std::max(image.size(), second_block_offset +
+                                 std::size_t{FakeImage::fake_cluster_size}));
   std::copy_n(image.begin() + static_cast<std::ptrdiff_t>(block_offset),
               FakeImage::fake_cluster_size,
               image.begin() + static_cast<std::ptrdiff_t>(second_block_offset));
