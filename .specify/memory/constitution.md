@@ -1,6 +1,16 @@
 <!--
 Sync Impact Report
-Version change: 1.5.0 -> 2.0.0 (MAJOR: the public surface shrinks to Search::Scan and Search::Reader).
+Version change: 2.0.0 -> 3.0.0 (MAJOR: the public API leaves the Search sub-namespace for the root).
+Awaiting maintainer approval.
+Modified sections: Technical Constraints (the public types and functions, `Scan`, `Reader`, `Options`,
+`Entry`, `Handle`, `SetLogSink()` and the rest, now live in the root `NTFS_BROWSER_NAMESPACE`. The
+`Search` namespace no longer exists, in the public headers, in `src/search/` and in the tests. The
+public headers moved from `include/ntfs-browser/search/` to `include/ntfs-browser/`: `scan.h`,
+`types.h`, `reader.h`, `reader-types.h` and `log.h`). The domain namespaces and the five older root
+names (`IDiskReader`, `NtfsVolume`, `IndexEntry`, `Filename`, `VolumeOptions`) stay.
+Reason: only the public API remains in the public headers, so a namespace for it adds a prefix and
+no information. Code that spelled `Search::Scan` is no longer compliant.
+Previous: 1.5.0 -> 2.0.0 (MAJOR: the public surface shrinks to Search::Scan and Search::Reader).
 Awaiting maintainer approval.
 Modified sections: Technical Constraints (the public headers are `search/scan.h`, `search/types.h`,
 `search/reader.h`, `search/reader-types.h` and `search/log.h` only. Every other header moved to `src/`
@@ -18,7 +28,7 @@ lists and benchmarks a volume. NtfsFuzzer is the only Windows-only executable.
 Templates: plan-template.md checked, no change needed.
 Previous: 1.3.0 -> 1.4.0 (MINOR: materially expanded guidance).
 Modified sections: Technical Constraints (public headers MUST NOT include spdlog, except
-include/ntfs-browser/log/spdlog-adapter.h, an opt-in header-only adapter to Log::ISink).
+src/log/spdlog-adapter.h, an opt-in header-only adapter to Log::ISink).
 Reason: consumers customize the log output, through sinks of their own or through their own spdlog
 logger.
 Previous: 1.2.0 -> 1.3.0 (MINOR: materially expanded guidance).
@@ -91,17 +101,17 @@ Rationale: a clear scope keeps the parser auditable against the on-disk specific
   NtfsUndel, NtfsDir, NtfsScanBench, NtfsCompare, NtfsBench, NtfsFuzzGen and NtfsFuzzerAfl MUST also
   build with GCC on Linux. The build has no MFC.
 - Windows-only executables MUST be guarded with `if(WIN32)` in CMake. NtfsFuzzer is the only one.
-- `Search::Scan` (`include/ntfs-browser/search/scan.h`) is the public entry point to list a folder or
-  a volume, and `Search::Reader` (`search/reader.h`) reads the files it found. NtfsDir and NtfsUndel are
+- `Scan` (`include/ntfs-browser/scan.h`) is the public entry point to list a folder or
+  a volume, and `Reader` (`reader.h`) reads the files it found. NtfsDir and NtfsUndel are
   built on them. Their public headers MUST include only the standard library, `namespace.h`,
   `export.h` and each other.
 - `include/`, `src/` and `NTFSLibTests/` MUST NOT contain a `friend` declaration. A class MUST get
   what it needs from another class through that class's methods, not through friendship.
   `.github/scripts/check-no-friend.py` enforces it in CI.
-- The public headers in `include/ntfs-browser/search/` (`scan.h`, `types.h`, `reader.h`,
+- The public headers in `include/ntfs-browser/` (`scan.h`, `types.h`, `reader.h`,
   `reader-types.h`, `log.h`) are the only consumer surface. They MUST NOT include spdlog, Crypto++,
-  `<windows.h>`, any internal header or any feature macro. The public date is `Search::Date`. A consumer
-  receives the log through `Search::SetLogSink()`. Every other header lives in `src/`, and the library
+  `<windows.h>`, any internal header or any feature macro. The public date is `Date`. A consumer
+  receives the log through `SetLogSink()`. Every other header lives in `src/`, and the library
   target keeps `src/` private. Tests, tools and fuzzers get it through the `NtfsBrowserInternals`
   CMake target. `NtfsPublicApiCheck` builds against the public headers alone.
 - Core classes that depend on cache behaviour MUST be templated on `Cache::Strategy`.
@@ -114,15 +124,16 @@ Rationale: a clear scope keeps the parser auditable against the on-disk specific
   a private `Impl`.
 - A symbol of a public header MUST carry `NTFS_BROWSER_EXPORT`.
   An internal symbol that tests, tools or fuzzers reach MUST carry `NTFS_BROWSER_EXPORT_TESTS_ONLY`.
-- Public types and functions MUST live in `NTFS_BROWSER_NAMESPACE`, in a sub-namespace per domain.
-  Code MUST NOT spell out the namespace name.
+- The public API (`Scan`, `Reader` and their types) MUST live in `NTFS_BROWSER_NAMESPACE` itself, with no
+  sub-namespace. Every other type and function MUST live in a sub-namespace per domain. Code MUST NOT
+  spell out the namespace name.
 - A header that another test folder includes MUST live in
   `<module>/include/ntfs-browser/{test,tool,example}/<module>/`, and CMake never installs it.
   Test code lives in `Test::<Module>`, tools in `Tool::<Name>` and examples in `Example::<Name>`.
-- The library and its logging are single-threaded. `Search::SetLogSink()`, `Log::Configure()`,
+- The library and its logging are single-threaded. `SetLogSink()`, `Log::Configure()`,
   `Log::SetSinks()` and every log message MUST run on one thread.
 - Every source file MUST be listed explicitly in its folder's `CMakeLists.txt`. Globbing MUST NOT be used.
-- Every public function in `include/ntfs-browser/search/` and in `src/` headers MUST have a purpose comment.
+- Every public function in `include/ntfs-browser/` and in `src/` headers MUST have a purpose comment.
   Every constant MUST have a comment that says what it is for and why it has its value.
 
 ## Development Workflow and Quality Gates
@@ -159,4 +170,4 @@ PATCH for wording, typo fixes and clarifications that change no obligation.
 Development Workflow and Quality Gates. A violated MUST MUST be fixed, or justified in the
 pull request description. Complexity beyond what a principle requires MUST be justified in the same way.
 
-**Version**: 2.0.0 | **Ratified**: 2026-10-17 | **Last Amended**: 2026-11-08
+**Version**: 3.0.0 | **Ratified**: 2026-10-17 | **Last Amended**: 2026-11-09

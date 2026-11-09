@@ -46,38 +46,36 @@ On Linux, `NtfsDir` and `NtfsScanBench` take a device or an image file. Reading 
 #include <cstdio>
 #include <string_view>
 
-#include <ntfs-browser/search/log.h>
-#include <ntfs-browser/search/scan.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/log.h>
+#include <ntfs-browser/scan.h>
+#include <ntfs-browser/types.h>
 
 int main() {
-  namespace Search = NtfsBrowser::Search;
+  namespace Lib = NtfsBrowser;
 
   // The library reports problems as log lines. Print the warnings and errors.
-  Search::SetLogSink(
-      [](Search::LogLevel, std::string_view message) {
-        std::fprintf(stderr, "%.*s
-", static_cast<int>(message.size()),
+  Lib::SetLogSink(
+      [](Lib::LogLevel, std::string_view message) {
+        std::fprintf(stderr, "%.*s\n", static_cast<int>(message.size()),
                      message.data());
       },
-      Search::LogLevel::Warn);
+      Lib::LogLevel::Warn);
 
-  Search::Options options;
-  options.target = u"C:\Windows";
-  Search::Scan scan(options);
+  Lib::Options options;
+  options.target = u"C:\\Windows";
+  Lib::Scan scan(options);
 
   std::size_t count = 0;
-  scan.OnBatch([&count](const Search::Batch& batch) {
+  scan.OnBatch([&count](const Lib::Batch& batch) {
     count += batch.entries.size();
   });
   scan.Run();
-  std::printf("%zu entries
-", count);
+  std::printf("%zu entries\n", count);
   return 0;
 }
 ```
 
-`Search::Reader` reads the content of a file that a scan found. `Search::Scan`, `Search::Reader` and `Search::SetLogSink()` are the whole public API. The headers are in `include/ntfs-browser/search/`.
+`Reader` reads the content of a file that a scan found. `Scan`, `Reader` and `SetLogSink()` are the whole public API. They sit in the root namespace (`NtfsBrowser`), and the headers are in `include/ntfs-browser/`.
 
 ## Installation
 
@@ -190,7 +188,7 @@ An unknown key, a value out of range or a constant that a pattern does not serve
 
 ## Documentation
 
-Each public class and function is described in the headers under `include/ntfs-browser/search/`.
+Each public class and function is described in the headers under `include/ntfs-browser/`.
 
 ## Contributing
 
@@ -225,12 +223,13 @@ Each public class and function is described in the headers under `include/ntfs-b
 - 2026-10: Change journal (`$UsnJrnl`) in recovery mode
 - 2026-11: `NtfsAttr`, `NtfsDump` and `NtfsUndel` are console tools on Windows and Linux. MFC is gone from the build
 - 2026-11: `NtfsFuzzGen` builds the fuzz inputs and the corpus traces from code at build time. No fuzz data is committed, and the library is free to change its read order
-- 2026-11: `Search::Scan` lists a folder or a volume without blocking. A worker thread finds the files. The caller polls about every 100 ms, or calls `Run()` to poll until the end. Three engines walk the volume. A scan searches by name, wildcard or regular expression (optional PCRE2) and filters on every field
-- 2026-11: `NtfsDir` is built on `Search::Scan` and takes `--engine=` to pick the engine
-- 2026-11: `NtfsScanBench` replaces `NtfsMftList`. It times the three engines (`mftlist`, `nocache`, `fullcache`), alone or side by side with `--engine=all`. `--via-scan` times a run through `Search::Scan` and reports its critical path
-- 2026-11: `Search::Reader` reads the file behind a `Search::Handle` that a scan gives: its times, names, streams, raw attributes and content, for a live or a deleted file. It fails with an error when the record is another file's. `NtfsUndel` is built on `Search::Scan` and `Search::Reader`
+- 2026-11: `Scan` lists a folder or a volume without blocking. A worker thread finds the files. The caller polls about every 100 ms, or calls `Run()` to poll until the end. Three engines walk the volume. A scan searches by name, wildcard or regular expression (optional PCRE2) and filters on every field
+- 2026-11: `NtfsDir` is built on `Scan` and takes `--engine=` to pick the engine
+- 2026-11: `NtfsScanBench` replaces `NtfsMftList`. It times the three engines (`mftlist`, `nocache`, `fullcache`), alone or side by side with `--engine=all`. `--via-scan` times a run through `Scan` and reports its critical path
+- 2026-11: `Reader` reads the file behind a `Handle` that a scan gives: its times, names, streams, raw attributes and content, for a live or a deleted file. It fails with an error when the record is another file's. `NtfsUndel` is built on `Scan` and `Reader`
+- 2026-11: Only `Scan`, `Reader` and `SetLogSink()` are public. Every other header moved to `src/`, and the shared library exports no more than these
+- 2026-11: The public API sits in the root namespace, with no `Search` sub-namespace, and the five public headers moved up to `include/ntfs-browser/` (`<ntfs-browser/scan.h>`)
 
 ## Credits and licence
 
 Based on [An NTFS Parser Lib](https://www.codeproject.com/Articles/81456/An-NTFS-Parser-Lib) from CodeProject. The project is licensed under BSD-3c. The original web page is archived in `documentation/old`.
-- 2026-11: Only `Search::Scan`, `Search::Reader` and `Search::SetLogSink()` are public. Every other header moved to `src/`, and the shared library exports no more than these
