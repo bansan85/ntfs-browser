@@ -63,7 +63,7 @@ Conventional Commits, no scope (`fix:`, `feat:`, `refactor:`, `test:`, `docs:`, 
 - **Paths.** Code that opens a user-given path MUST go through `Io::ToExtendedLengthPath()`. Tests that create or list paths over 260 units MUST extend them too.
 - **Names** are raw UTF-16 units. Collate through `$UpCase`, never the locale. A map or set keyed by a name MUST NOT fold case. Print names as UTF-8 (WTF-8 for unpaired surrogates) with `Utf::WideToUtf8()`.
 - **Strict vs recovering.** `VolumeOptions::recover_errors` chooses between rejecting a damaged item and salvaging it. `include_deleted` decides which healthy items show. Call `Log::Recoverable()` only for a condition that strict mode would reject.
-- **Instrumentation and tuning** are opt-in. With neither, no read, hint, log line or output may change. A new tunable constant MUST be added to `Tuning::Settings` and to the knob table in `include/ntfs-browser/tuning/knobs.h`. Tests and the fuzz harness MUST NOT set a tuning field.
+- **Instrumentation and tuning** are opt-in. With neither, no read, hint, log line or output may change. A new tunable constant MUST be added to `Tuning::Settings` and to the knob table in `src/tuning/knobs.h`. Tests and the fuzz harness MUST NOT set a tuning field.
 
 ## Tests
 

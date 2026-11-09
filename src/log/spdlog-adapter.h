@@ -1,11 +1,10 @@
 #pragma once
 
-// Opt-in adapters from spdlog to Log::ISink. This is the only public header
-// that includes spdlog. The library itself never includes it, and nothing
-// here is exported: every function is compiled in the consumer's build,
-// against the consumer's spdlog. The library only ever sees an ISink, so
-// the consumer's spdlog version, linkage and SPDLOG_WCHAR_FILENAMES need
-// not match the library's.
+// Opt-in adapters from spdlog to Log::ISink. The library itself never
+// includes it, and nothing here is exported: every function is compiled in the
+// consumer's build, against the consumer's spdlog. The library only ever sees
+// an ISink, so the consumer's spdlog version, linkage and
+// SPDLOG_WCHAR_FILENAMES need not match the library's.
 //
 // A spdlog sink next to the console target:
 //   Log::SetSinks({Log::MakeConsoleSink(Log::Level::Warn),
