@@ -125,21 +125,31 @@ std::optional<Tool::DeviceAccess::LocalTime>
 // read.
 using Marker = char;
 
+// Characters of the time column, "YYYY-MM-DD  HH:MM". A time that the host
+// cannot show (a 32-bit time_t, for a date after 2038) gets that many spaces,
+// as in the listing of NtfsDir.
+constexpr size_t time_column_width = 17;
+
 // Prints the modification time, the size or <DIR>, the attribute flags and
-// the name of one entry. time is the entry time in local time. marker is
-// null when the listing has no marker column.
+// the name of one entry. time is the entry time in local time, or empty for
+// a time the host cannot show. marker is null when the listing has no marker
+// column.
 void PrintLine(Tool::DeviceAccess::Output& out, const IndexEntryView& ie,
-               const Tool::DeviceAccess::LocalTime& time,
+               const std::optional<Tool::DeviceAccess::LocalTime>& time,
                std::optional<Marker> marker) {
-  out.AppendNumber(time.year, 0);
-  out.Append("-");
-  out.AppendNumber(time.month, 2, '0');
-  out.Append("-");
-  out.AppendNumber(time.day, 2, '0');
-  out.Append("  ");
-  out.AppendNumber(time.hour, 2, '0');
-  out.Append(":");
-  out.AppendNumber(time.minute, 2, '0');
+  if (time) {
+    out.AppendNumber(time->year, 0);
+    out.Append("-");
+    out.AppendNumber(time->month, 2, '0');
+    out.Append("-");
+    out.AppendNumber(time->day, 2, '0');
+    out.Append("  ");
+    out.AppendNumber(time->hour, 2, '0');
+    out.Append(":");
+    out.AppendNumber(time->minute, 2, '0');
+  } else {
+    out.Append(std::string(time_column_width, ' '));
+  }
   out.Append(ie.IsDirectory() ? "\t<DIR>    " : "\t         ");
 
   if (!ie.IsDirectory()) {
@@ -211,12 +221,9 @@ void VisitEntry(const IndexEntryView& ie, Io::RecordStanding standing,
   }
   auto& entries = *static_cast<DirectoryEntries<S>*>(context);
 
-  if (const std::optional<Tool::DeviceAccess::LocalTime> time =
-          LocalWriteTime(ie)) {
-    PrintLine(*entries.out, ie, *time,
-              entries.marking ? std::optional<Marker>(MarkerOf(standing))
-                              : std::nullopt);
-  }
+  PrintLine(*entries.out, ie, LocalWriteTime(ie),
+            entries.marking ? std::optional<Marker>(MarkerOf(standing))
+                            : std::nullopt);
 
   if (!ie.IsDirectory()) {
     entries.total.files++;
