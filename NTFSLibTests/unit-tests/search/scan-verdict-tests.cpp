@@ -87,8 +87,10 @@ TEST_CASE("The parallel figures divide the CPU by the time and the threads",
 
   CHECK(verdict.cores_busy == Approx(2.0));
   CHECK(verdict.parallel_efficiency == Approx(0.5));
-  CHECK(verdict.worker_cpu_share == Approx(0.8));
-  CHECK(verdict.worker_cpu_of_total == Approx(0.4));
+  // A margin: nsan sees 0.8 and 0.4 as other numbers in double and in its
+  // shadow.
+  CHECK(verdict.worker_cpu_share == Approx(0.8).margin(1e-9));
+  CHECK(verdict.worker_cpu_of_total == Approx(0.4).margin(1e-9));
 }
 
 TEST_CASE("Every ratio is 0 when its divisor is", "[search][verdict]") {
