@@ -214,15 +214,15 @@ Image MalformedFields() {
       // The value ends at the count of the DDF, which is zero.
       {10,
        HandMadeEfs::ValueBytes({.count = 0, .length = header_and_count_bytes})},
-      {8, DamagedEntry(0x12, [](auto& e) { e.length = entry_too_long; })},
+      {8, DamagedEntry(0x12, [&](auto& e) { e.length = entry_too_long; })},
       {9,
-       DamagedEntry(0x13, [](auto& e) { e.credential_offset = far_offset; })},
-      {11, DamagedEntry(0x15, [](auto& e) { e.hash_offset = far_offset; })},
+       DamagedEntry(0x13, [&](auto& e) { e.credential_offset = far_offset; })},
+      {11, DamagedEntry(0x15, [&](auto& e) { e.hash_offset = far_offset; })},
       {12,
-       DamagedEntry(0x16,
-                    [](auto& e) { e.thumbprint_size = thumbprint_too_short; })},
+       DamagedEntry(
+           0x16, [&](auto& e) { e.thumbprint_size = thumbprint_too_short; })},
       {13,
-       DamagedEntry(0x17, [](auto& e) { e.thumbprint_offset = far_offset; })},
+       DamagedEntry(0x17, [&](auto& e) { e.thumbprint_offset = far_offset; })},
       // A DRF with no DDF.
       {14,
        HandMadeEfs::ValueBytes({.ddf_offset = 0,
