@@ -12,7 +12,7 @@ add_library(
   "hex-bytes.cpp"
   "byte-writer.h"
   "byte-writer.cpp"
-  "command-line.h"
+  "include/ntfs-browser/tool/fuzzgen/command-line.h"
   "command-line.cpp"
   "generator-app.h"
   "generator-app.cpp"

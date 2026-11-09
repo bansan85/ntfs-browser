@@ -10,9 +10,9 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tool/fuzzgen/command-line.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-catalog.h>
 
-#include "command-line.h"
 #include "generator-app.h"
 #include "log/log.h"
 

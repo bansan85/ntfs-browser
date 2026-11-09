@@ -5,10 +5,9 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tool/fuzzgen/command-line.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
 #include <ntfs-browser/tool/fuzzgen/scenario.h>
-
-#include "command-line.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

@@ -20,11 +20,11 @@
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/fuzzgen/build-features.h>
+#include <ntfs-browser/tool/fuzzgen/command-line.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
 #include <ntfs-browser/tool/fuzzgen/scenario.h>
 
 #include "byte-writer.h"
-#include "command-line.h"
 #include "io/extended-path.h"
 #include "resource-locator.h"
 #include "sparse-image.h"

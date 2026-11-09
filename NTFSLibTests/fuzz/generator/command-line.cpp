@@ -1,13 +1,14 @@
-#include "command-line.h"
-
+#include <array>
 #include <cstddef>
 #include <filesystem>
 #include <optional>
 #include <ostream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/tool/fuzzgen/command-line.h>
 
 #ifndef NTFS_FUZZGEN_RESOURCES_DIR
   #define NTFS_FUZZGEN_RESOURCES_DIR ""
@@ -17,9 +18,136 @@ namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 
 namespace {
 
+// What a parse function reads and writes. The index points at the option under
+// read. A function that takes operands moves it to the last one.
+struct ParseState {
+  const std::vector<std::filesystem::path>& args;
+  std::size_t index;
+  Options& options;
+  std::ostream& err;
+};
+
+// An option that takes a folder and selects a mode.
+struct FolderMode {
+  std::string_view name;
+  Options::Mode mode;
+};
+
+// The options of the folder modes. --list is apart: it takes no folder.
+constexpr std::array<FolderMode, 3> kFolderModes{{
+    {.name = "--out", .mode = Options::Mode::Out},
+    {.name = "--seeds", .mode = Options::Mode::Seeds},
+    {.name = "--verify", .mode = Options::Mode::Verify},
+}};
+
+// How many files --predict takes: layers, intervals and output.
+constexpr std::size_t kPredictOperands = 3;
+
+// The message for a second mode, as --list and the folder modes say it.
+constexpr std::string_view kOneModeMessage =
+    "only one of --list, --out, --seeds and --verify is allowed\n";
+
+// The message for a second mode, as --predict says it. It names --predict too,
+// so the two texts differ and the tests check both.
+constexpr std::string_view kOneModeOrPredictMessage =
+    "only one of --list, --out, --seeds, --verify and --predict is allowed\n";
+
 // True when arg starts an option.
 bool IsOption(const std::filesystem::path& arg) {
   return arg.generic_string().starts_with("--");
+}
+
+// True when an argument follows the option under read and it is not an option.
+bool HasOperand(const ParseState& state) {
+  return state.index + 1 < state.args.size() &&
+         !IsOption(state.args[state.index + 1]);
+}
+
+// Selects the mode. Returns false, with conflict on err, when a mode is
+// already selected.
+bool ClaimMode(ParseState& state, Options::Mode mode,
+               std::string_view conflict) {
+  if (state.options.mode != Options::Mode::Help) {
+    state.err << conflict;
+    return false;
+  }
+  state.options.mode = mode;
+  return true;
+}
+
+// Reads a mode option that takes a folder.
+bool ParseFolderMode(ParseState& state, Options::Mode mode) {
+  if (!ClaimMode(state, mode, kOneModeMessage)) {
+    return false;
+  }
+  if (!HasOperand(state)) {
+    state.err << state.args[state.index].string() << " needs a folder\n";
+    return false;
+  }
+  state.options.folder = state.args[++state.index];
+  return true;
+}
+
+// Reads --predict and its three files. A file MAY look like an option.
+bool ParsePredict(ParseState& state) {
+  if (!ClaimMode(state, Options::Mode::Predict, kOneModeOrPredictMessage)) {
+    return false;
+  }
+  if (state.index + kPredictOperands >= state.args.size()) {
+    state.err << "--predict needs a layers file, an intervals file and an "
+                 "output file\n";
+    return false;
+  }
+  state.options.layers = state.args[++state.index];
+  state.options.intervals = state.args[++state.index];
+  state.options.output = state.args[++state.index];
+  return true;
+}
+
+// Reads --resources and its folder. The folder MAY look like an option.
+bool ParseResources(ParseState& state) {
+  if (state.index + 1 >= state.args.size()) {
+    state.err << "--resources needs a folder\n";
+    return false;
+  }
+  state.options.resources = state.args[++state.index];
+  return true;
+}
+
+// Reads --only and every name up to the next option.
+bool ParseOnly(ParseState& state) {
+  if (!HasOperand(state)) {
+    state.err << "--only needs at least one name\n";
+    return false;
+  }
+  while (HasOperand(state)) {
+    state.options.only.push_back(state.args[++state.index].generic_string());
+  }
+  return true;
+}
+
+// Reads the option at the current index, with its operands.
+bool ParseOption(ParseState& state) {
+  const std::string arg = state.args[state.index].generic_string();
+  if (arg == "--list") {
+    return ClaimMode(state, Options::Mode::List, kOneModeMessage);
+  }
+  for (const auto& [name, mode] : kFolderModes) {
+    if (arg == name) {
+      return ParseFolderMode(state, mode);
+    }
+  }
+  if (arg == "--predict") {
+    return ParsePredict(state);
+  }
+  if (arg == "--resources") {
+    return ParseResources(state);
+  }
+  if (arg == "--only") {
+    return ParseOnly(state);
+  }
+  state.err << "unknown argument " << arg << "\n";
+  return false;
 }
 
 }  // namespace
@@ -30,70 +158,9 @@ std::optional<Options>
   Options options;
   options.resources = std::filesystem::path(u8"" NTFS_FUZZGEN_RESOURCES_DIR);
 
-  // Reads the folder that follows a mode option.
-  const auto set_mode = [&](Options::Mode mode, std::size_t& index) {
-    if (options.mode != Options::Mode::Help) {
-      err << "only one of --list, --out, --seeds and --verify is allowed\n";
-      return false;
-    }
-    options.mode = mode;
-    if (mode == Options::Mode::List) {
-      return true;
-    }
-    if (index + 1 >= args.size() || IsOption(args[index + 1])) {
-      err << args[index].string() << " needs a folder\n";
-      return false;
-    }
-    options.folder = args[++index];
-    return true;
-  };
-
-  for (std::size_t index = 1; index < args.size(); ++index) {
-    const std::string arg = args[index].generic_string();
-    bool ok = true;
-    if (arg == "--list") {
-      ok = set_mode(Options::Mode::List, index);
-    } else if (arg == "--out") {
-      ok = set_mode(Options::Mode::Out, index);
-    } else if (arg == "--seeds") {
-      ok = set_mode(Options::Mode::Seeds, index);
-    } else if (arg == "--verify") {
-      ok = set_mode(Options::Mode::Verify, index);
-    } else if (arg == "--predict") {
-      if (options.mode != Options::Mode::Help) {
-        err << "only one of --list, --out, --seeds, --verify and --predict "
-               "is allowed\n";
-        return std::nullopt;
-      }
-      constexpr std::size_t predict_operands = 3;
-      if (index + predict_operands >= args.size()) {
-        err << "--predict needs a layers file, an intervals file and an "
-               "output file\n";
-        return std::nullopt;
-      }
-      options.mode = Options::Mode::Predict;
-      options.layers = args[++index];
-      options.intervals = args[++index];
-      options.output = args[++index];
-    } else if (arg == "--resources") {
-      if (index + 1 >= args.size()) {
-        err << "--resources needs a folder\n";
-        return std::nullopt;
-      }
-      options.resources = args[++index];
-    } else if (arg == "--only") {
-      if (index + 1 >= args.size() || IsOption(args[index + 1])) {
-        err << "--only needs at least one name\n";
-        return std::nullopt;
-      }
-      while (index + 1 < args.size() && !IsOption(args[index + 1])) {
-        options.only.push_back(args[++index].generic_string());
-      }
-    } else {
-      err << "unknown argument " << arg << "\n";
-      ok = false;
-    }
-    if (!ok) {
+  ParseState state{.args = args, .index = 1, .options = options, .err = err};
+  for (; state.index < args.size(); ++state.index) {
+    if (!ParseOption(state)) {
       return std::nullopt;
     }
   }
