@@ -73,12 +73,17 @@ src:*/include/c++/*
 EOF
 # The inlined std::distance of a unicode table reports at the caller's file (bits/unicode.h,
 # bits/stl_algobase.h), so the whole libstdc++ is ignored for pointer checks, as in UBSan.
+# PCRE2 compares pointers into different objects on purpose (set_private_data_ptrs in the JIT).
 cat >"$ASAN_IGNORELIST" <<'EOF'
 src:*/include/c++/*
+src:*/3rdparty/pcre2/*
 EOF
 # libstdc++'s make_shared/allocate_shared cast raw storage to T* before the vtable is set.
+# PCRE2 JIT calls the machine code it has just generated through a function pointer
+# (pcre2_jit_match_inc.h): CFI has no jump table entry for it and rejects the call.
 cat >"$CFI_IGNORELIST" <<'EOF'
 src:*/include/c++/*
+src:*/3rdparty/pcre2/*
 EOF
 
 export ASAN_SYMBOLIZER_PATH=/usr/bin/llvm-symbolizer-23
