@@ -1,13 +1,13 @@
 #pragma once
 
-// Writes the entries of a Search::Scan as the lines of a directory listing.
+// Writes the entries of a Scan as the lines of a directory listing.
 
 #include <cstdint>
 #include <string>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
 #include <ntfs-browser/tool/device-access/output.h>
+#include <ntfs-browser/types.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Example::NtfsDir {
 
@@ -37,18 +37,18 @@ class ListingPrinter {
                  ListingStyle style);
 
   // Writes the lines of the entries of batch.
-  void Print(const NTFS_BROWSER_NAMESPACE::Search::Batch& batch);
+  void Print(const NTFS_BROWSER_NAMESPACE::Batch& batch);
 
   // Writes the last line: the number of files and of folders printed so far.
   void PrintTotals();
 
  private:
   // Writes the line of one entry.
-  void PrintEntry(const NTFS_BROWSER_NAMESPACE::Search::Entry& entry);
+  void PrintEntry(const NTFS_BROWSER_NAMESPACE::Entry& entry);
 
   // Opens a block with a header when entry is filed in another folder than the
   // last one.
-  void PrintHeaderIfNew(const NTFS_BROWSER_NAMESPACE::Search::Entry& entry);
+  void PrintHeaderIfNew(const NTFS_BROWSER_NAMESPACE::Entry& entry);
 
   NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess::Output& out_;
   ListingStyle style_;

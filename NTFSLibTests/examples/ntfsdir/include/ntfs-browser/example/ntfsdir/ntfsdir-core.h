@@ -1,6 +1,6 @@
 #pragma once
 
-// The ntfsdir command: lists a folder, or a whole volume, with Search::Scan.
+// The ntfsdir command: lists a folder, or a whole volume, with Scan.
 // It shows how to use a Scan: set the Options, hand a callback to Run() and
 // print what the batches hold. Plain C++, so main.cpp only hands over argv and
 // the unit tests drive it without a process.

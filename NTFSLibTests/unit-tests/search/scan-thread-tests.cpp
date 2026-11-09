@@ -19,9 +19,9 @@
 #include <catch2/generators/catch_generators.hpp>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/scan.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/scan.h>
 #include <ntfs-browser/test/support/test-log-sink.h>
+#include <ntfs-browser/types.h>
 
 #include "log/ntfs-common.h"
 #include "log/sink.h"
@@ -31,7 +31,7 @@
 
 namespace TestSearch = NTFS_BROWSER_NAMESPACE::Test::Search;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
-namespace Lib = NTFS_BROWSER_NAMESPACE::Search;
+namespace Lib = NTFS_BROWSER_NAMESPACE;
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;
 
 namespace {

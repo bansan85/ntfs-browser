@@ -1,10 +1,10 @@
 #pragma once
 
-// The directory walk of NtfsDir before it was built on Search::Scan. It opens
+// The directory walk of NtfsDir before it was built on Scan. It opens
 // a volume through NtfsVolume<S> and lists a folder, or a whole tree, with
 // the index entries of each directory. NtfsScanBench runs it as its nocache
 // and fullcache engines. The read ahead tests use it as an oracle: they list
-// a fake volume that they hold and count the reads of, which Search::Scan does
+// a fake volume that they hold and count the reads of, which Scan does
 // not allow. The text it writes and the reads it asks for are what their
 // expectations were made from.
 

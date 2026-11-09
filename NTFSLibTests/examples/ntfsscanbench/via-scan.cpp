@@ -5,8 +5,8 @@
 
 #include <ntfs-browser/example/ntfsscanbench/via-scan.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
 #include <ntfs-browser/tool/device-access/json.h>
+#include <ntfs-browser/types.h>
 
 #include "arguments.h"
 #include "bench/bench.h"
@@ -17,25 +17,26 @@ namespace NTFS_BROWSER_NAMESPACE::Example::NtfsScanBench {
 namespace {
 
 // The engine of the scan that an engine of the tool names.
-Search::EngineKind KindOf(Engine engine) {
+NTFS_BROWSER_NAMESPACE::EngineKind KindOf(Engine engine) {
   switch (engine) {
     case Engine::MftList:
-      return Search::EngineKind::MftList;
+      return NTFS_BROWSER_NAMESPACE::EngineKind::MftList;
     case Engine::NoCache:
-      return Search::EngineKind::DirectoryNoCache;
+      return NTFS_BROWSER_NAMESPACE::EngineKind::DirectoryNoCache;
     case Engine::FullCache:
-      return Search::EngineKind::DirectoryFullCache;
+      return NTFS_BROWSER_NAMESPACE::EngineKind::DirectoryFullCache;
     case Engine::Auto:
     case Engine::All:
       break;
   }
-  return Search::EngineKind::Auto;
+  return NTFS_BROWSER_NAMESPACE::EngineKind::Auto;
 }
 
 }  // namespace
 
-Search::Options ScanOptionsOf(const Arguments& args, const RunPlan& plan) {
-  Search::Options options;
+NTFS_BROWSER_NAMESPACE::Options ScanOptionsOf(const Arguments& args,
+                                              const RunPlan& plan) {
+  NTFS_BROWSER_NAMESPACE::Options options;
   options.target = args.target_units;
   options.engine = KindOf(plan.engine);
   options.recursive = plan.recursive;
@@ -51,7 +52,7 @@ int RunViaScan(const Arguments& args, const RunPlan& plan, Outcome& outcome) {
   result.measure = MeasureScan(ScanOptionsOf(args, plan));
   outcome.entries = result.measure.entries;
   outcome.scan = result;
-  if (result.measure.state != Search::State::Finished) {
+  if (result.measure.state != NTFS_BROWSER_NAMESPACE::State::Finished) {
     fprintf(stderr, "The scan did not finish\n");
     return -1;
   }

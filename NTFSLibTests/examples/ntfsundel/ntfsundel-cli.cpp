@@ -19,13 +19,13 @@
 #include <ntfs-browser/example/ntfsundel/ntfsundel-cli.h>
 #include <ntfs-browser/example/ntfsundel/ntfsundel-core.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/reader.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/reader.h>
 #include <ntfs-browser/tool/device-access/device-path.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
 #include <ntfs-browser/tool/device-access/tool-support.h>
 #include <ntfs-browser/tool/device-access/volume-identity.h>
 #include <ntfs-browser/tool/device-access/volume-target.h>
+#include <ntfs-browser/types.h>
 
 #ifdef _WIN32
   #include <io.h>
@@ -33,7 +33,7 @@
   #include <unistd.h>
 #endif
 
-namespace Lib = NTFS_BROWSER_NAMESPACE::Search;
+namespace Lib = NTFS_BROWSER_NAMESPACE;
 
 namespace NTFS_BROWSER_NAMESPACE::Example::NtfsUndel {
 

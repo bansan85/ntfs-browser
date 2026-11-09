@@ -13,7 +13,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/scan.h>
+#include <ntfs-browser/scan.h>
 #include <ntfs-browser/test/device-access/temp-dir.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/mft/ntfsscanbench-sample-support.h>
@@ -125,7 +125,7 @@ TEST_CASE("NtfsScanBench --via-scan takes a regular expression",
       TestMft::RunScanBench({L"--engine=fullcache", L"--via-scan",
                              L"--regex=^[ac]\\.txt$", image.path.wstring()});
 
-  if (!NTFS_BROWSER_NAMESPACE::Search::RegexAvailable()) {
+  if (!NTFS_BROWSER_NAMESPACE::RegexAvailable()) {
     CHECK(run.exit_code == sample_failure_exit_code);
     return;
   }

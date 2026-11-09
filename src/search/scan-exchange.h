@@ -12,7 +12,7 @@
 #include <stop_token>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/types.h>
 
 #include "internal-export.h"
 #include "log/ntfs-common.h"
@@ -21,7 +21,7 @@
 #include "search/entry-buffer.h"
 #include "search/scan-probe.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 // Everything a scan passes from its worker thread to the thread that polls it:
 // the entries, the percent and the log lines. It is the sink of the engine.
@@ -159,4 +159,4 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY ScanExchange final : public EntrySink {
   Log::Detail::WorkerLog log_;
 };
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

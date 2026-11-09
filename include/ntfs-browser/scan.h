@@ -7,12 +7,12 @@
 //
 // Use:
 //
-//   Search::Options options;
+//   Options options;
 //   options.target = u"c:\\Users";
 //   options.recursive = true;
-//   Search::Scan scan(options);
-//   scan.OnBatch([](const Search::Batch& batch) {
-//     for (const Search::Entry& entry : batch.entries) { ... }
+//   Scan scan(options);
+//   scan.OnBatch([](const Batch& batch) {
+//     for (const Entry& entry : batch.entries) { ... }
 //   });
 //   scan.Start();
 //   while (!scan.Finished()) {
@@ -23,7 +23,7 @@
 // A caller with nothing else to do can let Run() do the waiting. It starts the
 // scan, polls about every 100 ms and returns when the scan is over:
 //
-//   const Search::State state = scan.Run();
+//   const State state = scan.Run();
 //
 // Threads. Start() makes one worker thread, which opens the volume and runs the
 // scan. Start() returns at once. The caller keeps every call: Start(), Poll(),
@@ -40,7 +40,7 @@
 // The library and its log are not thread safe, and the Scan keeps to that.
 // Whatever the worker logs, the opening of the volume included, is captured in
 // a buffer of the worker. Poll() replays it to the log sink (SetLogSink() in
-// search/log.h) on the caller's thread, in order, as it hands over the batches.
+// log.h) on the caller's thread, in order, as it hands over the batches.
 // The sink is never called from the worker thread. The log level is the one the
 // sink accepts when Start() runs.
 //
@@ -93,7 +93,7 @@
 // expression that does not compile, or one when the library has no regex
 // support, a range with its minimum above its maximum, a field that the engine
 // does not give), a damaged folder or an unreadable record goes to the library
-// log: see search/log.h, which sets the function that receives it. An exception
+// log: see log.h, which sets the function that receives it. An exception
 // in the worker is caught, logged, and ends the scan as Failed. GetState()
 // tells that the scan failed.
 
@@ -103,9 +103,9 @@
 
 #include <ntfs-browser/export.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/types.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 // Whether this build of the library has regular expressions
 // (PatternKind::Regex), which the CMake option NTFS_BROWSER_ENABLE_REGEX turns
@@ -212,4 +212,4 @@ class NTFS_BROWSER_EXPORT Scan {
   #pragma warning(pop)
 #endif
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

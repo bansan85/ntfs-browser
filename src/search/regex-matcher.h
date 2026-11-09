@@ -4,13 +4,13 @@
 #include <string_view>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/types.h>
 
 #include "internal-export.h"
 #include "search/case-folder.h"
 #include "search/matcher.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 // PatternKind::Regex: a PCRE2 regular expression, see Pattern. The expression
 // is compiled once, in UTF-16 mode, and JIT compiled when the CPU allows it.
@@ -53,4 +53,4 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY RegexMatcher final : public Matcher {
   std::unique_ptr<State> state_;
 };
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

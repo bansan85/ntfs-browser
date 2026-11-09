@@ -176,11 +176,11 @@ set(
   "mft/idx.h"
   "mft/tree.h"
   "record/carved-name.h"
-  "../include/ntfs-browser/search/log.h"
-  "../include/ntfs-browser/search/reader-types.h"
-  "../include/ntfs-browser/search/reader.h"
-  "../include/ntfs-browser/search/scan.h"
-  "../include/ntfs-browser/search/types.h"
+  "../include/ntfs-browser/log.h"
+  "../include/ntfs-browser/reader-types.h"
+  "../include/ntfs-browser/reader.h"
+  "../include/ntfs-browser/scan.h"
+  "../include/ntfs-browser/types.h"
   "ntfs-volume.h"
   "cache/stats.h"
   "cache/strategy.h"
@@ -331,7 +331,7 @@ add_library(
 include(GenerateExportHeader)
 # Per-symbol export/import, replacing a blanket
 # CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS: only the types of the public headers
-# (include/ntfs-browser/search/*.h) carry NTFS_BROWSER_EXPORT. An internal
+# (include/ntfs-browser/*.h) carry NTFS_BROWSER_EXPORT. An internal
 # symbol that the tests reach carries NTFS_BROWSER_EXPORT_TESTS_ONLY
 # (internal-export.h). A static build (the default) gets an empty macro, so
 # this header is safe to include either way.

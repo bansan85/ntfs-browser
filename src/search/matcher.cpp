@@ -4,8 +4,8 @@
 #include <string_view>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/scan.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/scan.h>
+#include <ntfs-browser/types.h>
 
 #include "log/ntfs-common.h"
 #include "search/case-folder.h"
@@ -16,7 +16,7 @@
 #include "search/wildcard-matcher.h"
 #include "upcase/upcase.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 Matcher::Matcher(MatchTarget target) noexcept : target_(target) {}
 
@@ -57,4 +57,4 @@ std::unique_ptr<Matcher> MakeMatcher(const Pattern& pattern,
   return nullptr;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

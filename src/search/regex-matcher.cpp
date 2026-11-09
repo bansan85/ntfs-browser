@@ -15,14 +15,14 @@
 #include <pcre2.h>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/types.h>
 
 #include "log/ntfs-common.h"
 #include "search/case-folder.h"
 #include "search/matcher.h"
 #include "utf/utf.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace {
 
@@ -194,4 +194,4 @@ bool RegexMatcher::MatchesText(std::u16string_view text) const {
   return false;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

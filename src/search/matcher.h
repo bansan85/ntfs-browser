@@ -4,12 +4,12 @@
 #include <string_view>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/types.h>
 
 #include "internal-export.h"
 #include "upcase/upcase.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 // Decides whether an entry matches the Pattern of a scan. A matcher is built
 // once, on the worker thread, after the volume is open, and called once for
@@ -45,4 +45,4 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY Matcher {
 [[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY std::unique_ptr<Matcher>
     MakeMatcher(const Pattern& pattern, const UpCase::Table& table);
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

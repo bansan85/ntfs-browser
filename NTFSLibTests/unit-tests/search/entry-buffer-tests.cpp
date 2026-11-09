@@ -4,11 +4,11 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/types.h>
 
 #include "search/entry-buffer.h"
 
-namespace Lib = NTFS_BROWSER_NAMESPACE::Search;
+namespace Lib = NTFS_BROWSER_NAMESPACE;
 
 namespace {
 

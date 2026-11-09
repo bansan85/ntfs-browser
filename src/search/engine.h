@@ -1,6 +1,6 @@
 #pragma once
 
-// How Search::Scan is built, for whoever extends it.
+// How Scan is built, for whoever extends it.
 //
 //   Scan (public, scan.h)    Start/Poll/Cancel and the state. Start() makes
 //                            a worker thread that runs Engine::Run() with the
@@ -79,12 +79,12 @@
 #include <stop_token>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/types.h>
 
 #include "internal-export.h"
 #include "search/target.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 // Where an engine puts what it finds.
 class NTFS_BROWSER_EXPORT_TESTS_ONLY EntrySink {
@@ -144,4 +144,4 @@ using EngineFactory = std::function<std::unique_ptr<Engine>(
 NTFS_BROWSER_EXPORT_TESTS_ONLY void
     SetEngineFactoryForTests(EngineFactory factory);
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

@@ -8,9 +8,9 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/scan.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/scan.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/types.h>
 
 #include "win-types.h"
 
@@ -53,13 +53,13 @@ struct Row {
   std::uint64_t accessed{0};
   std::uint32_t attributes{0};
   bool is_directory{false};
-  NTFS_BROWSER_NAMESPACE::Search::Standing standing{
-      NTFS_BROWSER_NAMESPACE::Search::Standing::Live};
+  NTFS_BROWSER_NAMESPACE::Standing standing{
+      NTFS_BROWSER_NAMESPACE::Standing::Live};
   std::uint16_t link_count{0};
-  NTFS_BROWSER_NAMESPACE::Search::DataState data_state{
-      NTFS_BROWSER_NAMESPACE::Search::DataState::NotChecked};
+  NTFS_BROWSER_NAMESPACE::DataState data_state{
+      NTFS_BROWSER_NAMESPACE::DataState::NotChecked};
   bool has_clusters{false};
-  NTFS_BROWSER_NAMESPACE::Search::Handle handle;
+  NTFS_BROWSER_NAMESPACE::Handle handle;
 
   [[nodiscard]] bool operator==(const Row&) const = default;
 };
@@ -67,22 +67,20 @@ struct Row {
 // What a whole scan gave.
 struct Outcome {
   std::vector<Row> rows;
-  NTFS_BROWSER_NAMESPACE::Search::State state{
-      NTFS_BROWSER_NAMESPACE::Search::State::NotStarted};
+  NTFS_BROWSER_NAMESPACE::State state{
+      NTFS_BROWSER_NAMESPACE::State::NotStarted};
   std::size_t batches{0};
   // How many batches had last set.
   std::size_t last_batches{0};
-  NTFS_BROWSER_NAMESPACE::Search::Progress progress;
+  NTFS_BROWSER_NAMESPACE::Progress progress;
 };
 
 // Runs a scan with options to its end, polling, and collects what it gave.
-[[nodiscard]] Outcome
-    RunScan(const NTFS_BROWSER_NAMESPACE::Search::Options& options);
+[[nodiscard]] Outcome RunScan(const NTFS_BROWSER_NAMESPACE::Options& options);
 
 // Polls scan until it is over, or until a long deadline, and returns its state.
 // A scan that is not over by then is stuck and reports Running.
-NTFS_BROWSER_NAMESPACE::Search::State
-    PollToEnd(NTFS_BROWSER_NAMESPACE::Search::Scan& scan);
+NTFS_BROWSER_NAMESPACE::State PollToEnd(NTFS_BROWSER_NAMESPACE::Scan& scan);
 
 // The names of rows, as UTF-8, in order.
 [[nodiscard]] std::vector<std::string> Names(const std::vector<Row>& rows);

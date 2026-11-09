@@ -1,7 +1,7 @@
 # Three ways to list a volume, timed: the scan of $MFT (mft-list-engine.cpp),
 # and the walk of the directory indexes with a volume that keeps no cache or
 # one that does (tools/dir-walk). --engine=all runs the three in turn.
-# The measure of a Search::Scan and its verdicts, shared with the unit tests
+# The measure of a Scan and its verdicts, shared with the unit tests
 # (unit-tests/search/scan-via-*-tests.cpp). They reach the test seams of the
 # scan in src/search/scan-probe.h.
 add_library(

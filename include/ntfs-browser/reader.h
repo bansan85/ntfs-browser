@@ -8,8 +8,8 @@
 //
 // Use:
 //
-//   Search::Reader reader({.target = u"c:"});
-//   // handle comes from Search::Entry::GetHandle(), kept past the callback
+//   Reader reader({.target = u"c:"});
+//   // handle comes from Entry::GetHandle(), kept past the callback
 //   std::vector<std::uint8_t> bytes(4096);
 //   const auto read = reader.Read(handle, u"", 0, bytes);
 //   if (read) { /* read.value bytes of the unnamed stream are in bytes */ }
@@ -46,7 +46,7 @@
 // record it parsed, so a loop of reads of one file parses it once.
 //
 // Errors. Nothing is thrown. A call returns a ReadResult with a ReadError. The
-// detail goes to the library log (see search/log.h).
+// detail goes to the library log (see log.h).
 
 #include <cstddef>
 #include <cstdint>
@@ -58,10 +58,10 @@
 
 #include <ntfs-browser/export.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/reader-types.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/reader-types.h>
+#include <ntfs-browser/types.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 // MSVC warns (C4251, at /W4) that the exported class holds a std::unique_ptr
 // of a type it does not export. The member is private and Impl is never seen
@@ -168,4 +168,4 @@ class NTFS_BROWSER_EXPORT Reader {
   #pragma warning(pop)
 #endif
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

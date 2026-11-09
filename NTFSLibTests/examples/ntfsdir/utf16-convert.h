@@ -1,7 +1,7 @@
 #pragma once
 
 // Conversions between the wide strings of the command line and the UTF-16
-// text of Search::Scan. wchar_t is UTF-16 on Windows and UTF-32 elsewhere.
+// text of Scan. wchar_t is UTF-16 on Windows and UTF-32 elsewhere.
 
 #include <string>
 #include <string_view>

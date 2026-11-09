@@ -14,7 +14,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/scan.h>
+#include <ntfs-browser/scan.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/io/ntfsdir-sample-support.h>
 #include <ntfs-browser/test/support/test-log-sink.h>
@@ -22,7 +22,7 @@
 #include "ntfsdir-in-process.h"
 #include "win-types.h"
 
-namespace Lib = NTFS_BROWSER_NAMESPACE::Search;
+namespace Lib = NTFS_BROWSER_NAMESPACE;
 namespace TestFake = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 using Catch::Matchers::ContainsSubstring;

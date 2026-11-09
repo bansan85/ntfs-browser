@@ -4,7 +4,7 @@
 
 #include <ntfs-browser/namespace.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace {
 
@@ -42,4 +42,4 @@ WorkerTimingsScope::WorkerTimingsScope(ScanTimings* timings) noexcept {
 
 WorkerTimingsScope::~WorkerTimingsScope() { t_worker_timings = nullptr; }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

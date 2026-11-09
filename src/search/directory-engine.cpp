@@ -12,7 +12,7 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/types.h>
 
 #include "alloc/types.h"
 #include "attr/mask.h"
@@ -32,7 +32,7 @@
 #include "volume-options.h"
 #include "win-types.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace {
 
@@ -373,4 +373,4 @@ bool DirectoryEngine<S>::Run(EntrySink& sink, std::stop_token stop) {
 template class DirectoryEngine<Cache::Strategy::FullCache>;
 template class DirectoryEngine<Cache::Strategy::NoCache>;
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

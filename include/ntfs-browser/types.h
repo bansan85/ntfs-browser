@@ -1,6 +1,6 @@
 #pragma once
 
-// Types of the Search::Scan interface (see scan.h). They use no other type of
+// Types of the Scan interface (see scan.h). They use no other type of
 // the library, and nothing of <windows.h>: a program that includes scan.h
 // needs nothing else.
 
@@ -16,7 +16,7 @@
 
 #include <ntfs-browser/namespace.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 // A point in time, as NTFS stores it: 100 ns ticks since 1601-01-01 00:00 UTC.
 // No zone is applied. 0 means the volume holds no time.
@@ -654,4 +654,4 @@ struct Options {
   Filter filter;
 };
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

@@ -4,9 +4,9 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/types.h>
 
-namespace Lib = NTFS_BROWSER_NAMESPACE::Search;
+namespace Lib = NTFS_BROWSER_NAMESPACE;
 
 TEST_CASE("A Date converts to and from Unix seconds", "[search][types]") {
   constexpr Lib::Date epoch = Lib::Date::FromUnixSeconds(0);

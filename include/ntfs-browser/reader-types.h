@@ -1,8 +1,8 @@
 #pragma once
 
-// Types of the Search::Reader interface (see reader.h). They use no other type
-// of the library, and nothing of <windows.h>. Dates are Search::Date, and a
-// file is named by a Search::Handle, both from types.h.
+// Types of the Reader interface (see reader.h). They use no other type
+// of the library, and nothing of <windows.h>. Dates are Date, and a
+// file is named by a Handle, both from types.h.
 
 #include <cstddef>
 #include <cstdint>
@@ -11,9 +11,9 @@
 #include <string>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/types.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 // Why a Reader call failed. The log (Log::Error, Log::Warn) holds the detail.
 enum class ReadError : std::uint8_t {
@@ -198,4 +198,4 @@ using ByteSink = std::function<bool(std::span<const std::uint8_t> chunk)>;
 // size.
 inline constexpr std::size_t copy_chunk_bytes = 64 * 1024;
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

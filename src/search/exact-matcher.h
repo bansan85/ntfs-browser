@@ -4,13 +4,13 @@
 #include <string_view>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/types.h>
 
 #include "internal-export.h"
 #include "search/case-folder.h"
 #include "search/matcher.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 // PatternKind::Exact: the whole text equals the pattern, unit by unit after the
 // folder maps both.
@@ -29,4 +29,4 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY ExactMatcher final : public Matcher {
   std::u16string pattern_;
 };
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

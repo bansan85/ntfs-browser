@@ -10,12 +10,12 @@
 #include <utility>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/types.h>
 
 #include "log/ntfs-common.h"
 #include "search/scan-probe.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 ScanExchange::ScanExchange(std::size_t max_pending)
     : max_pending_(max_pending) {}
@@ -178,4 +178,4 @@ std::optional<double> ScanExchange::Percent() const noexcept {
   return percent;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

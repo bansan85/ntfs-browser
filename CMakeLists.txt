@@ -91,7 +91,7 @@ option(
   ON
 )
 
-# The regular expression matcher of Search::Scan uses PCRE2 in its 16 bit form
+# The regular expression matcher of Scan uses PCRE2 in its 16 bit form
 # (UTF-16 names). Turning it off drops the matcher and the dependency, and a
 # scan that asks for a regular expression fails. PCRE2 stays an implementation
 # detail: no public header includes it.

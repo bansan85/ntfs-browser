@@ -9,10 +9,10 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/reader.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/reader.h>
 #include <ntfs-browser/test/alloc/alloc-test-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/types.h>
 
 #include "reader-support.h"
 #include "scan-support.h"
@@ -21,7 +21,7 @@
 namespace TestSearch = NTFS_BROWSER_NAMESPACE::Test::Search;
 namespace TestFake = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;
-namespace Lib = NTFS_BROWSER_NAMESPACE::Search;
+namespace Lib = NTFS_BROWSER_NAMESPACE;
 using TestSearch::ContentBytes;
 using TestSearch::RowNamed;
 using TestSearch::TempImage;

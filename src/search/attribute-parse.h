@@ -9,11 +9,11 @@
 #include <span>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/reader-types.h>
+#include <ntfs-browser/reader-types.h>
 
 #include "internal-export.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 // Decodes the content of a $STANDARD_INFORMATION. Nothing when it is shorter
 // than the 48 bytes of the NTFS 1 form. The fields of the NTFS 3 form are set
@@ -27,4 +27,4 @@ namespace NTFS_BROWSER_NAMESPACE::Search {
 [[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY std::optional<FileName>
     ParseFileName(std::span<const std::uint8_t> content, std::uint16_t index);
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

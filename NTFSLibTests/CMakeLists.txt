@@ -10,7 +10,7 @@ set(
 # that makes a shared library export the internal symbols (see
 # src/internal-export.h). The library MUST define it too, in the same builds, so
 # that both sides agree. A build without tests never defines it, and then the
-# shared library exports Search::Scan and Search::Reader only.
+# shared library exports Scan and Reader only.
 add_library(NtfsBrowserInternals INTERFACE)
 target_include_directories(
   NtfsBrowserInternals

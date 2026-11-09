@@ -9,7 +9,7 @@
 
 #include <ntfs-browser/example/ntfsundel/ntfsundel-core.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/reader.h>
+#include <ntfs-browser/reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/io/ntfsdir-sample-support.h>
 
@@ -19,7 +19,7 @@ namespace ExampleNtfsUndel = NTFS_BROWSER_NAMESPACE::Example::NtfsUndel;
 
 namespace {
 
-namespace Lib = NTFS_BROWSER_NAMESPACE::Search;
+namespace Lib = NTFS_BROWSER_NAMESPACE;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 using ExampleNtfsUndel::CopyResult;
 using ExampleNtfsUndel::RecoverError;

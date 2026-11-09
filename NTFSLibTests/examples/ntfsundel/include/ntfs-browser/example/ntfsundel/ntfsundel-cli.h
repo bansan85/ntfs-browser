@@ -18,7 +18,7 @@
 
 #include <ntfs-browser/example/ntfsundel/ntfsundel-core.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/reader.h>
+#include <ntfs-browser/reader.h>
 #include <ntfs-browser/tool/device-access/volume-target.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Example::NtfsUndel {
@@ -105,9 +105,8 @@ struct FileState {
 };
 
 // Asks reader for the state of the deleted file. Reads no data.
-[[nodiscard]] FileState
-    DescribeFile(NTFS_BROWSER_NAMESPACE::Search::Reader& reader,
-                 const DeletedFile& file);
+[[nodiscard]] FileState DescribeFile(NTFS_BROWSER_NAMESPACE::Reader& reader,
+                                     const DeletedFile& file);
 
 // The word a listing shows for state: "intact", "reallocated", "bad",
 // "unchecked", "no-data" or "unreadable".

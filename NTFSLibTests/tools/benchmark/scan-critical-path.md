@@ -1,6 +1,6 @@
 # Critical path of a search
 
-`NtfsScanBench --via-scan` answers two questions about `Search::Scan`: does the disk or the CPU bound a search, and does the CPU work run in parallel. The direct paths of `NtfsScanBench` (no `--via-scan`) time the engines alone. They say nothing about the worker thread of a `Scan`, the match stage or the exchange. `--via-scan` runs the same engines through `Scan::Run()`.
+`NtfsScanBench --via-scan` answers two questions about `Scan`: does the disk or the CPU bound a search, and does the CPU work run in parallel. The direct paths of `NtfsScanBench` (no `--via-scan`) time the engines alone. They say nothing about the worker thread of a `Scan`, the match stage or the exchange. `--via-scan` runs the same engines through `Scan::Run()`.
 
 ## Method
 

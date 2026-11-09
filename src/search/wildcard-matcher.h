@@ -4,13 +4,13 @@
 #include <string_view>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/types.h>
 
 #include "internal-export.h"
 #include "search/case-folder.h"
 #include "search/matcher.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 // PatternKind::Wildcard: '*' for any run, '?' for one character, see Pattern.
 // The comparison keeps one resume point, the last '*', so a pattern costs at
@@ -31,4 +31,4 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY WildcardMatcher final : public Matcher {
   std::u16string pattern_;
 };
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

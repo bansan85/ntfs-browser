@@ -11,7 +11,7 @@
 #include "win-types.h"
 
 namespace TestSearch = NTFS_BROWSER_NAMESPACE::Test::Search;
-namespace Lib = NTFS_BROWSER_NAMESPACE::Search;
+namespace Lib = NTFS_BROWSER_NAMESPACE;
 namespace Utf = NTFS_BROWSER_NAMESPACE::Utf;
 using Parts = std::vector<std::wstring>;
 

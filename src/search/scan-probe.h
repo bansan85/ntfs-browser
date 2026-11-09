@@ -1,6 +1,6 @@
 #pragma once
 
-// The test seams of Search::Scan. A benchmark or a test sets them while no scan
+// The test seams of Scan. A benchmark or a test sets them while no scan
 // runs. Without them a scan reads, hints, logs and outputs exactly what it did
 // before: the worker only pays one test of a null pointer for each entry.
 
@@ -15,7 +15,7 @@
 #include "internal-export.h"
 #include "search/target.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 // What the worker thread of one scan spent its time on. All times are
 // nanoseconds. The engine's own time (reading and parsing) is what remains of
@@ -111,4 +111,4 @@ class StageTimer {
   std::chrono::steady_clock::time_point begin_;
 };
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

@@ -10,9 +10,9 @@
 #include <catch2/generators/catch_generators.hpp>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/support/test-log-sink.h>
+#include <ntfs-browser/types.h>
 
 #include "scan-support.h"
 #include "win-types.h"
@@ -20,7 +20,7 @@
 namespace TestSearch = NTFS_BROWSER_NAMESPACE::Test::Search;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace Fake = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace Lib = NTFS_BROWSER_NAMESPACE::Search;
+namespace Lib = NTFS_BROWSER_NAMESPACE;
 using TestSearch::Outcome;
 using TestSearch::RunScan;
 using TestSearch::TempImage;

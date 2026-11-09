@@ -8,10 +8,10 @@
 #include <string>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/reader-types.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/reader-types.h>
+#include <ntfs-browser/types.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace {
 
@@ -141,4 +141,4 @@ std::optional<FileName> ParseFileName(std::span<const std::uint8_t> content,
   return name;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

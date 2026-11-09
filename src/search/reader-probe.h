@@ -1,6 +1,6 @@
 #pragma once
 
-// The test seam of Search::Reader. A test sets it while no Reader works.
+// The test seam of Reader. A test sets it while no Reader works.
 // Without it a Reader uses the key provider that its volume makes by itself.
 
 #include <memory>
@@ -11,7 +11,7 @@
 #include "efs/efs.h"
 #include "internal-export.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 // Makes every Reader that opens from now on give provider to its volume as the
 // source of EFS keys. A null provider turns decryption off. The default
@@ -30,4 +30,4 @@ NTFS_BROWSER_EXPORT_TESTS_ONLY void ClearReaderKeyProviderForTests();
     std::shared_ptr<NTFS_BROWSER_NAMESPACE::Efs::IEfsKeyProvider>>&
     ReaderKeyProviderOverride() noexcept;
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

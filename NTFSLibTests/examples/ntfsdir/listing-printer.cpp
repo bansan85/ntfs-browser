@@ -8,9 +8,9 @@
 #include <utility>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
 #include <ntfs-browser/tool/device-access/local-time.h>
 #include <ntfs-browser/tool/device-access/output.h>
+#include <ntfs-browser/types.h>
 
 #include "utf16-convert.h"
 
@@ -26,14 +26,14 @@ constexpr char16_t path_separator = u'\\';
 constexpr std::size_t time_column_width = 17;
 
 // The marker column of an entry in a listing that shows deleted entries.
-char MarkerOf(Search::Standing standing) {
+char MarkerOf(NTFS_BROWSER_NAMESPACE::Standing standing) {
   switch (standing) {
-    case Search::Standing::Live:
+    case NTFS_BROWSER_NAMESPACE::Standing::Live:
       return ' ';
-    case Search::Standing::Unreadable:
+    case NTFS_BROWSER_NAMESPACE::Standing::Unreadable:
       return '?';
-    case Search::Standing::Deleted:
-    case Search::Standing::Reused:
+    case NTFS_BROWSER_NAMESPACE::Standing::Deleted:
+    case NTFS_BROWSER_NAMESPACE::Standing::Reused:
       break;
   }
   return '*';
@@ -53,8 +53,8 @@ ListingPrinter::ListingPrinter(Tool::DeviceAccess::Output& out,
                                ListingStyle style)
     : out_(out), style_(std::move(style)) {}
 
-void ListingPrinter::Print(const Search::Batch& batch) {
-  for (const Search::Entry& entry : batch.entries) {
+void ListingPrinter::Print(const NTFS_BROWSER_NAMESPACE::Batch& batch) {
+  for (const NTFS_BROWSER_NAMESPACE::Entry& entry : batch.entries) {
     if (style_.folder_headers) {
       PrintHeaderIfNew(entry);
     }
@@ -62,7 +62,8 @@ void ListingPrinter::Print(const Search::Batch& batch) {
   }
 }
 
-void ListingPrinter::PrintHeaderIfNew(const Search::Entry& entry) {
+void ListingPrinter::PrintHeaderIfNew(
+    const NTFS_BROWSER_NAMESPACE::Entry& entry) {
   const std::u16string_view folder = FolderOf(entry.path);
   if (has_folder_ && folder_ == folder) {
     return;
@@ -76,7 +77,7 @@ void ListingPrinter::PrintHeaderIfNew(const Search::Entry& entry) {
   out_.EndLine();
 }
 
-void ListingPrinter::PrintEntry(const Search::Entry& entry) {
+void ListingPrinter::PrintEntry(const NTFS_BROWSER_NAMESPACE::Entry& entry) {
   const std::optional<Tool::DeviceAccess::LocalTime> time =
       Tool::DeviceAccess::UtcTicksToLocalTime(entry.modified.ticks);
   if (time) {
@@ -101,10 +102,18 @@ void ListingPrinter::PrintEntry(const Search::Entry& entry) {
   }
 
   out_.Append("\t<");
-  out_.Append((entry.attributes & Search::Attribute::read_only) != 0U ? "R"
-                                                                      : " ");
-  out_.Append((entry.attributes & Search::Attribute::hidden) != 0U ? "H" : " ");
-  out_.Append((entry.attributes & Search::Attribute::system) != 0U ? "S" : " ");
+  out_.Append(
+      (entry.attributes & NTFS_BROWSER_NAMESPACE::Attribute::read_only) != 0U
+          ? "R"
+          : " ");
+  out_.Append((entry.attributes & NTFS_BROWSER_NAMESPACE::Attribute::hidden) !=
+                      0U
+                  ? "H"
+                  : " ");
+  out_.Append((entry.attributes & NTFS_BROWSER_NAMESPACE::Attribute::system) !=
+                      0U
+                  ? "S"
+                  : " ");
   out_.Append(">\t");
   if (style_.marker_column) {
     out_.Append(std::string(1, MarkerOf(entry.standing)));

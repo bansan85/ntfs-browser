@@ -8,7 +8,7 @@
 
 #include "efs/efs.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace {
 
@@ -33,4 +33,4 @@ const std::optional<std::shared_ptr<Efs::IEfsKeyProvider>>&
   return KeyProviderStorage();
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

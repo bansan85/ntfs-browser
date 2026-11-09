@@ -11,7 +11,7 @@
 #include <utility>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/types.h>
 
 #include "search/engine.h"
 
@@ -62,11 +62,11 @@ class Gate final {
 };
 
 // What an engine of a test does on the worker thread.
-using EngineScript = std::function<bool(
-    NTFS_BROWSER_NAMESPACE::Search::EntrySink& sink, std::stop_token stop)>;
+using EngineScript = std::function<bool(NTFS_BROWSER_NAMESPACE::EntrySink& sink,
+                                        std::stop_token stop)>;
 
 // An engine that runs a script.
-class ScriptedEngine final : public NTFS_BROWSER_NAMESPACE::Search::Engine {
+class ScriptedEngine final : public NTFS_BROWSER_NAMESPACE::Engine {
  public:
   ScriptedEngine(EngineScript script, std::shared_ptr<Gate> destroyed)
       : script_(std::move(script)), destroyed_(std::move(destroyed)) {}
@@ -83,7 +83,7 @@ class ScriptedEngine final : public NTFS_BROWSER_NAMESPACE::Search::Engine {
     }
   }
 
-  [[nodiscard]] bool Run(NTFS_BROWSER_NAMESPACE::Search::EntrySink& sink,
+  [[nodiscard]] bool Run(NTFS_BROWSER_NAMESPACE::EntrySink& sink,
                          std::stop_token stop) override {
     return script_(sink, std::move(stop));
   }
@@ -99,10 +99,10 @@ class ScriptedEngineScope final {
  public:
   explicit ScriptedEngineScope(EngineScript script)
       : destroyed_(std::make_shared<Gate>()) {
-    NTFS_BROWSER_NAMESPACE::Search::SetEngineFactoryForTests(
-        [script = std::move(script), destroyed = destroyed_](
-            const NTFS_BROWSER_NAMESPACE::Search::Options&,
-            const NTFS_BROWSER_NAMESPACE::Search::TargetParts&) {
+    NTFS_BROWSER_NAMESPACE::SetEngineFactoryForTests(
+        [script = std::move(script),
+         destroyed = destroyed_](const NTFS_BROWSER_NAMESPACE::Options&,
+                                 const NTFS_BROWSER_NAMESPACE::TargetParts&) {
           return std::make_unique<ScriptedEngine>(script, destroyed);
         });
   }
@@ -113,7 +113,7 @@ class ScriptedEngineScope final {
   ScriptedEngineScope& operator=(ScriptedEngineScope&&) = delete;
 
   ~ScriptedEngineScope() {
-    NTFS_BROWSER_NAMESPACE::Search::SetEngineFactoryForTests({});
+    NTFS_BROWSER_NAMESPACE::SetEngineFactoryForTests({});
   }
 
   // Opens when the worker destroyed the engine, as it leaves its work.
@@ -124,12 +124,12 @@ class ScriptedEngineScope final {
 };
 
 // Gives sink one entry named "file<number>", with record set to number.
-inline void AddNumbered(NTFS_BROWSER_NAMESPACE::Search::EntrySink& sink,
+inline void AddNumbered(NTFS_BROWSER_NAMESPACE::EntrySink& sink,
                         std::uint64_t number) {
   const std::string digits = std::to_string(number);
   std::u16string name = u"file";
   name.append(digits.begin(), digits.end());
-  NTFS_BROWSER_NAMESPACE::Search::Entry entry;
+  NTFS_BROWSER_NAMESPACE::Entry entry;
   entry.name = name;
   entry.record = number;
   sink.Add(entry);

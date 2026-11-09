@@ -11,9 +11,9 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/reader-types.h>
-#include <ntfs-browser/search/reader.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/reader-types.h>
+#include <ntfs-browser/reader.h>
+#include <ntfs-browser/types.h>
 
 #include "alloc/types.h"
 #include "attr/base.h"
@@ -32,7 +32,7 @@
 #include "volume-options.h"
 #include "win-types.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace {
 
@@ -599,4 +599,4 @@ ReadResult<std::uint64_t>
   });
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

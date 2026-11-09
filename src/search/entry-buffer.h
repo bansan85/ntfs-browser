@@ -8,11 +8,11 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/types.h>
 
 #include "internal-export.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 // Entries that a scan found and that nobody has taken yet, with the text they
 // point at. Add() copies the name, the path and the cluster summary of an
@@ -61,4 +61,4 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY EntryBuffer {
   std::deque<ClusterSummary> summaries_;
 };
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

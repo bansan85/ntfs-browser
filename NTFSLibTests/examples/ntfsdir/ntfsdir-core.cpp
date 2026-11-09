@@ -8,13 +8,13 @@
 #include <ntfs-browser/example/ntfsdir/arguments.h>
 #include <ntfs-browser/example/ntfsdir/ntfsdir-core.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/scan.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/scan.h>
 #include <ntfs-browser/tool/device-access/device-path.h>
 #include <ntfs-browser/tool/device-access/output.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
 #include <ntfs-browser/tool/device-access/tool-support.h>
 #include <ntfs-browser/tool/device-access/volume-target.h>
+#include <ntfs-browser/types.h>
 
 #include "listing-printer.h"
 #include "log/log.h"
@@ -64,18 +64,20 @@ TargetShape ShapeOf(std::wstring_view target) {
 // covers the whole volume whatever --recursive says, so only a recursive
 // listing of a volume reads it. The layout of the listing depends on the
 // engine, so the program names it to the scan.
-Search::EngineKind ResolveEngine(Search::EngineKind engine, bool in_folder,
-                                 bool recursive) {
-  if (engine != Search::EngineKind::Auto) {
+NTFS_BROWSER_NAMESPACE::EngineKind
+    ResolveEngine(NTFS_BROWSER_NAMESPACE::EngineKind engine, bool in_folder,
+                  bool recursive) {
+  if (engine != NTFS_BROWSER_NAMESPACE::EngineKind::Auto) {
     return engine;
   }
-  return in_folder || !recursive ? Search::EngineKind::DirectoryFullCache
-                                 : Search::EngineKind::MftList;
+  return in_folder || !recursive
+             ? NTFS_BROWSER_NAMESPACE::EngineKind::DirectoryFullCache
+             : NTFS_BROWSER_NAMESPACE::EngineKind::MftList;
 }
 
 // Writes the percent of the scan to err when it moved to a new whole number.
-void ReportProgress(const Search::Progress& progress, int& shown,
-                    std::FILE* err) {
+void ReportProgress(const NTFS_BROWSER_NAMESPACE::Progress& progress,
+                    int& shown, std::FILE* err) {
   if (!progress.percent) {
     return;
   }
@@ -89,7 +91,7 @@ void ReportProgress(const Search::Progress& progress, int& shown,
 }  // namespace
 
 int ListTarget(const Arguments& args, std::FILE* out, std::FILE* err) {
-  Search::Options options = args.scan;
+  NTFS_BROWSER_NAMESPACE::Options options = args.scan;
   const TargetShape shape = ShapeOf(FromUtf16(options.target));
   options.engine =
       ResolveEngine(options.engine, shape.in_folder, options.recursive);
@@ -97,7 +99,8 @@ int ListTarget(const Arguments& args, std::FILE* out, std::FILE* err) {
   // The directory engines deliver the entries of a folder together, so a
   // recursive listing comes under a header for each folder. The MftList engine
   // delivers in $MFT order: each line then names its path.
-  const bool folder_walk = options.engine != Search::EngineKind::MftList;
+  const bool folder_walk =
+      options.engine != NTFS_BROWSER_NAMESPACE::EngineKind::MftList;
   ListingStyle style;
   style.marker_column = options.include_deleted;
   style.folder_headers = folder_walk && options.recursive;
@@ -110,16 +113,17 @@ int ListTarget(const Arguments& args, std::FILE* out, std::FILE* err) {
   ListingPrinter printer(output, style);
   int shown_percent = -1;
 
-  Search::Scan scan(std::move(options));
-  scan.OnBatch([&](const Search::Batch& batch) {
+  NTFS_BROWSER_NAMESPACE::Scan scan(std::move(options));
+  scan.OnBatch([&](const NTFS_BROWSER_NAMESPACE::Batch& batch) {
     printer.Print(batch);
     if (args.progress) {
       ReportProgress(batch.progress, shown_percent, err);
     }
   });
   // Waits on this thread and calls the callback about every 100 ms.
-  const Search::State state = scan.Run(std::chrono::milliseconds(100));
-  if (state != Search::State::Finished) {
+  const NTFS_BROWSER_NAMESPACE::State state =
+      scan.Run(std::chrono::milliseconds(100));
+  if (state != NTFS_BROWSER_NAMESPACE::State::Finished) {
     return failure_exit_code;
   }
   printer.PrintTotals();

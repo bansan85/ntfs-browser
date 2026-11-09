@@ -1,4 +1,4 @@
-# The directory walk of NtfsDir as it was before Search::Scan: the nocache and
+# The directory walk of NtfsDir as it was before Scan: the nocache and
 # fullcache engines of NtfsScanBench, and the oracle of the read ahead tests
 # (unit-tests/io/). Portable C++, the POSIX half sits behind #ifndef _WIN32.
 add_library(

@@ -1,18 +1,18 @@
 #pragma once
 
-// The log of the library. Search::Scan and Search::Reader report what they
+// The log of the library. Scan and Reader report what they
 // cannot do (a target that does not open, a damaged folder, an unreadable
 // record) as log lines, never as exceptions. This header is the one way to
 // receive them or to silence them. It needs nothing but the standard library.
 //
-//   Search::SetLogSink(
-//       [](Search::LogLevel level, std::string_view message) {
+//   SetLogSink(
+//       [](LogLevel level, std::string_view message) {
 //         MyLog(static_cast<int>(level), message);
 //       },
-//       Search::LogLevel::Info);
+//       LogLevel::Info);
 //
 // Until the first call, the library writes its warnings and errors to the
-// console (stderr). Search::SetLogSink({}, Search::LogLevel::Off) discards
+// console (stderr). SetLogSink({}, LogLevel::Off) discards
 // every line.
 //
 // Threads. The library and its log are not thread safe. SetLogSink() and every
@@ -28,7 +28,7 @@
 #include <ntfs-browser/export.h>
 #include <ntfs-browser/namespace.h>
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 // Severity of a line, and, for the sink, the least severe line it accepts.
 // Ordered from the most to the least severe. Off never matches a line, so as a
@@ -46,4 +46,4 @@ using LogSink = std::function<void(LogLevel level, std::string_view message)>;
 // released before the call returns. May throw std::bad_alloc.
 NTFS_BROWSER_EXPORT void SetLogSink(LogSink sink, LogLevel threshold);
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

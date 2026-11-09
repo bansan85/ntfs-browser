@@ -1,4 +1,4 @@
-// Lists the files of a folder or of a whole NTFS volume with Search::Scan.
+// Lists the files of a folder or of a whole NTFS volume with Scan.
 // usage: ntfsdir [options] "path"
 // eg. ntfsdir c:\windows
 // eg. ntfsdir -r "c:\program files\common files" --name=*.dll

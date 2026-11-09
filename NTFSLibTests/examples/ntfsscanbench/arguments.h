@@ -6,8 +6,8 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
 #include <ntfs-browser/tool/device-access/bench-options.h>
+#include <ntfs-browser/types.h>
 
 #include "alloc/cluster-account.h"
 #include "log/log.h"
@@ -54,15 +54,15 @@ struct Arguments {
   // Stays null until the command line names a volume. A walk also takes a
   // directory after the image or device ("disk.img\Windows").
   const wchar_t* target = nullptr;
-  // The same target as UTF-16 units, for Search::Options. Set with target.
+  // The same target as UTF-16 units, for Options. Set with target.
   std::u16string target_units;
-  // Runs the engine through Search::Scan (--via-scan), as the library runs a
+  // Runs the engine through Scan (--via-scan), as the library runs a
   // search, and measures its worker thread. The listing is not shown.
   bool via_scan = false;
   // What --name, --regex, --min-size and --max-size ask of a scan. Only with
   // --via-scan.
-  NTFS_BROWSER_NAMESPACE::Search::Pattern pattern;
-  NTFS_BROWSER_NAMESPACE::Search::Filter filter;
+  NTFS_BROWSER_NAMESPACE::Pattern pattern;
+  NTFS_BROWSER_NAMESPACE::Filter filter;
   // The instrumentation and tuning options, and the command line they came
   // from as UTF-8, for the summary.
   Tool::DeviceAccess::BenchOptions bench;

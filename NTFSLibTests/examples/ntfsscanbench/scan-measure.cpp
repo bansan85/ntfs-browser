@@ -9,8 +9,8 @@
 
 #include <ntfs-browser/example/ntfsscanbench/via-scan.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/scan.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/scan.h>
+#include <ntfs-browser/types.h>
 
 #include "bench/bench.h"
 #include "bench/platform-reader.h"
@@ -33,13 +33,13 @@ constexpr std::chrono::milliseconds poll_interval{100};
 
 }  // namespace
 
-ScanMeasure MeasureScan(const Search::Options& options) {
-  Search::ScanTimings timings;
-  Search::SetScanProbeForTests(&timings);
+ScanMeasure MeasureScan(const NTFS_BROWSER_NAMESPACE::Options& options) {
+  NTFS_BROWSER_NAMESPACE::ScanTimings timings;
+  NTFS_BROWSER_NAMESPACE::SetScanProbeForTests(&timings);
   ScanMeasure measure;
   {
-    Search::Scan scan(options);
-    scan.OnBatch([&](const Search::Batch& batch) {
+    NTFS_BROWSER_NAMESPACE::Scan scan(options);
+    scan.OnBatch([&](const NTFS_BROWSER_NAMESPACE::Batch& batch) {
       measure.entries += batch.entries.size();
     });
     const auto begin = std::chrono::steady_clock::now();
@@ -49,7 +49,7 @@ ScanMeasure MeasureScan(const Search::Options& options) {
             std::chrono::steady_clock::now() - begin)
             .count());
   }
-  Search::SetScanProbeForTests(nullptr);
+  NTFS_BROWSER_NAMESPACE::SetScanProbeForTests(nullptr);
   measure.worker = {.wall_ns = timings.worker_wall_ns,
                     .cpu_ns = timings.worker_cpu_ns,
                     .wait_ns = timings.wait_ns,
@@ -63,12 +63,13 @@ ScanMeasure MeasureScan(const Search::Options& options) {
 std::optional<std::uint64_t> ReplayNs(
     std::wstring_view target, const Bench::ReadLog& log,
     const std::array<Tuning::ReaderTuning, Tuning::pattern_count>& caps) {
-  const std::optional<Search::TargetParts> parts = Search::SplitTarget(target);
+  const std::optional<NTFS_BROWSER_NAMESPACE::TargetParts> parts =
+      NTFS_BROWSER_NAMESPACE::SplitTarget(target);
   if (!parts) {
     return std::nullopt;
   }
   std::wstring path = parts->source;
-  if (parts->kind == Search::TargetParts::Kind::Drive) {
+  if (parts->kind == NTFS_BROWSER_NAMESPACE::TargetParts::Kind::Drive) {
     path = std::wstring(L"\\.\\") + parts->source + L":";
   }
   std::unique_ptr<IDiskReader> reader;

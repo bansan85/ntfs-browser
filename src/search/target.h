@@ -14,7 +14,7 @@
 #include "ntfs-volume.h"
 #include "volume-options.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 // A scan target split into the thing that holds the volume and the path inside
 // the volume.
@@ -60,4 +60,4 @@ template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
     OpenVolume(const TargetParts& parts,
                const NTFS_BROWSER_NAMESPACE::VolumeOptions& options);
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

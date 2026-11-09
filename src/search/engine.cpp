@@ -5,7 +5,7 @@
 #include <utility>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/types.h>
 
 #include "cache/strategy.h"
 #include "log/ntfs-common.h"
@@ -14,7 +14,7 @@
 #include "search/mft-list-engine.h"
 #include "search/target.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace {
 
@@ -71,4 +71,4 @@ std::unique_ptr<Engine> MakeEngine(const Options& options,
   return nullptr;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

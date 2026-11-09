@@ -3,13 +3,13 @@
 #include <stop_token>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/types.h>
 
 #include "internal-export.h"
 #include "search/engine.h"
 #include "search/target.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 // The MftTree walk: reads every record of the $MFT in record order, builds
 // the tree of names from the parent reference of each $FILE_NAME, and gives
@@ -44,4 +44,4 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY MftListEngine final : public Engine {
   TargetParts parts_;
 };
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

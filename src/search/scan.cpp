@@ -10,8 +10,8 @@
 #include <utility>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/scan.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/scan.h>
+#include <ntfs-browser/types.h>
 
 #include "bench/bench.h"
 #include "bench/process-times.h"
@@ -23,7 +23,7 @@
 #include "search/target.h"
 #include "utf/utf.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 // The state of a scan. A worker thread runs the engine into exchange_. The
 // caller's thread owns every member that is not part of the exchange: Start(),
@@ -324,4 +324,4 @@ bool Scan::Finished() const noexcept {
 
 Progress Scan::GetProgress() const noexcept { return impl_->GetProgress(); }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

@@ -3,14 +3,14 @@
 #include <stop_token>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/types.h>
 
 #include "cache/strategy.h"
 #include "internal-export.h"
 #include "search/engine.h"
 #include "search/target.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 // The NtfsDir walk: reads the index of the target folder and, with
 // Options::recursive, of every folder below it, depth first, in index order.
@@ -31,4 +31,4 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY DirectoryEngine final : public Engine {
   TargetParts parts_;
 };
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

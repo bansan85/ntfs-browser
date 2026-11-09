@@ -4,11 +4,11 @@
 #include <string_view>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/types.h>
 
 #include "search/case-folder.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 ExactMatcher::ExactMatcher(MatchTarget target, std::u16string_view text,
                            const CaseFolder& folder)
@@ -26,4 +26,4 @@ bool ExactMatcher::MatchesText(std::u16string_view text) const {
   return true;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

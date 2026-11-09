@@ -12,11 +12,11 @@
 
 #include <ntfs-browser/example/ntfsdir/arguments.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/scan.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/scan.h>
+#include <ntfs-browser/types.h>
 
 namespace ExampleNtfsDir = NTFS_BROWSER_NAMESPACE::Example::NtfsDir;
-namespace Lib = NTFS_BROWSER_NAMESPACE::Search;
+namespace Lib = NTFS_BROWSER_NAMESPACE;
 using Catch::Matchers::ContainsSubstring;
 
 namespace {

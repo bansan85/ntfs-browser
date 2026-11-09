@@ -3,7 +3,7 @@
 #include <memory>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/types.h>
 
 #include "internal-export.h"
 #include "search/engine.h"
@@ -11,7 +11,7 @@
 #include "search/matcher.h"
 #include "upcase/upcase.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 // The sink an engine gives its entries to. It passes on to the real sink the
 // entries that the options select, and drops the others, so that an entry that
@@ -55,4 +55,4 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY MatchingSink final : public EntrySink {
   std::unique_ptr<Matcher> matcher_;
 };
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

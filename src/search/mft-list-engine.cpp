@@ -12,7 +12,7 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/types.h>
 
 #include "alloc/cluster-account.h"
 #include "alloc/types.h"
@@ -32,7 +32,7 @@
 #include "volume-options.h"
 #include "win-types.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace {
 
@@ -388,4 +388,4 @@ bool MftListEngine::Run(EntrySink& sink, std::stop_token stop) {
   return true;
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

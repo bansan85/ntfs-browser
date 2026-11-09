@@ -12,9 +12,9 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/scan.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/scan.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+#include <ntfs-browser/types.h>
 
 #include "utf/utf.h"
 #include "win-types.h"
@@ -24,7 +24,7 @@ namespace NTFS_BROWSER_NAMESPACE::Test::Search {
 namespace {
 
 namespace Fake = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace Lib = NTFS_BROWSER_NAMESPACE::Search;
+namespace Lib = NTFS_BROWSER_NAMESPACE;
 
 // How long PollToEnd() waits for a scan: far more than any test scan needs, so
 // that only a stuck scan reaches it.

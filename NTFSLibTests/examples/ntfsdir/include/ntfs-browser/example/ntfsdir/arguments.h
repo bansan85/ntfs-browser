@@ -1,15 +1,15 @@
 #pragma once
 
 // The command line of the ntfsdir command, parsed into the options of a
-// Search::Scan. Plain C++, so main.cpp only hands over argv and the unit tests
+// Scan. Plain C++, so main.cpp only hands over argv and the unit tests
 // drive it without a process.
 
 #include <optional>
 #include <string>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
 #include <ntfs-browser/tool/device-access/volume-target.h>
+#include <ntfs-browser/types.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Example::NtfsDir {
 
@@ -22,7 +22,7 @@ struct Arguments {
   NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess::CommonArguments common;
   // What the scan gets: the target, the engine, --recursive, the pattern and
   // the filter. include_deleted and recover_errors copy the common options.
-  NTFS_BROWSER_NAMESPACE::Search::Options scan;
+  NTFS_BROWSER_NAMESPACE::Options scan;
   // --progress: write the percent of the scan to stderr.
   bool progress = false;
 };

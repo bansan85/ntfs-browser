@@ -4,11 +4,11 @@
 #include <optional>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/types.h>
 
 #include "internal-export.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 // What the filter of a scan asks of the rest of the scan, besides the tests
 // themselves.
@@ -69,4 +69,4 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FieldFilter {
   std::uint32_t data_state_bits_{0};
 };
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

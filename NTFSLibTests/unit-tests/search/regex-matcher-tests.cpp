@@ -7,15 +7,15 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/scan.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/scan.h>
 #include <ntfs-browser/test/support/test-log-sink.h>
+#include <ntfs-browser/types.h>
 
 #include "search/matcher.h"
 #include "upcase/upcase.h"
 
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
-namespace Lib = NTFS_BROWSER_NAMESPACE::Search;
+namespace Lib = NTFS_BROWSER_NAMESPACE;
 using NTFS_BROWSER_NAMESPACE::UpCase::Table;
 
 namespace {

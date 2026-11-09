@@ -8,10 +8,10 @@
 
 #include <ntfs-browser/example/ntfsdir/arguments.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/scan.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/scan.h>
 #include <ntfs-browser/tool/device-access/bench-options.h>
 #include <ntfs-browser/tool/device-access/volume-target.h>
+#include <ntfs-browser/types.h>
 
 #include "utf16-convert.h"
 
@@ -34,18 +34,19 @@ std::optional<std::wstring_view> ValueOf(std::wstring_view arg,
 }
 
 // The engine that text names, or nothing for an unknown name.
-std::optional<Search::EngineKind> EngineOf(std::wstring_view text) {
+std::optional<NTFS_BROWSER_NAMESPACE::EngineKind>
+    EngineOf(std::wstring_view text) {
   if (text == L"auto") {
-    return Search::EngineKind::Auto;
+    return NTFS_BROWSER_NAMESPACE::EngineKind::Auto;
   }
   if (text == L"mftlist") {
-    return Search::EngineKind::MftList;
+    return NTFS_BROWSER_NAMESPACE::EngineKind::MftList;
   }
   if (text == L"nocache") {
-    return Search::EngineKind::DirectoryNoCache;
+    return NTFS_BROWSER_NAMESPACE::EngineKind::DirectoryNoCache;
   }
   if (text == L"fullcache") {
-    return Search::EngineKind::DirectoryFullCache;
+    return NTFS_BROWSER_NAMESPACE::EngineKind::DirectoryFullCache;
   }
   return std::nullopt;
 }
@@ -85,14 +86,16 @@ enum class Handled : std::uint8_t {
 
 // Sets the pattern kind and text of --name or --regex. Rejects an empty text
 // and the use of both options.
-Handled SetPattern(Search::PatternKind kind, std::wstring_view option,
-                   std::wstring_view text, Search::Pattern& pattern,
+Handled SetPattern(NTFS_BROWSER_NAMESPACE::PatternKind kind,
+                   std::wstring_view option, std::wstring_view text,
+                   NTFS_BROWSER_NAMESPACE::Pattern& pattern,
                    std::wstring& error) {
   if (text.empty()) {
     error = std::wstring(option) + L" needs a pattern";
     return Handled::Rejected;
   }
-  if (pattern.kind != Search::PatternKind::None && pattern.kind != kind) {
+  if (pattern.kind != NTFS_BROWSER_NAMESPACE::PatternKind::None &&
+      pattern.kind != kind) {
     error = L"--name and --regex cannot be used together";
     return Handled::Rejected;
   }
@@ -105,20 +108,20 @@ Handled SetPattern(Search::PatternKind kind, std::wstring_view option,
 // and --max-size.
 Handled ParseValueOption(std::wstring_view arg, Arguments& args,
                          std::wstring& error) {
-  Search::Pattern& pattern = args.scan.pattern;
+  NTFS_BROWSER_NAMESPACE::Pattern& pattern = args.scan.pattern;
   if (const auto text = ValueOf(arg, L"--name")) {
-    return SetPattern(Search::PatternKind::Wildcard, L"--name", *text, pattern,
-                      error);
+    return SetPattern(NTFS_BROWSER_NAMESPACE::PatternKind::Wildcard, L"--name",
+                      *text, pattern, error);
   }
   if (const auto text = ValueOf(arg, L"--regex")) {
-    if (!Search::RegexAvailable()) {
+    if (!NTFS_BROWSER_NAMESPACE::RegexAvailable()) {
       error =
           L"--regex is not available: this build has no regular expression "
           L"support";
       return Handled::Rejected;
     }
-    return SetPattern(Search::PatternKind::Regex, L"--regex", *text, pattern,
-                      error);
+    return SetPattern(NTFS_BROWSER_NAMESPACE::PatternKind::Regex, L"--regex",
+                      *text, pattern, error);
   }
   for (const std::wstring_view name : {L"--min-size", L"--max-size"}) {
     const auto text = ValueOf(arg, name);
@@ -143,7 +146,7 @@ Handled ParseValueOption(std::wstring_view arg, Arguments& args,
 // Rejected, with the reason in error.
 Handled ParseOwnOption(std::wstring_view arg, Arguments& args,
                        std::wstring& error) {
-  Search::Options& scan = args.scan;
+  NTFS_BROWSER_NAMESPACE::Options& scan = args.scan;
   if (arg == L"--recursive" || arg == L"-r") {
     scan.recursive = true;
   } else if (arg == L"--system") {
@@ -151,7 +154,7 @@ Handled ParseOwnOption(std::wstring_view arg, Arguments& args,
   } else if (arg == L"--progress") {
     args.progress = true;
   } else if (arg == L"--match-path") {
-    scan.pattern.target = Search::MatchTarget::FullPath;
+    scan.pattern.target = NTFS_BROWSER_NAMESPACE::MatchTarget::FullPath;
   } else if (arg == L"--case") {
     scan.pattern.case_sensitive = true;
   } else if (arg == L"--dirs-only" || arg == L"--files-only") {
@@ -162,7 +165,8 @@ Handled ParseOwnOption(std::wstring_view arg, Arguments& args,
     }
     scan.filter.is_directory = directories;
   } else if (const auto engine = ValueOf(arg, L"--engine")) {
-    const std::optional<Search::EngineKind> kind = EngineOf(*engine);
+    const std::optional<NTFS_BROWSER_NAMESPACE::EngineKind> kind =
+        EngineOf(*engine);
     if (!kind) {
       error = L"Unknown engine \"" + std::wstring(*engine) +
               L"\": use auto, mftlist, nocache or fullcache";
@@ -180,7 +184,7 @@ Handled ParseOwnOption(std::wstring_view arg, Arguments& args,
 std::string UsageText() {
   std::string usage =
       "Usage: ntfsdir [options] \"target\"\n"
-      "Lists the files of a folder, or of a whole volume, with Search::Scan.\n"
+      "Lists the files of a folder, or of a whole volume, with Scan.\n"
       "\n"
       "Options:\n"
       "  --recursive, -r  also list every folder below the target folder\n"
@@ -194,7 +198,7 @@ std::string UsageText() {
       "  --name=PATTERN   only the names that match. The whole name must\n"
       "                   match. * stands for any run of characters and ?\n"
       "                   for one character. Case is ignored.\n";
-  usage += Search::RegexAvailable()
+  usage += NTFS_BROWSER_NAMESPACE::RegexAvailable()
                ? "  --regex=PATTERN  only the names in which a regular "
                  "expression (PCRE2)\n"
                  "                   matches. ^ and $ hold it to the start "

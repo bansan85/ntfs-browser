@@ -1,7 +1,7 @@
 #pragma once
 
-// Search and recovery behind the ntfsundel command. Plain C++ over Search::Scan
-// and Search::Reader, so the unit tests drive it without a process. Builds on
+// Search and recovery behind the ntfsundel command. Plain C++ over Scan
+// and Reader, so the unit tests drive it without a process. Builds on
 // Windows and POSIX.
 
 #include <cstddef>
@@ -15,8 +15,8 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/reader.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/reader.h>
+#include <ntfs-browser/types.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Example::NtfsUndel {
 
@@ -31,7 +31,7 @@ inline constexpr std::uint64_t kConfirmFileSize = 100 * 1024 * 1024;
 // One deleted file that a scan listed.
 struct DeletedFile {
   // The stable name of the file: a Reader reads the file from it.
-  NTFS_BROWSER_NAMESPACE::Search::Handle handle;
+  NTFS_BROWSER_NAMESPACE::Handle handle;
   // MFT record number of the freed record.
   std::uint64_t reference = 0;
   // Name the record carries.
@@ -59,7 +59,7 @@ struct SearchResult {
   bool truncated = false;
 };
 
-// Lists the deleted files of target with a Search::Scan: the MftList engine,
+// Lists the deleted files of target with a Scan: the MftList engine,
 // with the path of each file. target is a drive, an image file or a device, and
 // an optional folder inside the volume, which restricts the list to the files
 // below it. recover_errors is the tolerance of the volume. pattern, when set,
@@ -67,7 +67,7 @@ struct SearchResult {
 // scan could not run: the target does not open, or is no NTFS volume.
 std::optional<SearchResult> ListDeletedFiles(
     std::wstring_view target, bool recover_errors, const SearchControl& control,
-    const std::optional<NTFS_BROWSER_NAMESPACE::Search::Pattern>& pattern = {});
+    const std::optional<NTFS_BROWSER_NAMESPACE::Pattern>& pattern = {});
 
 // The record numbers of the deleted files whose name matches wildcard, as the
 // --name option reads it: '*' and '?', without regard to case, letters of any
@@ -79,11 +79,11 @@ std::optional<std::set<std::uint64_t>>
     FindNamedFiles(std::wstring_view target, bool recover_errors,
                    std::wstring_view wildcard);
 
-// The Search::Pattern that FindNamedFiles() uses for wildcard.
-[[nodiscard]] NTFS_BROWSER_NAMESPACE::Search::Pattern
+// The Pattern that FindNamedFiles() uses for wildcard.
+[[nodiscard]] NTFS_BROWSER_NAMESPACE::Pattern
     MakeNamePattern(std::wstring_view wildcard);
 
-// The text as UTF-16 units, the way a Search::Options target takes it.
+// The text as UTF-16 units, the way a Options target takes it.
 [[nodiscard]] std::u16string ToUtf16(std::wstring_view text);
 
 // Warning to show when a search stops at kMaxListedFiles. Built from
@@ -119,8 +119,8 @@ struct CopyResult {
 // by chunk, in order. confirm_large is asked once before a file over
 // kConfirmFileSize; false declines. write returns false to abort the copy.
 CopyResult CopyUnnamedData(
-    NTFS_BROWSER_NAMESPACE::Search::Reader& reader,
-    const NTFS_BROWSER_NAMESPACE::Search::Handle& handle,
+    NTFS_BROWSER_NAMESPACE::Reader& reader,
+    const NTFS_BROWSER_NAMESPACE::Handle& handle,
     const std::function<bool(std::uint64_t size)>& confirm_large,
     const std::function<bool(std::span<const std::uint8_t> chunk)>& write);
 
@@ -154,13 +154,12 @@ struct RecoveryCheck {
 // Turns the data state of the unnamed $DATA stream into advice: intact goes
 // ahead, reallocated or bad asks first, and an unknown state warns. NotChecked
 // goes ahead: the copy reports a missing stream itself.
-RecoveryCheck AssessRecovery(NTFS_BROWSER_NAMESPACE::Search::DataState state);
+RecoveryCheck AssessRecovery(NTFS_BROWSER_NAMESPACE::DataState state);
 
 // The data state of the unnamed stream of handle, as advice. A file with no
 // unnamed stream goes ahead.
-RecoveryCheck
-    AssessRecovery(NTFS_BROWSER_NAMESPACE::Search::Reader& reader,
-                   const NTFS_BROWSER_NAMESPACE::Search::Handle& handle);
+RecoveryCheck AssessRecovery(NTFS_BROWSER_NAMESPACE::Reader& reader,
+                             const NTFS_BROWSER_NAMESPACE::Handle& handle);
 
 // The text that names check.cause, a statement with no question in it. Empty
 // for None.

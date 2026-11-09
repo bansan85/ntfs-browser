@@ -5,13 +5,13 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/scan.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/scan.h>
+#include <ntfs-browser/types.h>
 
 #include "scan-support.h"
 
 namespace TestSearch = NTFS_BROWSER_NAMESPACE::Test::Search;
-namespace Lib = NTFS_BROWSER_NAMESPACE::Search;
+namespace Lib = NTFS_BROWSER_NAMESPACE;
 
 namespace {
 

@@ -28,7 +28,7 @@
   #include "io/posix-disk-reader.h"
 #endif
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace {
 
@@ -209,4 +209,4 @@ template OpenedVolume<Cache::Strategy::NoCache>
     OpenVolume<Cache::Strategy::NoCache>(const TargetParts&,
                                          const VolumeOptions&);
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

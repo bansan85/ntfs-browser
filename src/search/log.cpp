@@ -4,12 +4,12 @@
 #include <string_view>
 #include <utility>
 
+#include <ntfs-browser/log.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/log.h>
 
 #include "log/sink.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 namespace {
 
@@ -48,4 +48,4 @@ void SetLogSink(LogSink sink, LogLevel threshold) {
       {std::make_shared<FunctionSink>(std::move(sink), threshold)});
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

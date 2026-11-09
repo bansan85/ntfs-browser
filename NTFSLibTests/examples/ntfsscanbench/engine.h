@@ -6,9 +6,9 @@
 
 #include <ntfs-browser/example/ntfsscanbench/via-scan.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
 #include <ntfs-browser/tool/device-access/bench-options.h>
 #include <ntfs-browser/tool/device-access/json.h>
+#include <ntfs-browser/types.h>
 
 #include "arguments.h"
 #include "bench/bench.h"
@@ -34,12 +34,12 @@ struct RunPlan {
   // process leaves it to the system, which is faster; a run that others
   // follow gives the memory back.
   bool release = false;
-  // Runs the engine through Search::Scan under the worker probe, and measures
+  // Runs the engine through Scan under the worker probe, and measures
   // what the benchmark of the direct path does not: the worker thread.
   bool via_scan = false;
 };
 
-// What a run through Search::Scan measured, with its verdicts.
+// What a run through Scan measured, with its verdicts.
 struct ScanResult {
   ScanMeasure measure;
   ScanFigures figures;
@@ -65,16 +65,16 @@ struct Outcome {
 // as the exit code.
 Outcome RunEngine(const Arguments& args, const RunPlan& plan);
 
-// Runs plan.engine through Search::Scan with the options of args, in the
+// Runs plan.engine through Scan with the options of args, in the
 // session that the caller holds. Fills outcome.entries and outcome.scan (with
 // the figures of the worker only: the caller completes them from the report
 // once the session has ended). Returns the exit code.
 int RunViaScan(const Arguments& args, const RunPlan& plan, Outcome& outcome);
 
-// The options of the Search::Scan that RunViaScan() runs: the target, the
+// The options of the Scan that RunViaScan() runs: the target, the
 // engine, the pattern and the filters of args, and plan.recursive.
-NTFS_BROWSER_NAMESPACE::Search::Options ScanOptionsOf(const Arguments& args,
-                                                      const RunPlan& plan);
+NTFS_BROWSER_NAMESPACE::Options ScanOptionsOf(const Arguments& args,
+                                              const RunPlan& plan);
 
 // Writes scan as one JSON object: the worker, the figures and the verdicts.
 void WriteScanJson(NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess::JsonWriter& json,

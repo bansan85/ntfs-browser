@@ -5,7 +5,7 @@
 #include <utility>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/types.h>
 
 #include "search/engine.h"
 #include "search/field-filter.h"
@@ -13,7 +13,7 @@
 #include "search/scan-probe.h"
 #include "upcase/upcase.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 std::unique_ptr<MatchingSink> MatchingSink::Make(EntrySink& inner,
                                                  const Options& options,
@@ -61,4 +61,4 @@ bool MatchingSink::Accepts(const Entry& entry) const {
   return matcher_ == nullptr || matcher_->Matches(entry.name, entry.path);
 }
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

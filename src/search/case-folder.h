@@ -7,7 +7,7 @@
 
 #include "upcase/upcase.h"
 
-namespace NTFS_BROWSER_NAMESPACE::Search {
+namespace NTFS_BROWSER_NAMESPACE {
 
 // Maps the units of a name to the unit that compares equal to them. With a
 // $UpCase table it folds case as NTFS does. Without one it leaves every unit as
@@ -37,4 +37,4 @@ class CaseFolder final {
   const UpCase::Table* table_;
 };
 
-}  // namespace NTFS_BROWSER_NAMESPACE::Search
+}  // namespace NTFS_BROWSER_NAMESPACE

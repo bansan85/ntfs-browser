@@ -7,11 +7,11 @@
 #include <string_view>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/scan.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/scan.h>
 #include <ntfs-browser/tool/device-access/bench-options.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
 #include <ntfs-browser/tool/device-access/tool-support.h>
+#include <ntfs-browser/types.h>
 
 #include "alloc/cluster-account.h"
 #include "log/log.h"
@@ -46,7 +46,7 @@ constexpr std::wstring_view verify_option = L"--verify-data";
 constexpr std::wstring_view verify_sample_option = L"--verify-data=sample";
 constexpr std::wstring_view verify_full_option = L"--verify-data=full";
 
-// Command-line switch that runs the engine through Search::Scan, and the
+// Command-line switch that runs the engine through Scan, and the
 // options that only a scan takes: a pattern on the name and bounds on the size.
 constexpr std::wstring_view via_scan_option = L"--via-scan";
 constexpr std::wstring_view name_option = L"--name=";
@@ -176,15 +176,17 @@ bool ParseBytes(std::wstring_view text, std::uint64_t& bytes) {
 
 // Sets the pattern of --name or --regex. Rejects an empty text and both
 // options together.
-OptionStatus SetPattern(Search::PatternKind kind, std::wstring_view text,
-                        Arguments& args) {
-  if (text.empty() || (args.pattern.kind != Search::PatternKind::None &&
-                       args.pattern.kind != kind)) {
+OptionStatus SetPattern(NTFS_BROWSER_NAMESPACE::PatternKind kind,
+                        std::wstring_view text, Arguments& args) {
+  if (text.empty() ||
+      (args.pattern.kind != NTFS_BROWSER_NAMESPACE::PatternKind::None &&
+       args.pattern.kind != kind)) {
     fprintf(stderr,
             "--name and --regex need a pattern, and exclude each other\n");
     return OptionStatus::Rejected;
   }
-  if (kind == Search::PatternKind::Regex && !Search::RegexAvailable()) {
+  if (kind == NTFS_BROWSER_NAMESPACE::PatternKind::Regex &&
+      !NTFS_BROWSER_NAMESPACE::RegexAvailable()) {
     fprintf(stderr,
             "--regex is not available: this build has no regex support\n");
     return OptionStatus::Rejected;
@@ -202,15 +204,15 @@ OptionStatus ParseScanOption(std::wstring_view arg, Arguments& args) {
     return OptionStatus::Accepted;
   }
   if (arg == match_path_option) {
-    args.pattern.target = Search::MatchTarget::FullPath;
+    args.pattern.target = NTFS_BROWSER_NAMESPACE::MatchTarget::FullPath;
     return OptionStatus::Accepted;
   }
   if (arg.starts_with(name_option)) {
-    return SetPattern(Search::PatternKind::Wildcard,
+    return SetPattern(NTFS_BROWSER_NAMESPACE::PatternKind::Wildcard,
                       arg.substr(name_option.size()), args);
   }
   if (arg.starts_with(regex_option)) {
-    return SetPattern(Search::PatternKind::Regex,
+    return SetPattern(NTFS_BROWSER_NAMESPACE::PatternKind::Regex,
                       arg.substr(regex_option.size()), args);
   }
   for (const std::wstring_view option : {min_size_option, max_size_option}) {
@@ -317,9 +319,10 @@ bool ParseArguments(int argc, wchar_t* argv[], Arguments& args) {
   if (args.target == nullptr) {
     return false;
   }
-  const bool scan_only = args.engine == Engine::Auto ||
-                         args.pattern.kind != Search::PatternKind::None ||
-                         args.filter.size.min || args.filter.size.max;
+  const bool scan_only =
+      args.engine == Engine::Auto ||
+      args.pattern.kind != NTFS_BROWSER_NAMESPACE::PatternKind::None ||
+      args.filter.size.min || args.filter.size.max;
   if (scan_only && !args.via_scan) {
     fprintf(stderr,
             "--engine=auto, --name, --regex, --min-size and --max-size need "
@@ -363,7 +366,7 @@ void Usage() {
   printf("                fullcache only, mftlist always lists them all\n");
   printf("  --quiet       write no listing, only the messages and the table\n");
   printf(
-      "  --via-scan    run the engine through Search::Scan, as the library "
+      "  --via-scan    run the engine through Scan, as the library "
       "runs a\n");
   printf(
       "                search, and measure its worker thread. Lists nothing; "

@@ -1,6 +1,6 @@
 #pragma once
 
-// The measure of a Search::Scan, run as the library runs it: one worker thread
+// The measure of a Scan, run as the library runs it: one worker thread
 // that fills the exchange, and a caller that polls. It answers two questions:
 // whether the disk or the CPU bounds the run, and whether the CPU work runs in
 // parallel. The scan runs under the test seams of src/search/scan-probe.h, so
@@ -12,7 +12,7 @@
 #include <string_view>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
+#include <ntfs-browser/types.h>
 
 #include "bench/bench.h"
 #include "bench/read-log.h"
@@ -21,7 +21,7 @@
 namespace NTFS_BROWSER_NAMESPACE::Example::NtfsScanBench {
 
 // What the worker thread of a scan spent its time on, in nanoseconds. The
-// fields are those of the internal Search::ScanTimings.
+// fields are those of the internal ScanTimings.
 struct WorkerFigures {
   std::uint64_t wall_ns{0};
   std::uint64_t cpu_ns{0};
@@ -38,8 +38,8 @@ struct WorkerFigures {
 
 // One scan, run to its end.
 struct ScanMeasure {
-  NTFS_BROWSER_NAMESPACE::Search::State state{
-      NTFS_BROWSER_NAMESPACE::Search::State::NotStarted};
+  NTFS_BROWSER_NAMESPACE::State state{
+      NTFS_BROWSER_NAMESPACE::State::NotStarted};
   // Entries the callback received.
   std::uint64_t entries{0};
   // From the start of the scan to the end of Run(), on the steady clock.
@@ -47,12 +47,12 @@ struct ScanMeasure {
   WorkerFigures worker;
 };
 
-// Runs a Search::Scan with options to its end on the calling thread, polling
+// Runs a Scan with options to its end on the calling thread, polling
 // every 100 ms, with the worker timed. The scan reads through whatever reader
 // the tests set with SetReaderFactoryForTests(), else through the file or
 // device of options.target. The probe is removed when the call returns.
 [[nodiscard]] ScanMeasure
-    MeasureScan(const NTFS_BROWSER_NAMESPACE::Search::Options& options);
+    MeasureScan(const NTFS_BROWSER_NAMESPACE::Options& options);
 
 // Everything that the verdicts of a run are made of, in nanoseconds.
 struct ScanFigures {

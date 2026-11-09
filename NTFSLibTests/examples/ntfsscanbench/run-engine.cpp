@@ -4,11 +4,11 @@
 
 #include <ntfs-browser/example/ntfsscanbench/via-scan.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/search/types.h>
 #include <ntfs-browser/tool/device-access/bench-options.h>
 #include <ntfs-browser/tool/device-access/bench-session.h>
 #include <ntfs-browser/tool/device-access/json.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
+#include <ntfs-browser/types.h>
 
 #include "arguments.h"
 #include "engine.h"
@@ -32,7 +32,7 @@ void CompleteScanResult(const Arguments& args, const RunPlan& plan,
   }
   ScanResult& scan = *outcome.scan;
   scan.figures = FiguresOf(*session.Report(), scan.measure);
-  if (scan.measure.state == Search::State::Finished) {
+  if (scan.measure.state == NTFS_BROWSER_NAMESPACE::State::Finished) {
     if (const auto& log = session.KeptReadLog()) {
       scan.figures.io_ns =
           ReplayNs(args.target, *log, volume_options.tuning.reader).value_or(0);
