@@ -232,16 +232,11 @@ OptionStatus ParseScanOption(std::wstring_view arg, Arguments& args) {
   return OptionStatus::NotMine;
 }
 
-// Applies arg when it is an option of the listing itself.
-OptionStatus ParseListingOption(std::wstring_view arg, Arguments& args) {
+// Applies arg when it is a switch of the listing: an option with no value.
+OptionStatus ParseListingSwitch(std::wstring_view arg, Arguments& args) {
   if (arg == deleted_option) {
     args.volume_options.include_deleted = true;
     return OptionStatus::Accepted;
-  }
-  if (arg.starts_with(engine_option)) {
-    return ParseEngine(arg.substr(engine_option.size()), args.engine)
-               ? OptionStatus::Accepted
-               : OptionStatus::Rejected;
   }
   if (arg == recursive_option || arg == recursive_short_option) {
     args.recursive = true;
@@ -254,6 +249,20 @@ OptionStatus ParseListingOption(std::wstring_view arg, Arguments& args) {
   if (arg == recover_option) {
     args.volume_options.recover_errors = true;
     return OptionStatus::Accepted;
+  }
+  return OptionStatus::NotMine;
+}
+
+// Applies arg when it is an option of the listing itself.
+OptionStatus ParseListingOption(std::wstring_view arg, Arguments& args) {
+  const OptionStatus status = ParseListingSwitch(arg, args);
+  if (status != OptionStatus::NotMine) {
+    return status;
+  }
+  if (arg.starts_with(engine_option)) {
+    return ParseEngine(arg.substr(engine_option.size()), args.engine)
+               ? OptionStatus::Accepted
+               : OptionStatus::Rejected;
   }
   if (arg == clusters_option || arg == clusters_map_option) {
     args.clusters = arg == clusters_map_option

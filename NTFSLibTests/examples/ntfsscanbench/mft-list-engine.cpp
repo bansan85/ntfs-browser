@@ -290,6 +290,14 @@ std::string TallyText(const Alloc::ClusterTally& tally) {
   return text.empty() ? "-" : text;
 }
 
+// What the scan counted of the clusters of one entry. account is null when the
+// scan did not count clusters. cluster_size turns the cluster ranges of the map
+// into byte ranges.
+struct ClusterColumns {
+  const Alloc::ClusterAccount* account = nullptr;
+  ULONGLONG cluster_size = 0;
+};
+
 // Prints what the scan counted of an entry's clusters, and with the map, the
 // byte ranges of each stream in file order.
 void PrintClusterLines(ToolDeviceAccess::LineBuffer& out,
@@ -314,7 +322,7 @@ void PrintClusterLines(ToolDeviceAccess::LineBuffer& out,
 // reused from one entry to the next.
 void PrintEntry(ToolDeviceAccess::LineBuffer& out, const DisplayPaths& paths,
                 const NTFS_BROWSER_NAMESPACE::Mft::MftTree::Entry& entry,
-                const Alloc::ClusterAccount* account, ULONGLONG cluster_size,
+                const ClusterColumns& clusters,
                 DisplayPaths::Scratch& scratch) {
   paths.Display(entry, std::nullopt, scratch.path, scratch);
   PrintMainLine(out, entry, scratch.path);
@@ -325,8 +333,8 @@ void PrintEntry(ToolDeviceAccess::LineBuffer& out, const DisplayPaths& paths,
   if (entry.usn) {
     PrintJournalLine(out, *entry.usn);
   }
-  if (account != nullptr) {
-    PrintClusterLines(out, *account, cluster_size);
+  if (clusters.account != nullptr) {
+    PrintClusterLines(out, *clusters.account, clusters.cluster_size);
   }
 }
 
@@ -406,9 +414,11 @@ void PrintEntries(Output& out, const NTFS_BROWSER_NAMESPACE::Mft::MftTree& tree,
       // i < entries.size() by first_of().
       // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
       const auto& entry = entries[i];
-      PrintEntry(text, paths, entry,
-                 counted ? tree.ClusterAccountOf(entry.record) : nullptr,
-                 cluster_size, scratch);
+      PrintEntry(
+          text, paths, entry,
+          {.account = counted ? tree.ClusterAccountOf(entry.record) : nullptr,
+           .cluster_size = cluster_size},
+          scratch);
     }
   };
   steps.consume = [&](size_t chunk) {
