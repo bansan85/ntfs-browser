@@ -335,6 +335,25 @@ ReadResult<T> Guarded(Call&& call) noexcept {
   return Failure<T>(ReadError::Unreadable);
 }
 
+// Opens the record of handle with the attributes of mask, then gives the result
+// of body. Fails with NotOpen when the volume did not open, before any read,
+// and with the error of the open when the record is not the file of the handle.
+// body reads the parsed record through impl. ImplType is Reader::Impl, which a
+// free function cannot name.
+template <typename T, typename ImplType, typename Body>
+ReadResult<T> WithRecord(ImplType* impl, const Handle& handle, Attr::Mask mask,
+                         Body&& body) noexcept {
+  return Guarded<T>([&]() -> ReadResult<T> {
+    if (impl == nullptr || !impl->IsOpen()) {
+      return Failure<T>(ReadError::NotOpen);
+    }
+    if (const auto opened = impl->Open(handle, mask); !opened) {
+      return Failure<T>(opened.error);
+    }
+    return body();
+  });
+}
+
 }  // namespace
 
 Reader::Reader(ReaderOptions options) : impl_(nullptr) {
@@ -366,44 +385,32 @@ ReadResult<Standing> Reader::Check(const Handle& handle) {
 
 ReadResult<StandardInformation>
     Reader::GetStandardInformation(const Handle& handle) {
-  return Guarded<StandardInformation>([&]() -> ReadResult<StandardInformation> {
-    if (!IsOpen()) {
-      return Failure<StandardInformation>(ReadError::NotOpen);
-    }
-    if (const auto opened =
-            impl_->Open(handle, Attr::Mask::StandardInformation);
-        !opened) {
-      return Failure<StandardInformation>(opened.error);
-    }
-    const auto& attrs =
-        impl_->Record().GetAttr(Attr::Type::StandardInformation);
-    if (attrs.empty()) {
-      return Failure<StandardInformation>(ReadError::NoSuchAttribute);
-    }
-    const std::optional<std::vector<std::uint8_t>> content =
-        ReadSmall(*attrs.front());
-    if (!content) {
-      return Failure<StandardInformation>(ReadError::RecordDamaged);
-    }
-    std::optional<StandardInformation> info =
-        ParseStandardInformation(*content);
-    if (!info) {
-      return Failure<StandardInformation>(ReadError::RecordDamaged);
-    }
-    return {.error = ReadError::None, .value = *std::move(info)};
-  });
+  return WithRecord<StandardInformation>(
+      impl_.get(), handle, Attr::Mask::StandardInformation,
+      [&]() -> ReadResult<StandardInformation> {
+        const auto& attrs =
+            impl_->Record().GetAttr(Attr::Type::StandardInformation);
+        if (attrs.empty()) {
+          return Failure<StandardInformation>(ReadError::NoSuchAttribute);
+        }
+        const std::optional<std::vector<std::uint8_t>> content =
+            ReadSmall(*attrs.front());
+        if (!content) {
+          return Failure<StandardInformation>(ReadError::RecordDamaged);
+        }
+        std::optional<StandardInformation> info =
+            ParseStandardInformation(*content);
+        if (!info) {
+          return Failure<StandardInformation>(ReadError::RecordDamaged);
+        }
+        return {.error = ReadError::None, .value = *std::move(info)};
+      });
 }
 
 ReadResult<std::vector<FileName>> Reader::GetFileNames(const Handle& handle) {
-  return Guarded<std::vector<FileName>>(
+  return WithRecord<std::vector<FileName>>(
+      impl_.get(), handle, Attr::Mask::FileName,
       [&]() -> ReadResult<std::vector<FileName>> {
-        if (!IsOpen()) {
-          return Failure<std::vector<FileName>>(ReadError::NotOpen);
-        }
-        if (const auto opened = impl_->Open(handle, Attr::Mask::FileName);
-            !opened) {
-          return Failure<std::vector<FileName>>(opened.error);
-        }
         return {.error = ReadError::None, .value = impl_->Names()};
       });
 }
@@ -429,15 +436,9 @@ ReadResult<FileName> Reader::GetFileName(const Handle& handle) {
 }
 
 ReadResult<std::vector<StreamInfo>> Reader::GetStreams(const Handle& handle) {
-  return Guarded<std::vector<StreamInfo>>(
+  return WithRecord<std::vector<StreamInfo>>(
+      impl_.get(), handle, Attr::Mask::Data,
       [&]() -> ReadResult<std::vector<StreamInfo>> {
-        if (!IsOpen()) {
-          return Failure<std::vector<StreamInfo>>(ReadError::NotOpen);
-        }
-        if (const auto opened = impl_->Open(handle, Attr::Mask::Data);
-            !opened) {
-          return Failure<std::vector<StreamInfo>>(opened.error);
-        }
         std::vector<StreamInfo> streams;
         for (const std::unique_ptr<NoCacheAttr>& listed :
              impl_->Record().GetAttr(Attr::Type::Data)) {
@@ -470,19 +471,15 @@ ReadResult<std::uint64_t> Reader::Read(const Handle& handle,
                                        std::u16string_view stream,
                                        std::uint64_t offset,
                                        std::span<std::uint8_t> buffer) {
-  return Guarded<std::uint64_t>([&]() -> ReadResult<std::uint64_t> {
-    if (!IsOpen()) {
-      return Failure<std::uint64_t>(ReadError::NotOpen);
-    }
-    if (const auto opened = impl_->Open(handle, Attr::Mask::Data); !opened) {
-      return Failure<std::uint64_t>(opened.error);
-    }
-    const NoCacheAttr* attr = impl_->Stream(stream);
-    if (attr == nullptr) {
-      return Failure<std::uint64_t>(ReadError::NoSuchStream);
-    }
-    return ReadBytes(*attr, offset, buffer);
-  });
+  return WithRecord<std::uint64_t>(
+      impl_.get(), handle, Attr::Mask::Data,
+      [&]() -> ReadResult<std::uint64_t> {
+        const NoCacheAttr* attr = impl_->Stream(stream);
+        if (attr == nullptr) {
+          return Failure<std::uint64_t>(ReadError::NoSuchStream);
+        }
+        return ReadBytes(*attr, offset, buffer);
+      });
 }
 
 ReadResult<std::uint64_t> Reader::CopyTo(const Handle& handle,
@@ -490,69 +487,55 @@ ReadResult<std::uint64_t> Reader::CopyTo(const Handle& handle,
                                          const ByteSink& sink,
                                          std::uint64_t offset,
                                          std::optional<std::uint64_t> length) {
-  return Guarded<std::uint64_t>([&]() -> ReadResult<std::uint64_t> {
-    if (!IsOpen()) {
-      return Failure<std::uint64_t>(ReadError::NotOpen);
-    }
-    if (const auto opened = impl_->Open(handle, Attr::Mask::Data); !opened) {
-      return Failure<std::uint64_t>(opened.error);
-    }
-    const NoCacheAttr* attr = impl_->Stream(stream);
-    if (attr == nullptr) {
-      return Failure<std::uint64_t>(ReadError::NoSuchStream);
-    }
-    const std::uint64_t size = attr->GetDataSize();
-    const std::uint64_t first = std::min(offset, size);
-    const std::uint64_t last =
-        length ? first + std::min(*length, size - first) : size;
-    std::vector<std::uint8_t> chunk(copy_chunk_bytes);
-    std::uint64_t given = 0;
-    for (std::uint64_t position = first; position < last;) {
-      const auto count = static_cast<std::size_t>(
-          std::min<std::uint64_t>(chunk.size(), last - position));
-      const ReadResult<std::uint64_t> read =
-          ReadBytes(*attr, position, std::span(chunk).first(count));
-      if (!read) {
-        return {.error = read.error, .value = given};
-      }
-      if (!sink(std::span<const std::uint8_t>(chunk).first(count))) {
-        return {.error = ReadError::Aborted, .value = given};
-      }
-      given += count;
-      position += count;
-    }
-    return {.error = ReadError::None, .value = given};
-  });
+  return WithRecord<std::uint64_t>(
+      impl_.get(), handle, Attr::Mask::Data,
+      [&]() -> ReadResult<std::uint64_t> {
+        const NoCacheAttr* attr = impl_->Stream(stream);
+        if (attr == nullptr) {
+          return Failure<std::uint64_t>(ReadError::NoSuchStream);
+        }
+        const std::uint64_t size = attr->GetDataSize();
+        const std::uint64_t first = std::min(offset, size);
+        const std::uint64_t last =
+            length ? first + std::min(*length, size - first) : size;
+        std::vector<std::uint8_t> chunk(copy_chunk_bytes);
+        std::uint64_t given = 0;
+        for (std::uint64_t position = first; position < last;) {
+          const auto count = static_cast<std::size_t>(
+              std::min<std::uint64_t>(chunk.size(), last - position));
+          const ReadResult<std::uint64_t> read =
+              ReadBytes(*attr, position, std::span(chunk).first(count));
+          if (!read) {
+            return {.error = read.error, .value = given};
+          }
+          if (!sink(std::span<const std::uint8_t>(chunk).first(count))) {
+            return {.error = ReadError::Aborted, .value = given};
+          }
+          given += count;
+          position += count;
+        }
+        return {.error = ReadError::None, .value = given};
+      });
 }
 
 ReadResult<DataState> Reader::GetDataState(const Handle& handle,
                                            std::u16string_view stream) {
-  return Guarded<DataState>([&]() -> ReadResult<DataState> {
-    if (!IsOpen()) {
-      return Failure<DataState>(ReadError::NotOpen);
-    }
-    if (const auto opened = impl_->Open(handle, Attr::Mask::Data); !opened) {
-      return Failure<DataState>(opened.error);
-    }
-    const std::optional<Alloc::DataState> state =
-        impl_->Record().GetDataState(Utf::Utf16ToWide(stream));
-    if (!state) {
-      return Failure<DataState>(ReadError::NoSuchStream);
-    }
-    return {.error = ReadError::None, .value = DataStateOf(*state)};
-  });
+  return WithRecord<DataState>(
+      impl_.get(), handle, Attr::Mask::Data, [&]() -> ReadResult<DataState> {
+        const std::optional<Alloc::DataState> state =
+            impl_->Record().GetDataState(Utf::Utf16ToWide(stream));
+        if (!state) {
+          return Failure<DataState>(ReadError::NoSuchStream);
+        }
+        return {.error = ReadError::None, .value = DataStateOf(*state)};
+      });
 }
 
 ReadResult<std::vector<AttributeInfo>>
     Reader::GetAttributes(const Handle& handle) {
-  return Guarded<std::vector<AttributeInfo>>(
+  return WithRecord<std::vector<AttributeInfo>>(
+      impl_.get(), handle, Attr::Mask::All,
       [&]() -> ReadResult<std::vector<AttributeInfo>> {
-        if (!IsOpen()) {
-          return Failure<std::vector<AttributeInfo>>(ReadError::NotOpen);
-        }
-        if (const auto opened = impl_->Open(handle, Attr::Mask::All); !opened) {
-          return Failure<std::vector<AttributeInfo>>(opened.error);
-        }
         std::vector<AttributeInfo> attributes;
         impl_->Traverse([&attributes](const NoCacheAttr& attr,
                                       void* /*context*/, bool* /*stop*/) {
@@ -573,17 +556,12 @@ ReadResult<std::uint64_t>
     Reader::ReadAttribute(const Handle& handle, const AttributeKey& key,
                           std::uint64_t offset,
                           std::span<std::uint8_t> buffer) {
-  return Guarded<std::uint64_t>([&]() -> ReadResult<std::uint64_t> {
-    if (!IsOpen()) {
-      return Failure<std::uint64_t>(ReadError::NotOpen);
-    }
-    if (const auto opened = impl_->Open(handle, Attr::Mask::All); !opened) {
-      return Failure<std::uint64_t>(opened.error);
-    }
-    const NoCacheAttr* found = nullptr;
-    const std::wstring name = Utf::Utf16ToWide(key.name);
-    impl_->Traverse(
-        [&](const NoCacheAttr& attr, void* /*context*/, bool* stop) {
+  return WithRecord<std::uint64_t>(
+      impl_.get(), handle, Attr::Mask::All, [&]() -> ReadResult<std::uint64_t> {
+        const NoCacheAttr* found = nullptr;
+        const std::wstring name = Utf::Utf16ToWide(key.name);
+        impl_->Traverse([&](const NoCacheAttr& attr, void* /*context*/,
+                            bool* stop) {
           const bool same_instance = key.instance == any_instance ||
                                      attr.GetAttrHeader().id == key.instance;
           if (static_cast<AttributeType>(attr.GetAttrType()) == key.type &&
@@ -592,11 +570,11 @@ ReadResult<std::uint64_t>
             *stop = true;
           }
         });
-    if (found == nullptr) {
-      return Failure<std::uint64_t>(ReadError::NoSuchAttribute);
-    }
-    return ReadBytes(*found, offset, buffer);
-  });
+        if (found == nullptr) {
+          return Failure<std::uint64_t>(ReadError::NoSuchAttribute);
+        }
+        return ReadBytes(*found, offset, buffer);
+      });
 }
 
 }  // namespace NTFS_BROWSER_NAMESPACE
