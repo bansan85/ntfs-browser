@@ -16,9 +16,10 @@
   ],
   "features": {
     "tests": {
-      "description": "Pull in Catch2 for NtfsBrowserTests (NTFS_BROWSER_USE_INSTALLED_CATCH2)",
+      "description": "Pull in Catch2 and nlohmann/json for NtfsBrowserTests and the tools (NTFS_BROWSER_USE_INSTALLED_CATCH2, NTFS_BROWSER_USE_INSTALLED_NLOHMANN_JSON)",
       "dependencies": [
-        "catch2"
+        "catch2",
+        "nlohmann-json"
       ]
     },
     "regex": {

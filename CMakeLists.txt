@@ -49,6 +49,23 @@ else()
   add_subdirectory("3rdparty/Catch2")
 endif()
 
+# nlohmann/json reads and writes the JSON of the benchmark tools and of the
+# tuning profile. The tool targets link it and the library never does.
+option(
+  NTFS_BROWSER_USE_INSTALLED_NLOHMANN_JSON
+  "Link an installed nlohmann/json instead of the 3rdparty submodule"
+  ${NTFS_BROWSER_USE_INSTALLED_DEFAULT}
+)
+if(NTFS_BROWSER_USE_INSTALLED_NLOHMANN_JSON)
+  find_package(nlohmann_json 3 CONFIG REQUIRED)
+else()
+  set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
+  set(JSON_Install OFF CACHE BOOL "" FORCE)
+  # Vendored headers are not this project's code to lint.
+  set(JSON_SystemInclude ON CACHE BOOL "" FORCE)
+  add_subdirectory("3rdparty/nlohmann_json")
+endif()
+
 option(
   NTFS_BROWSER_USE_INSTALLED_SPDLOG
   "Link an installed spdlog instead of the 3rdparty submodule"
