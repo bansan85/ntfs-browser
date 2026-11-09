@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdio>
 #include <filesystem>
 #include <optional>
@@ -53,24 +54,30 @@ struct TempImage final {
   TempImage& operator=(TempImage&&) = delete;
 };
 
+// Characters of the time column of a listing: "YYYY-MM-DD  HH:MM". NtfsDir
+// writes that many spaces for a time the host cannot show.
+constexpr std::size_t listing_time_width = 17;
+
 // The listing line of an entry of size zero and write time ticks (UTC), as
 // NtfsDir prints it in the host's time zone. The time is blank where the
-// platform cannot show it. marker is the --deleted column before the name, or
-// empty when the listing has none.
+// platform cannot show it (a 32-bit time_t host, for a date after 2038).
+// marker is the --deleted column before the name, or empty when the listing
+// has none.
 inline std::string ListingLine(std::string_view name, bool directory,
                                ULONGLONG ticks, std::string_view marker = {}) {
   const auto local = Tool::DeviceAccess::UtcTicksToLocalTime(ticks);
-  if (!local) {
-    return {};
+  std::string time(listing_time_width, ' ');
+  if (local) {
+    char text[32]{};
+    snprintf(text, sizeof(text), "%u-%02u-%02u  %02u:%02u", local->year,
+             local->month, local->day, local->hour, local->minute);
+    time = text;
   }
 
-  char text[160]{};
-  snprintf(text, sizeof(text), "%u-%02u-%02u  %02u:%02u\t%s    %s<   >\t",
-           local->year, local->month, local->day, local->hour, local->minute,
-           directory ? "<DIR>" : "     ", directory ? "\t" : "0\t");
   const std::string marker_column =
       marker.empty() ? std::string() : std::string(marker) + " ";
-  return std::string(text) + marker_column + std::string(name) + "\n";
+  return time + "\t" + (directory ? "<DIR>    \t" : "         0\t") +
+         "<   >\t" + marker_column + std::string(name) + "\n";
 }
 
 // The listing of the root of a TempImage: only "Docs", whose index entry has

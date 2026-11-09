@@ -37,14 +37,16 @@ namespace {
 constexpr ULONGLONG image_write_time = 0x1112131415161718ULL;
 
 // The listings' "{write}" as NtfsScanBench prints it. The sample converts
-// the time to the machine's local zone, so the text depends on the host.
+// the time to the machine's local zone, so the text depends on the host. A host
+// with a 32-bit time_t cannot show the year of image_write_time: the sample
+// then prints a zero date.
 std::string LocalWriteTime() {
-  const auto local = ToolDeviceAccess::UtcTicksToLocalTime(image_write_time);
-  REQUIRE(local.has_value());
+  const auto local = ToolDeviceAccess::UtcTicksToLocalTime(image_write_time)
+                         .value_or(ToolDeviceAccess::LocalTime{});
 
   char text[32]{};
-  snprintf(text, sizeof(text), "%04u-%02u-%02u %02u:%02u", local->year,
-           local->month, local->day, local->hour, local->minute);
+  snprintf(text, sizeof(text), "%04u-%02u-%02u %02u:%02u", local.year,
+           local.month, local.day, local.hour, local.minute);
   return text;
 }
 
