@@ -115,6 +115,21 @@ bool ParseShortDecimal(const char* first, const char* last, double& out) {
   return true;
 }
 
+// Reads the whole text as a double with from_chars. ok tells whether it was a
+// finite number. NumericalStabilitySanitizer cannot follow from_chars into a
+// double: the library writes the bytes without their shadow. The value is
+// returned, not stored through a reference, so that the caller takes the
+// result of an uninstrumented call and builds the shadow from the value.
+#if defined(__clang__)
+__attribute__((noinline, no_sanitize("numerical")))
+#endif
+double ParseDoubleWithFromChars(const char* first, const char* last, bool& ok) {
+  double parsed = 0;
+  const auto [end, error] = std::from_chars(first, last, parsed);
+  ok = error == std::errc{} && end == last && std::isfinite(parsed);
+  return parsed;
+}
+
 // Tells whether c can be part of a number.
 bool IsNumberChar(char c) {
   return (c >= '0' && c <= '9') ||
@@ -217,11 +232,6 @@ class Parser {
     return false;
   }
 
-  // nsan cannot follow from_chars into a double: a value past int64 has no
-  // shadow, so its store is reported. Only this parse is exempt from the check.
-#if defined(__clang__)
-  __attribute__((no_sanitize("numerical")))
-#endif
   bool ParseNumber(JsonValue& value) {
     const std::size_t start = position_;
     while (position_ < text_.size() && IsNumberChar(text_[position_])) {
@@ -232,9 +242,8 @@ class Parser {
     }
     const char* const first = text_.data() + start;
     const char* const last = text_.data() + position_;
-    // A whole number is read as an integer and converted: from_chars writes a
-    // double without the shadow nsan keeps for it, so the conversion is the
-    // store nsan can follow. Profiles hold whole numbers only.
+    // A whole number is read as an integer and converted. Profiles hold whole
+    // numbers only.
     std::int64_t whole = 0;
     const auto [whole_end, whole_error] = std::from_chars(first, last, whole);
     if (whole_error == std::errc{} && whole_end == last) {
@@ -248,8 +257,9 @@ class Parser {
       value.number = parsed;
       return true;
     }
-    const auto [end, error] = std::from_chars(first, last, parsed);
-    if (error != std::errc{} || end != last || !std::isfinite(parsed)) {
+    bool read = false;
+    parsed = ParseDoubleWithFromChars(first, last, read);
+    if (!read) {
       position_ = start;
       return Fail("a number was expected");
     }
