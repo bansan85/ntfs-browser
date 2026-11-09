@@ -1,6 +1,15 @@
 <!--
 Sync Impact Report
-Version change: 1.4.0 -> 1.5.0 (MINOR: materially expanded guidance). Awaiting maintainer approval.
+Version change: 1.5.0 -> 2.0.0 (MAJOR: the public surface shrinks to Search::Scan and Search::Reader).
+Awaiting maintainer approval.
+Modified sections: Technical Constraints (the public headers are `search/scan.h`, `search/types.h`,
+`search/reader.h`, `search/reader-types.h` and `search/log.h` only. Every other header moved to `src/`
+and is reached through a private include root. The spdlog adapter, `win-types.h`, tuning and bench
+are internal. A shared library exports Scan, Reader and the log setter, and the tests-only symbols
+only in a build with tests).
+Reason: a consumer needs to list files, read them and receive the log. Nothing else is a promise.
+A CMake check (`NtfsPublicApiCheck`) builds against the public headers alone.
+Previous: 1.4.0 -> 1.5.0 (MINOR: materially expanded guidance).
 Modified sections: Principle III (fake image path, namespaces of test code). Technical Constraints
 (Search::Scan is the public entry point; the Linux and Windows-only executable lists; no MFC; the
 header layout and namespaces of tests, tools and examples).
@@ -83,15 +92,18 @@ Rationale: a clear scope keeps the parser auditable against the on-disk specific
   build with GCC on Linux. The build has no MFC.
 - Windows-only executables MUST be guarded with `if(WIN32)` in CMake. NtfsFuzzer is the only one.
 - `Search::Scan` (`include/ntfs-browser/search/scan.h`) is the public entry point to list a folder or
-  a volume. NtfsDir is built on it. Its two public headers MUST include only the standard library,
-  `namespace.h` and `export.h`.
+  a volume, and `Search::Reader` (`search/reader.h`) reads the files it found. NtfsDir and NtfsUndel are
+  built on them. Their public headers MUST include only the standard library, `namespace.h`,
+  `export.h` and each other.
 - `include/`, `src/` and `NTFSLibTests/` MUST NOT contain a `friend` declaration. A class MUST get
   what it needs from another class through that class's methods, not through friendship.
   `.github/scripts/check-no-friend.py` enforces it in CI.
-- Public headers in `include/ntfs-browser/` are the only consumer surface. They MUST NOT include
-  spdlog, Crypto++, `<windows.h>`, or any feature macro. Win32 types come from the `win-types.h` shim.
-  One header is the exception for spdlog: `include/ntfs-browser/log/spdlog-adapter.h`. It is opt-in
-  and header-only, the library never includes it, and no other public header MAY include spdlog.
+- The public headers in `include/ntfs-browser/search/` (`scan.h`, `types.h`, `reader.h`,
+  `reader-types.h`, `log.h`) are the only consumer surface. They MUST NOT include spdlog, Crypto++,
+  `<windows.h>`, any internal header or any feature macro. The public date is `Search::Date`. A consumer
+  receives the log through `Search::SetLogSink()`. Every other header lives in `src/`, and the library
+  target keeps `src/` private. Tests, tools and fuzzers get it through the `NtfsBrowserInternals`
+  CMake target. `NtfsPublicApiCheck` builds against the public headers alone.
 - Core classes that depend on cache behaviour MUST be templated on `Cache::Strategy`.
   Callers under `NoCache` MUST NOT assume attribute data outlives the next read.
 - A template whose only parameter is a `Cache::Strategy` MUST NOT define a function in a header
@@ -100,17 +112,17 @@ Rationale: a clear scope keeps the parser auditable against the on-disk specific
   `.github/scripts/check-strategy-templates.py` enforces it in CI.
 - `NtfsVolume`, `FileRecord` and `MftTree` MUST keep every data member and private method behind
   a private `Impl`.
-- A symbol that crosses a shared-library boundary MUST carry `NTFS_BROWSER_EXPORT`.
-  An internal symbol that tests reach MUST carry `NTFS_BROWSER_EXPORT_TESTS_ONLY`.
+- A symbol of a public header MUST carry `NTFS_BROWSER_EXPORT`.
+  An internal symbol that tests, tools or fuzzers reach MUST carry `NTFS_BROWSER_EXPORT_TESTS_ONLY`.
 - Public types and functions MUST live in `NTFS_BROWSER_NAMESPACE`, in a sub-namespace per domain.
   Code MUST NOT spell out the namespace name.
 - A header that another test folder includes MUST live in
   `<module>/include/ntfs-browser/{test,tool,example}/<module>/`, and CMake never installs it.
   Test code lives in `Test::<Module>`, tools in `Tool::<Name>` and examples in `Example::<Name>`.
-- The library and its logging are single-threaded. `Log::Configure()`, `Log::SetSinks()` and every log message
-  MUST run on one thread.
+- The library and its logging are single-threaded. `Search::SetLogSink()`, `Log::Configure()`,
+  `Log::SetSinks()` and every log message MUST run on one thread.
 - Every source file MUST be listed explicitly in its folder's `CMakeLists.txt`. Globbing MUST NOT be used.
-- Every public function in `include/ntfs-browser/` MUST have a purpose comment.
+- Every public function in `include/ntfs-browser/search/` and in `src/` headers MUST have a purpose comment.
   Every constant MUST have a comment that says what it is for and why it has its value.
 
 ## Development Workflow and Quality Gates
@@ -147,4 +159,4 @@ PATCH for wording, typo fixes and clarifications that change no obligation.
 Development Workflow and Quality Gates. A violated MUST MUST be fixed, or justified in the
 pull request description. Complexity beyond what a principle requires MUST be justified in the same way.
 
-**Version**: 1.5.0 | **Ratified**: 2026-10-17 | **Last Amended**: 2026-11-08
+**Version**: 2.0.0 | **Ratified**: 2026-10-17 | **Last Amended**: 2026-11-08

@@ -42,37 +42,42 @@ On Linux, `NtfsDir` and `NtfsScanBench` take a device or an image file. Reading 
 ### As a library (C++)
 
 ```cpp
+#include <cstddef>
 #include <cstdio>
+#include <string_view>
 
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/ntfs-volume.h>
-
-// Called once for each entry of the directory.
-void CountEntry(const NtfsBrowser::IndexEntryView& /*entry*/, void* context) {
-  ++*static_cast<int*>(context);
-}
+#include <ntfs-browser/search/log.h>
+#include <ntfs-browser/search/scan.h>
+#include <ntfs-browser/search/types.h>
 
 int main() {
-  using Strategy = NtfsBrowser::Cache::Strategy;
+  namespace Search = NtfsBrowser::Search;
 
-  NtfsBrowser::NtfsVolume<Strategy::FullCache> volume(L'C');
-  if (!volume.IsVolumeOK()) {
-    return 1;
-  }
+  // The library reports problems as log lines. Print the warnings and errors.
+  Search::SetLogSink(
+      [](Search::LogLevel, std::string_view message) {
+        std::fprintf(stderr, "%.*s
+", static_cast<int>(message.size()),
+                     message.data());
+      },
+      Search::LogLevel::Warn);
 
-  // Record 5 is the root directory.
-  NtfsBrowser::Io::FileRecord<Strategy::FullCache> root(volume);
-  if (!root.ParseFileRecord(5) || !root.ParseAttrs()) {
-    return 1;
-  }
+  Search::Options options;
+  options.target = u"C:\Windows";
+  Search::Scan scan(options);
 
-  int count = 0;
-  root.TraverseSubEntries(CountEntry, &count);
-  std::printf("%d entries in the root directory\n", count);
+  std::size_t count = 0;
+  scan.OnBatch([&count](const Search::Batch& batch) {
+    count += batch.entries.size();
+  });
+  scan.Run();
+  std::printf("%zu entries
+", count);
   return 0;
 }
 ```
+
+`Search::Reader` reads the content of a file that a scan found. `Search::Scan`, `Search::Reader` and `Search::SetLogSink()` are the whole public API. The headers are in `include/ntfs-browser/search/`.
 
 ## Installation
 
@@ -185,7 +190,7 @@ An unknown key, a value out of range or a constant that a pattern does not serve
 
 ## Documentation
 
-Each public class and function is described in the headers under `include/ntfs-browser/`.
+Each public class and function is described in the headers under `include/ntfs-browser/search/`.
 
 ## Contributing
 
@@ -228,3 +233,4 @@ Each public class and function is described in the headers under `include/ntfs-b
 ## Credits and licence
 
 Based on [An NTFS Parser Lib](https://www.codeproject.com/Articles/81456/An-NTFS-Parser-Lib) from CodeProject. The project is licensed under BSD-3c. The original web page is archived in `documentation/old`.
+- 2026-11: Only `Search::Scan`, `Search::Reader` and `Search::SetLogSink()` are public. Every other header moved to `src/`, and the shared library exports no more than these
