@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -12,16 +10,17 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tuning/tuning.h>
+
+#include "tuning/tuning.h"
+#include "win-types.h"
 
 #ifdef _WIN32
   #include <string_view>
 #endif
 
-#include <ntfs-browser/cache/stats.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/cache/view.h>
-
+#include "cache/stats.h"
+#include "cache/strategy.h"
+#include "cache/view.h"
 #include "internal-export.h"
 
 namespace NTFS_BROWSER_NAMESPACE {

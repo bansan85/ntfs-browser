@@ -1,7 +1,5 @@
 #include "attr/list.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
@@ -14,20 +12,21 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/bench/bench.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 
 #include "attr/list-chain.h"
 #include "attr/non-resident.h"
 #include "attr/resident.h"
 #include "attr/slot.h"
+#include "attr/type.h"
+#include "bench/bench.h"
 #include "bench/recorder.h"
+#include "cache/strategy.h"
 #include "data/attribute-list.h"
+#include "io/file-record.h"
 #include "log/ntfs-common.h"
+#include "ntfs-volume.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Attr {
 

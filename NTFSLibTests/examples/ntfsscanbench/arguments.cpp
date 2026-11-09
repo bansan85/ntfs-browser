@@ -6,14 +6,15 @@
 #include <string>
 #include <string_view>
 
-#include <ntfs-browser/alloc/cluster-account.h>
-#include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/search/scan.h>
 #include <ntfs-browser/search/types.h>
 #include <ntfs-browser/tool/device-access/bench-options.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
 #include <ntfs-browser/tool/device-access/tool-support.h>
+
+#include "alloc/cluster-account.h"
+#include "log/log.h"
 
 using namespace NTFS_BROWSER_NAMESPACE;
 

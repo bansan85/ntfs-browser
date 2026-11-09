@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <filesystem>
 #include <string>
 #include <system_error>
@@ -12,6 +10,8 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/support/sample-run.h>
+
+#include "win-types.h"
 
 // What the tests of NtfsScanBench share: how to run it, and the image it lists.
 namespace NTFS_BROWSER_NAMESPACE::Test::Mft {

@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstring>
 #include <span>
 #include <stdexcept>
@@ -13,12 +11,13 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <gsl/narrow>
 
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/file-record-header-edit.h>
 
+#include "cache/strategy.h"
 #include "data/file-record-header.h"
 #include "record/header.h"
+#include "win-types.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 using NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader;

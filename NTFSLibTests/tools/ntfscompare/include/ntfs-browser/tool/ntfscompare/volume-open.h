@@ -6,8 +6,9 @@
 #include <string>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/volume-options.h>
+
+#include "ntfs-volume.h"
+#include "volume-options.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 

@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <span>
 #include <vector>
@@ -7,10 +5,11 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tuning/tuning.h>
 
 #include "io/mft-runs.h"
 #include "io/record-window.h"
+#include "tuning/tuning.h"
+#include "win-types.h"
 
 namespace Io = NTFS_BROWSER_NAMESPACE::Io;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;

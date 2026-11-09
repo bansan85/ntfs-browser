@@ -3,10 +3,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/namespace.h>
 
 #include "alloc/data-state.h"
+#include "alloc/types.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 using Alloc::ClusterState;

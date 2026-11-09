@@ -1,7 +1,5 @@
 #include "mft/slot-scan.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
@@ -16,19 +14,16 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/bench/bench.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/tuning/tuning.h>
 
 #include "alloc/claim-inventory.h"
+#include "alloc/types.h"
+#include "attr/mask.h"
+#include "attr/type.h"
+#include "bench/bench.h"
 #include "bench/recorder.h"
+#include "cache/strategy.h"
+#include "io/file-record.h"
 #include "log/ntfs-common.h"
 #include "mft/data-state-resolver.h"
 #include "mft/held-records.h"
@@ -36,8 +31,12 @@
 #include "mft/slot-parsers.h"
 #include "mft/slot-reader.h"
 #include "mft/tree-testing.h"
+#include "mft/tree.h"
 #include "mft/used-slots.h"
 #include "mft/waiting-reads.h"
+#include "ntfs-volume.h"
+#include "tuning/tuning.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Mft {
 

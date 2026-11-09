@@ -1,7 +1,5 @@
 #include "attribute-list-scan-scenarios.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <string>
 #include <vector>
 
@@ -9,7 +7,9 @@
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/tool/fuzzgen/recorded-stream.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
-#include <ntfs-browser/volume-options.h>
+
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

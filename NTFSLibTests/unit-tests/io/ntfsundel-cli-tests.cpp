@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -29,6 +27,7 @@
 #include <ntfs-browser/tool/device-access/text-convert.h>
 
 #include "sample-dump-support.h"
+#include "win-types.h"
 
 namespace TestIo = NTFS_BROWSER_NAMESPACE::Test::Io;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;

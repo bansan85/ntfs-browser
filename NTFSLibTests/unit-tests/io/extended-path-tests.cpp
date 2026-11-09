@@ -3,8 +3,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
+
+#include "io/extended-path.h"
 
 using NTFS_BROWSER_NAMESPACE::Io::ToExtendedLengthFsPath;
 using NTFS_BROWSER_NAMESPACE::Io::ToExtendedLengthPath;

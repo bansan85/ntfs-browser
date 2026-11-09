@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <filesystem>
 #include <memory>
@@ -11,20 +9,21 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 
-#include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/corpus/corpus-test-support.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
-#include <ntfs-browser/volume-options.h>
 
+#include "alloc/types.h"
+#include "attr/base.h"
+#include "attr/mask.h"
+#include "attr/type.h"
+#include "cache/strategy.h"
+#include "disk-reader.h"
 #include "external-mft-support.h"
+#include "io/file-record.h"
+#include "ntfs-volume.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace {
 

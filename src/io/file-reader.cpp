@@ -1,7 +1,5 @@
 #include "io/file-reader.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -13,19 +11,20 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/cache/stats.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/cache/view.h>
-#include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/io/read-ahead-disk-reader.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tuning/tuning.h>
 
 #include "bench/recorder.h"
 #include "cache/block-cache.h"
+#include "cache/stats.h"
+#include "cache/strategy.h"
 #include "cache/view-key.h"
+#include "cache/view.h"
+#include "disk-reader.h"
 #include "internal-export.h"
+#include "io/read-ahead-disk-reader.h"
 #include "log/ntfs-common.h"
+#include "tuning/tuning.h"
+#include "win-types.h"
 
 #ifdef _WIN32
   #include <string_view>

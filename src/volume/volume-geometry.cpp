@@ -1,7 +1,5 @@
 #include "volume/volume-geometry.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <bit>
 #include <cstddef>
@@ -18,6 +16,7 @@
 #include "data/index-block.h"
 #include "data/ntfs-bpb.h"
 #include "log/ntfs-common.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Volume {
 

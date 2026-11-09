@@ -1,15 +1,14 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <memory>
 #include <span>
 
-#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/namespace.h>
 
+#include "alloc/types.h"
 #include "internal-export.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Alloc {
 

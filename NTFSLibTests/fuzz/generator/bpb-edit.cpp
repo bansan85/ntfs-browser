@@ -1,7 +1,5 @@
 #include "bpb-edit.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <cstring>
 #include <vector>
@@ -10,6 +8,7 @@
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 
 #include "data/ntfs-bpb.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

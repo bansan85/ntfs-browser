@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <string>
 #include <vector>
 
@@ -10,6 +8,7 @@
 #include "scan-support.h"
 #include "search/target.h"
 #include "utf/utf.h"
+#include "win-types.h"
 
 namespace TestSearch = NTFS_BROWSER_NAMESPACE::Test::Search;
 namespace Lib = NTFS_BROWSER_NAMESPACE::Search;

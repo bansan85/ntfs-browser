@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -10,16 +8,17 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/search/reader.h>
 #include <ntfs-browser/search/types.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/support/test-log-sink.h>
 
+#include "efs/efs.h"
 #include "reader-support.h"
 #include "scan-support.h"
 #include "search/reader-probe.h"
+#include "win-types.h"
 
 #if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
     (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT))

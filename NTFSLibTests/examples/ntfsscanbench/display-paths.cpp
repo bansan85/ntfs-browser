@@ -10,10 +10,11 @@
 #include <string>
 #include <utility>
 
-#include <ntfs-browser/mft/idx.h>
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
+
+#include "mft/idx.h"
+#include "mft/tree.h"
 
 using namespace NTFS_BROWSER_NAMESPACE;
 

@@ -1,4 +1,4 @@
-#include <ntfs-browser/win-types.h>
+#include "io/directory-read-ahead.h"
 
 #include <cstddef>
 #include <memory>
@@ -6,20 +6,20 @@
 #include <span>
 #include <utility>
 
-#include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/directory-read-ahead.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/tuning/tuning.h>
 
+#include "attr/base.h"
 #include "attr/index-alloc.h"
+#include "attr/type.h"
+#include "cache/strategy.h"
 #include "io/batch-reader.h"
 #include "io/file-record-index.h"
+#include "io/file-record.h"
 #include "io/probe-lane.h"
 #include "io/read-ahead-held.h"
+#include "ntfs-volume.h"
+#include "tuning/tuning.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
 

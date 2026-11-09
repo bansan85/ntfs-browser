@@ -1,17 +1,16 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 
 #include "mft/entry-table.h"
+#include "mft/tree.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Mft {
 

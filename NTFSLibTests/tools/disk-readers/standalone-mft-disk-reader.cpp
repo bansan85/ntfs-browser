@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <bit>
 #include <climits>
@@ -19,14 +17,15 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/attr/header-common.h>
-#include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/disk-readers/standalone-mft-disk-reader.h>
 
+#include "attr/header-common.h"
+#include "attr/type.h"
 #include "data/file-record-header.h"
 #include "data/header-non-resident.h"
 #include "data/ntfs-bpb.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders {
 

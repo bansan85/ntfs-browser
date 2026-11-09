@@ -4,8 +4,9 @@
 #include <optional>
 #include <utility>
 
-#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/namespace.h>
+
+#include "bench/bench.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 

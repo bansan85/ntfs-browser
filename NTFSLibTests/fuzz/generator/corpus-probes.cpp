@@ -1,7 +1,5 @@
 #include "corpus-probes.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <array>
 #include <initializer_list>
 #include <optional>
@@ -10,14 +8,16 @@
 #include <string_view>
 #include <vector>
 
-#include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/mft/idx.h>
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/volume-options.h>
+
+#include "attr/base.h"
+#include "attr/mask.h"
+#include "cache/strategy.h"
+#include "index-entry.h"
+#include "mft/idx.h"
+#include "mft/tree.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

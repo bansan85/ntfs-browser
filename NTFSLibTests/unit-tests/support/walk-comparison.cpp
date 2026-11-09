@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -7,16 +5,18 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/io/record-standing.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/support/test-log-sink.h>
 #include <ntfs-browser/test/support/walk-comparison.h>
+
+#include "attr/mask.h"
+#include "cache/strategy.h"
+#include "index-entry.h"
+#include "io/file-record.h"
+#include "io/record-standing.h"
+#include "mft/idx.h"
+#include "ntfs-volume.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 

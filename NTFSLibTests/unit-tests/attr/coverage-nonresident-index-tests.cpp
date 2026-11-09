@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstring>
 #include <optional>
 #include <span>
@@ -9,19 +7,20 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/attr/nonresident-index-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-#include <ntfs-browser/volume-options.h>
 
+#include "attr/type.h"
+#include "cache/strategy.h"
 #include "data/header-non-resident.h"
 #include "data/index-block.h"
 #include "data/index-entry-flag.h"
 #include "data/index-entry.h"
 #include "data/index-root.h"
+#include "index-entry.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Io {

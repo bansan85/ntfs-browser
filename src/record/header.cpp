@@ -1,18 +1,17 @@
 #include "record/header.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <cassert>
 #include <cstring>
 #include <span>
 #include <stdexcept>
 
-#include <ntfs-browser/attr/header-common.h>
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 
+#include "attr/header-common.h"
+#include "cache/strategy.h"
 #include "log/ntfs-common.h"
 #include "util/small-pool.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Record {
 

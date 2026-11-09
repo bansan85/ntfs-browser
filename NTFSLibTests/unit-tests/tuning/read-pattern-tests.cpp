@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <memory>
 #include <optional>
@@ -14,24 +12,25 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 
-#include <ntfs-browser/alloc/cluster-account.h>
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/io/read-ahead-disk-reader.h>
-#include <ntfs-browser/mft/idx.h>
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/alloc/alloc-test-support.h>
 #include <ntfs-browser/test/alloc/cluster-account-support.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-#include <ntfs-browser/tuning/tuning.h>
-#include <ntfs-browser/volume-options.h>
 
+#include "alloc/cluster-account.h"
+#include "attr/mask.h"
+#include "cache/strategy.h"
+#include "disk-reader.h"
+#include "io/file-record.h"
+#include "io/read-ahead-disk-reader.h"
 #include "knob-effect-support.h"
+#include "mft/idx.h"
+#include "mft/tree.h"
+#include "ntfs-volume.h"
+#include "tuning/tuning.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 

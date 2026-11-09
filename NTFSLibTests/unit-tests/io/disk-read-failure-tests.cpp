@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstring>
 #include <memory>
 #include <optional>
@@ -15,18 +13,20 @@
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
-#include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/attr/nonresident-index-support.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/support/test-log-sink.h>
+
+#include "attr/base.h"
+#include "attr/type.h"
+#include "cache/strategy.h"
+#include "disk-reader.h"
+#include "io/file-record.h"
+#include "mft/idx.h"
+#include "ntfs-volume.h"
+#include "win-types.h"
 
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

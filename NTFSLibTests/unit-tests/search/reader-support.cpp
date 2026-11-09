@@ -1,7 +1,5 @@
 #include "reader-support.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -13,6 +11,7 @@
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 
 #include "scan-support.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Test::Search {
 

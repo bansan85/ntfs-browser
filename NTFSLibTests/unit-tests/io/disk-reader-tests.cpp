@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -16,6 +14,8 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/sequential-disk-reader.h>
+
+#include "win-types.h"
 
 using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MakeFileStreamProducer;
 using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MakeGeneratorProducer;

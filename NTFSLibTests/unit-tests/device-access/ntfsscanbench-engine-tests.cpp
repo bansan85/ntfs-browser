@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -19,6 +17,8 @@
 #include <ntfs-browser/test/io/ntfsdir-sample-support.h>
 #include <ntfs-browser/test/mft/ntfsscanbench-sample-support.h>
 #include <ntfs-browser/test/support/sample-run.h>
+
+#include "win-types.h"
 
 namespace TestFake = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace TestMft = NTFS_BROWSER_NAMESPACE::Test::Mft;

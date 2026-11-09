@@ -1,19 +1,18 @@
 #include "attr/resident.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstring>
 #include <span>
 #include <stdexcept>
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/attr/header-common.h>
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 
+#include "attr/base.h"
+#include "attr/header-common.h"
+#include "cache/strategy.h"
 #include "data/header-resident.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Io {

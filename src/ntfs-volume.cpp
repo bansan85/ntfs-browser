@@ -1,4 +1,4 @@
-#include <ntfs-browser/win-types.h>
+#include "ntfs-volume.h"
 
 #include <algorithm>
 #include <array>
@@ -11,23 +11,23 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/bench/bench.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/tuning/tuning.h>
 
 #include "alloc/alloc-loader.h"
+#include "bench/bench.h"
 #include "bench/recorder.h"
 #include "io/file-reader.h"
 #include "log/ntfs-common.h"
+#include "mft/idx.h"
 #include "mft/record-offset.h"
 #include "ntfs-volume-impl.h"
+#include "tuning/tuning.h"
 #include "upcase/upcase-loader.h"
 #include "upcase/upcase.h"
 #include "usn/usn-journal-loader.h"
 #include "volume/boot-sector-loader.h"
 #include "volume/volume-record-loader.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 

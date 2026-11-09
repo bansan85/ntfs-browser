@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
@@ -13,11 +11,13 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/example/ntfsundel/ntfsundel-core.h>
-#include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/device-access/temp-dir.h>
 #include <ntfs-browser/test/support/long-path-support.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
+
+#include "io/extended-path.h"
+#include "win-types.h"
 
 namespace ExampleNtfsUndel = NTFS_BROWSER_NAMESPACE::Example::NtfsUndel;
 namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;

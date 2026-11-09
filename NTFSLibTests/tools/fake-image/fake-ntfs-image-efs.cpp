@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <array>
 #include <cstring>
 #include <optional>
@@ -10,16 +8,17 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/attr/header-common.h>
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 
 #include "attr/flags.h"
+#include "attr/header-common.h"
+#include "attr/type.h"
 #include "data/header-resident.h"
 #include "data/std-info-permission.h"
 #include "fake-ntfs-image-internal.h"
+#include "mft/idx.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage {
 

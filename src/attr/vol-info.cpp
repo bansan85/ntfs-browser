@@ -1,15 +1,14 @@
 #include "attr/vol-info.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <stdexcept>
 
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 
 #include "attr/resident.h"
+#include "cache/strategy.h"
 #include "data/volume-information.h"
 #include "log/ntfs-common.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Io {

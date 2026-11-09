@@ -1,5 +1,5 @@
 // Tests for the opt-in spdlog adapters
-// (include/ntfs-browser/log/spdlog-adapter.h). The adapter header comes
+// (src/log/spdlog-adapter.h). The adapter header comes
 // first so that it has to include everything it uses itself.
 
 #include <memory>
@@ -14,12 +14,12 @@
 #include <spdlog/logger.h>
 #include <spdlog/sinks/ostream_sink.h>
 
-#include <ntfs-browser/log/log.h>
-#include <ntfs-browser/log/sink.h>
-#include <ntfs-browser/log/spdlog-adapter.h>
 #include <ntfs-browser/namespace.h>
 
+#include "log/log.h"
 #include "log/ntfs-common.h"
+#include "log/sink.h"
+#include "log/spdlog-adapter.h"
 #include "logging-test-support.h"
 
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;

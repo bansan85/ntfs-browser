@@ -1,7 +1,5 @@
 #include "sparse-image.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -20,6 +18,7 @@
 
 #include "counter-text.h"
 #include "layer-script.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

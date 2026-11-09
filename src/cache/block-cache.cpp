@@ -1,7 +1,5 @@
 #include "cache/block-cache.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
@@ -10,8 +8,10 @@
 #include <span>
 #include <utility>
 
-#include <ntfs-browser/cache/stats.h>
 #include <ntfs-browser/namespace.h>
+
+#include "cache/stats.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Cache {
 

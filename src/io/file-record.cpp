@@ -1,4 +1,4 @@
-#include <ntfs-browser/win-types.h>
+#include "io/file-record.h"
 
 #include <memory>
 #include <optional>
@@ -8,21 +8,19 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/attr/defines.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/filename.h>
-#include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 
 #include "alloc/data-state.h"
+#include "alloc/types.h"
+#include "attr/base.h"
+#include "attr/defines.h"
 #include "attr/file-name.h"
 #include "attr/slot.h"
 #include "attr/std-info.h"
+#include "cache/strategy.h"
 #include "data/file-record-flag.h"
+#include "filename.h"
+#include "index-entry.h"
 #include "io/file-record-attr-types.h"
 #include "io/file-record-extensions.h"
 #include "io/file-record-impl.h"
@@ -32,7 +30,9 @@
 #include "io/slack-name-carver.h"
 #include "log/ntfs-common.h"
 #include "mft/file-reference.h"
+#include "ntfs-volume.h"
 #include "utf/utf.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 

@@ -1,12 +1,12 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/namespace.h>
+
+#include "attr/mask.h"
+#include "attr/type.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Attr {
 

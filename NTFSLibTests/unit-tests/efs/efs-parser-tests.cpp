@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -16,21 +14,22 @@
 #include <catch2/catch_test_macros.hpp>
 #include <gsl/narrow>
 
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/efs/efs-test-support.h>
 #include <ntfs-browser/test/efs/efs-tests-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/support/optional-access.h>
 
+#include "cache/strategy.h"
 #include "efs/cipher-bcrypt.h"
 #include "efs/cipher-cryptopp.h"
 #include "efs/efs-stream.h"
+#include "efs/efs.h"
 #include "efs/fek.h"
 #include "efs/sector-cipher.h"
+#include "ntfs-volume.h"
 #include "util/util.h"
+#include "win-types.h"
 
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

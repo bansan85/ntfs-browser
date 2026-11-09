@@ -1,17 +1,16 @@
 #include "mft/entry-table.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <limits>
 #include <optional>
 #include <vector>
 
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 
 #include "mft/file-reference.h"
+#include "mft/tree.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Mft {
 

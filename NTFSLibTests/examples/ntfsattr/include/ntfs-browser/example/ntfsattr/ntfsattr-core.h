@@ -3,19 +3,19 @@
 // Attribute dump behind the ntfsattr command. Plain C++ over the library, so
 // main.cpp only hands over argv and the unit tests drive it without a process.
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstdint>
 #include <cstdio>
 #include <optional>
 #include <string>
 #include <string_view>
 
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/tool/device-access/volume-target.h>
+
+#include "attr/type.h"
+#include "cache/strategy.h"
+#include "ntfs-volume.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Example::NtfsAttr {
 

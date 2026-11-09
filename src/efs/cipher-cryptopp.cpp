@@ -1,7 +1,5 @@
 #include "efs/cipher-cryptopp.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -14,6 +12,8 @@
 #include <cryptopp/des.h>
 
 #include <ntfs-browser/namespace.h>
+
+#include "win-types.h"
 
 // Silences the weak-algorithm notice: MD5 is what the DESX key expansion uses.
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)

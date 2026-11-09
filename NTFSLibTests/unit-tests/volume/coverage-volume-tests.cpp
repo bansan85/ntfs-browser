@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <memory>
 #include <utility>
@@ -8,17 +6,19 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/volume/volume-tree-support.h>
+
+#include "attr/mask.h"
+#include "attr/type.h"
+#include "cache/strategy.h"
+#include "disk-reader.h"
+#include "io/file-record.h"
+#include "mft/idx.h"
+#include "ntfs-volume.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Attr {

@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstdlib>
 #include <fstream>
 #include <memory>
@@ -11,11 +9,13 @@
 #include <catch2/catch_test_macros.hpp>
 #include <gsl/narrow>
 
-#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/corpus/corpus-test-support.h>
 #include <ntfs-browser/test/disk-readers/partition-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/sequential-disk-reader.h>
+
+#include "disk-reader.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Test::Corpus {
 

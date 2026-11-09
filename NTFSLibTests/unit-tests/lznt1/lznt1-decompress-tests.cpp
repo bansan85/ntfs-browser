@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstring>
 #include <span>
 #include <stdexcept>
@@ -12,6 +10,7 @@
 #include <ntfs-browser/test/lznt1/compression-test-constants.h>
 
 #include "lznt1/decompress.h"
+#include "win-types.h"
 
 namespace {
 

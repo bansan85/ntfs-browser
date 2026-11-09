@@ -2,8 +2,6 @@
 
   #include "efs/cipher-bcrypt.h"
 
-  #include <ntfs-browser/win-types.h>
-
   #include <memory>
   #include <span>
   #include <string_view>
@@ -16,6 +14,7 @@
   #include "efs/fek.h"
   #include "efs/sector-cipher.h"
   #include "log/ntfs-common.h"
+  #include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Efs {
 

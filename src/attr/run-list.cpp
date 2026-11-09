@@ -1,7 +1,5 @@
 #include "attr/run-list.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cassert>
 #include <cstring>
@@ -10,11 +8,12 @@
 #include <stdexcept>
 #include <vector>
 
-#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/namespace.h>
 
+#include "alloc/types.h"
 #include "data/run-entry.h"
 #include "log/ntfs-common.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Attr {
 

@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
@@ -11,8 +9,10 @@
 #include <system_error>
 #include <vector>
 
-#include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
+
+#include "io/extended-path.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 

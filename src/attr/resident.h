@@ -1,16 +1,15 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <optional>
 #include <span>
 #include <vector>
 
-#include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 
+#include "attr/base.h"
+#include "cache/strategy.h"
 #include "internal-export.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Io {

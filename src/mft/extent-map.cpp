@@ -1,7 +1,5 @@
 #include "extent-map.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
@@ -13,14 +11,15 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 
+#include "alloc/types.h"
+#include "attr/base.h"
 #include "attr/non-resident.h"
+#include "cache/strategy.h"
 #include "log/ntfs-common.h"
+#include "mft/idx.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Attr {
 

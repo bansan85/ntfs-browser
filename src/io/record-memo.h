@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstdint>
 #include <cstdlib>
 #include <memory>
@@ -11,6 +9,7 @@
 #include <ntfs-browser/namespace.h>
 
 #include "internal-export.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
 

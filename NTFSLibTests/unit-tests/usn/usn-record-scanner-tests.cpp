@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <optional>
 #include <span>
@@ -12,9 +10,10 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/usn/usn-test-support.h>
-#include <ntfs-browser/usn/types.h>
 
+#include "usn/types.h"
 #include "usn/usn-record-scanner.h"
+#include "win-types.h"
 
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace TestUsn = NTFS_BROWSER_NAMESPACE::Test::Usn;

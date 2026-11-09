@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -12,26 +10,27 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/attr/header-common.h>
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/search/reader-types.h>
 #include <ntfs-browser/search/reader.h>
 #include <ntfs-browser/search/types.h>
-#include <ntfs-browser/volume-options.h>
 
+#include "alloc/types.h"
+#include "attr/base.h"
 #include "attr/flags.h"
+#include "attr/header-common.h"
+#include "attr/mask.h"
+#include "attr/type.h"
+#include "cache/strategy.h"
+#include "io/file-record.h"
 #include "log/ntfs-common.h"
+#include "ntfs-volume.h"
 #include "search/attribute-parse.h"
 #include "search/reader-probe.h"
 #include "search/target.h"
 #include "utf/utf.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Search {
 

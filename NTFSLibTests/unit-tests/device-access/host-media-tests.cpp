@@ -15,7 +15,8 @@
 #include <ntfs-browser/tool/device-access/host-media.h>
 #include <ntfs-browser/tool/device-access/posix-device-disk-reader.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
-#include <ntfs-browser/tuning/tuning.h>
+
+#include "tuning/tuning.h"
 
 namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
 

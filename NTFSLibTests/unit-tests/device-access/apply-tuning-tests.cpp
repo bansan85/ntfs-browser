@@ -17,9 +17,10 @@
 #include <ntfs-browser/test/device-access/temp-dir.h>
 #include <ntfs-browser/tool/device-access/bench-options.h>
 #include <ntfs-browser/tool/device-access/json.h>
-#include <ntfs-browser/tuning/knobs.h>
-#include <ntfs-browser/tuning/tuning.h>
-#include <ntfs-browser/volume-options.h>
+
+#include "tuning/knobs.h"
+#include "tuning/tuning.h"
+#include "volume-options.h"
 
 namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
 

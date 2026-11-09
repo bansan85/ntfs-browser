@@ -15,7 +15,7 @@ find_package(Threads REQUIRED)
 target_link_libraries(
   NtfsBench
   PRIVATE
-    ${PROJECT_NAME}
+    NtfsBrowserInternals
     NtfsDeviceAccess
     NtfsFakeImage
     NtfsTestDiskReaders

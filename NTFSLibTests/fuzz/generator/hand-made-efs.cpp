@@ -1,13 +1,13 @@
 #include "hand-made-efs.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <cstring>
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
+
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

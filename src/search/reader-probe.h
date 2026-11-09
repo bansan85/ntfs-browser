@@ -6,9 +6,9 @@
 #include <memory>
 #include <optional>
 
-#include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/namespace.h>
 
+#include "efs/efs.h"
 #include "internal-export.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Search {

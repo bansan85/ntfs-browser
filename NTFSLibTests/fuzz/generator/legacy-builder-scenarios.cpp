@@ -1,7 +1,5 @@
 #include "legacy-builder-scenarios.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
@@ -14,6 +12,7 @@
 #include "legacy-fixtures.h"
 #include "legacy-geometry.h"
 #include "record-edit.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

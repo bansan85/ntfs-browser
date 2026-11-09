@@ -1,10 +1,10 @@
 #include "util/util.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <span>
 
 #include <ntfs-browser/namespace.h>
+
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Util {
 

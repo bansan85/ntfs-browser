@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -20,6 +18,8 @@
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/io/ntfsdir-sample-support.h>
 #include <ntfs-browser/test/support/sample-run.h>
+
+#include "win-types.h"
 
 #ifndef _WIN32
   #include <sys/stat.h>

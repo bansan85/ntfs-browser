@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -16,18 +14,20 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/record/carved-name.h>
 #include <ntfs-browser/test/corpus/corpus-test-support.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/partition-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-#include <ntfs-browser/volume-options.h>
+
+#include "cache/strategy.h"
+#include "disk-reader.h"
+#include "index-entry.h"
+#include "io/file-record.h"
+#include "ntfs-volume.h"
+#include "record/carved-name.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace {
 

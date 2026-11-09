@@ -1,17 +1,17 @@
 #include "alloc-scan-scenarios.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <array>
 #include <cstddef>
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/tool/fuzzgen/recorded-stream.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
+
+#include "alloc/types.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

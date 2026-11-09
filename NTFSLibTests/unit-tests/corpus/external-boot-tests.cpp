@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -17,15 +15,16 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/generators/catch_generators_range.hpp>
 
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/corpus/corpus-test-support.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
-#include <ntfs-browser/volume-options.h>
 
+#include "cache/strategy.h"
 #include "data/ntfs-bpb.h"
+#include "ntfs-volume.h"
+#include "volume-options.h"
 #include "volume/volume-geometry.h"
+#include "win-types.h"
 
 namespace {
 

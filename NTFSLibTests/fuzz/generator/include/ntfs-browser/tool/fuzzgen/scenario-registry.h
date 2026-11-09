@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <functional>
 #include <string>
 #include <string_view>
@@ -11,7 +9,9 @@
 #include <ntfs-browser/tool/fuzzgen/build-features.h>
 #include <ntfs-browser/tool/fuzzgen/recorded-stream.h>
 #include <ntfs-browser/tool/fuzzgen/scenario.h>
-#include <ntfs-browser/volume-options.h>
+
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

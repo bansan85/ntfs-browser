@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <optional>
 #include <span>
@@ -12,6 +10,7 @@
 #include <ntfs-browser/test/support/optional-access.h>
 
 #include "upcase/upcase.h"
+#include "win-types.h"
 
 using NTFS_BROWSER_NAMESPACE::UpCase::Table;
 

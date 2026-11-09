@@ -1,7 +1,5 @@
 #include "mft/used-slots.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <bit>
 #include <exception>
 #include <memory>
@@ -10,18 +8,19 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 
+#include "attr/base.h"
+#include "attr/mask.h"
+#include "attr/type.h"
+#include "cache/strategy.h"
+#include "io/file-record.h"
 #include "log/ntfs-common.h"
+#include "mft/idx.h"
 #include "mft/slot-entry.h"
 #include "mft/slot-reader.h"
+#include "ntfs-volume.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Mft {
 

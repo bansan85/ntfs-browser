@@ -1,20 +1,19 @@
 #include "legacy-residency-scenarios.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <vector>
 
-#include <ntfs-browser/attr/header-common.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/tool/fuzzgen/recorded-stream.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
 
+#include "attr/header-common.h"
 #include "data/file-record-flag.h"
 #include "data/file-record-header.h"
 #include "legacy-fixtures.h"
 #include "record-edit.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

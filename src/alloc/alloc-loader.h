@@ -1,15 +1,14 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstdint>
 #include <memory>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/volume-options.h>
 
 #include "mft/metadata-opener.h"
+#include "volume-options.h"
 #include "volume/volume-geometry.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 

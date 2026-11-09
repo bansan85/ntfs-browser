@@ -1,7 +1,5 @@
 #include "mft-fixture-scenarios.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
@@ -13,6 +11,7 @@
 #include "data/ntfs-bpb.h"
 #include "legacy-fixtures.h"
 #include "record-edit.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

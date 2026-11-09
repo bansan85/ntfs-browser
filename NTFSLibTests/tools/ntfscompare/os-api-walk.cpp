@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <array>
 #include <ctime>
 #include <filesystem>
@@ -15,10 +13,12 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/ntfscompare/os-api-walk.h>
 
+#include "win-types.h"
+
 #ifdef _WIN32
   #include <windows.h>
 
-  #include <ntfs-browser/io/extended-path.h>
+  #include "io/extended-path.h"
 #else
   #include <dirent.h>
   #include <fcntl.h>

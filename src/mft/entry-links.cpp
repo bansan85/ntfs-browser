@@ -1,7 +1,5 @@
 #include "mft/entry-links.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <iterator>
@@ -12,10 +10,11 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 
 #include "mft/entry-table.h"
+#include "mft/tree.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Mft {
 

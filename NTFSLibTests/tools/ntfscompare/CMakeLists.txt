@@ -25,10 +25,13 @@ target_include_directories(
   NtfsCompareCore
   PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
-target_link_libraries(NtfsCompareCore PUBLIC ${PROJECT_NAME} NtfsDeviceAccess)
+target_link_libraries(
+  NtfsCompareCore
+  PUBLIC NtfsBrowserInternals NtfsDeviceAccess
+)
 
 add_executable(NtfsCompare "main.cpp")
-target_link_libraries(NtfsCompare PRIVATE ${PROJECT_NAME} NtfsCompareCore)
+target_link_libraries(NtfsCompare PRIVATE NtfsBrowserInternals NtfsCompareCore)
 if(WIN32)
   target_sources(NtfsCompare PRIVATE "${NTFS_BROWSER_LONG_PATH_MANIFEST}")
 endif()

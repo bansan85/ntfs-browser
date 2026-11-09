@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -14,9 +12,6 @@
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
-#include <ntfs-browser/bench/bench.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/device-access/temp-dir.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
@@ -24,7 +19,11 @@
 #include <ntfs-browser/test/support/bench-session-guard.h>
 #include <ntfs-browser/tool/device-access/sparse-capture.h>
 
+#include "bench/bench.h"
+#include "cache/strategy.h"
+#include "disk-reader.h"
 #include "io/file-reader.h"
+#include "win-types.h"
 
 namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
 

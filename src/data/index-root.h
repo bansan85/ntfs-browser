@@ -1,9 +1,9 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
-#include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/namespace.h>
+
+#include "attr/type.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Data {
 

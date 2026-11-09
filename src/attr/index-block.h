@@ -1,14 +1,14 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <optional>
 #include <span>
 #include <vector>
 
-#include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/namespace.h>
+
+#include "index-entry.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Attr {
 

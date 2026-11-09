@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <optional>
@@ -10,12 +8,14 @@
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/alloc/cluster-account.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/alloc/alloc-test-support.h>
 #include <ntfs-browser/test/alloc/cluster-account-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/mft/mft-tree-state-support.h>
+
+#include "alloc/cluster-account.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 

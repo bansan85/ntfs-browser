@@ -1,7 +1,5 @@
 #include "case-twin-scenarios.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <array>
 #include <cstddef>
 #include <string>
@@ -12,6 +10,8 @@
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/tool/fuzzgen/recorded-stream.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
+
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

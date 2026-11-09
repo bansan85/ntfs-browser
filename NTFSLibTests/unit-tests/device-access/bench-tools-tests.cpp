@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -19,7 +17,6 @@
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
-#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/device-access/temp-dir.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
@@ -27,7 +24,10 @@
 #include <ntfs-browser/test/mft/ntfsscanbench-sample-support.h>
 #include <ntfs-browser/test/support/sample-run.h>
 #include <ntfs-browser/tool/device-access/json.h>
-#include <ntfs-browser/tuning/knobs.h>
+
+#include "bench/bench.h"
+#include "tuning/knobs.h"
+#include "win-types.h"
 
 namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
 

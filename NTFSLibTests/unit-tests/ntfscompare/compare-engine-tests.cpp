@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <iostream>
 #include <optional>
 #include <set>
@@ -14,6 +12,8 @@
 #include <ntfs-browser/test/support/name-support.h>
 #include <ntfs-browser/tool/ntfscompare/compare-engine.h>
 #include <ntfs-browser/tool/ntfscompare/entry.h>
+
+#include "win-types.h"
 
 namespace ToolNtfsCompare = NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare;
 

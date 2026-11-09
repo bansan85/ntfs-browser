@@ -8,15 +8,15 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/bench-session.h>
 #include <ntfs-browser/tool/device-access/json.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
-#include <ntfs-browser/tuning/tuning.h>
-#include <ntfs-browser/volume-options.h>
 
 #include "bench-tool.h"
+#include "bench/bench.h"
+#include "tuning/tuning.h"
+#include "volume-options.h"
 
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;

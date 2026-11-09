@@ -9,11 +9,11 @@
 
 #include <windows.h>
 
-#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tuning/tuning.h>
 
+#include "disk-reader.h"
 #include "internal-export.h"
+#include "tuning/tuning.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
 

@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstdlib>
 #include <ctime>
 #include <optional>
@@ -9,6 +7,8 @@
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/local-time.h>
+
+#include "win-types.h"
 
 namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
 

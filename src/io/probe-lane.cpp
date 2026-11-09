@@ -1,7 +1,5 @@
 #include "io/probe-lane.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <atomic>
 #include <cstddef>
@@ -18,17 +16,18 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/directory-read-ahead.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/tuning/tuning.h>
 
+#include "cache/strategy.h"
 #include "io/directory-read-ahead-testing.h"
+#include "io/directory-read-ahead.h"
+#include "io/file-record.h"
 #include "io/read-ahead-held.h"
 #include "io/run-planner.h"
 #include "log/ntfs-common.h"
+#include "ntfs-volume.h"
+#include "tuning/tuning.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
 

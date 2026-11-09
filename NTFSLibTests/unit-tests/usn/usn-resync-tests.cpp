@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <memory>
 #include <optional>
@@ -12,13 +10,15 @@
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/alloc/alloc-failure-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/usn/usn-test-support.h>
-#include <ntfs-browser/usn/types.h>
+
+#include "cache/strategy.h"
+#include "log/log.h"
+#include "usn/types.h"
+#include "win-types.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;

@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <chrono>
 #include <cstddef>
 #include <iostream>
@@ -12,11 +10,12 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/support/test-log-sink.h>
 
 #include "alloc/bad-cluster-list.h"
+#include "alloc/types.h"
+#include "win-types.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 using Alloc::BadClusterList;

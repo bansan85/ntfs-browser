@@ -1,7 +1,5 @@
 #include "record/slack-carver.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -17,11 +15,12 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/record/carved-name.h>
 
 #include "data/filename.h"
 #include "mft/file-reference.h"
+#include "record/carved-name.h"
 #include "utf/utf.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Record {
 

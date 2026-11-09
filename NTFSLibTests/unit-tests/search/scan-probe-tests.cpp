@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -10,7 +8,6 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/example/ntfsscanbench/via-scan.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/search/types.h>
@@ -18,9 +15,11 @@
 #include <ntfs-browser/test/disk-readers/throttled-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 
+#include "disk-reader.h"
 #include "scan-support.h"
 #include "search/scan-probe.h"
 #include "search/target.h"
+#include "win-types.h"
 
 namespace Fake = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Lib = NTFS_BROWSER_NAMESPACE::Search;

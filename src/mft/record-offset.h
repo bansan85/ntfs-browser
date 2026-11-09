@@ -1,13 +1,12 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <limits>
 #include <optional>
 
 #include <ntfs-browser/namespace.h>
 
 #include "log/ntfs-common.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Mft {
 

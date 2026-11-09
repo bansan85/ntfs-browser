@@ -4,15 +4,15 @@
 #include <cstdio>
 #include <optional>
 
-#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/example/ntfsscanbench/via-scan.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/search/types.h>
 #include <ntfs-browser/tool/device-access/bench-options.h>
 #include <ntfs-browser/tool/device-access/json.h>
-#include <ntfs-browser/volume-options.h>
 
 #include "arguments.h"
+#include "bench/bench.h"
+#include "volume-options.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Example::NtfsScanBench {
 

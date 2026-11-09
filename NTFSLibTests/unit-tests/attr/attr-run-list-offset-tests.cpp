@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstdint>
 #include <memory>
 #include <span>
@@ -13,15 +11,17 @@
 #include <gsl/narrow>
 #include <gsl/util>
 
-#include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/support/scratch-record.h>
-#include <ntfs-browser/volume-options.h>
+
+#include "alloc/types.h"
+#include "attr/type.h"
+#include "cache/strategy.h"
+#include "io/file-record.h"
+#include "ntfs-volume.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;

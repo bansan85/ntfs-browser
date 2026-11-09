@@ -1,11 +1,11 @@
-#include <ntfs-browser/win-types.h>
-
 #include <utility>
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/account-volume.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage {
 

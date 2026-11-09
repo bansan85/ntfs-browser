@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <string>
@@ -15,6 +13,7 @@
 #include <ntfs-browser/test/support/test-log-sink.h>
 
 #include "scan-support.h"
+#include "win-types.h"
 
 namespace TestSearch = NTFS_BROWSER_NAMESPACE::Test::Search;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;

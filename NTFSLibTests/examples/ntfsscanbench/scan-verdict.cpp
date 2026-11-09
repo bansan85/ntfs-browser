@@ -4,9 +4,10 @@
 #include <optional>
 #include <string_view>
 
-#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/example/ntfsscanbench/via-scan.h>
 #include <ntfs-browser/namespace.h>
+
+#include "bench/bench.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Example::NtfsScanBench {
 

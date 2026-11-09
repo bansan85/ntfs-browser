@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <functional>
@@ -18,19 +16,20 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/generators/catch_generators_range.hpp>
 
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/log/log.h>
-#include <ntfs-browser/mft/idx.h>
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/support/level-recorder.h>
-#include <ntfs-browser/volume-options.h>
 
+#include "cache/strategy.h"
+#include "log/log.h"
+#include "mft/idx.h"
 #include "mft/tree-testing.h"
+#include "mft/tree.h"
+#include "ntfs-volume.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 

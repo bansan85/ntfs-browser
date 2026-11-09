@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -14,10 +12,12 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/disk-readers/throttled-disk-reader.h>
-#include <ntfs-browser/tuning/tuning.h>
+
+#include "disk-reader.h"
+#include "tuning/tuning.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders {
 

@@ -4,8 +4,9 @@
 #include <string>
 #include <vector>
 
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
+
+#include "mft/tree.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Test::Corpus {
 

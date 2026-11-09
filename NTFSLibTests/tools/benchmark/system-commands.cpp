@@ -23,10 +23,10 @@
 #include <ntfs-browser/tool/device-access/disk-identity.h>
 #include <ntfs-browser/tool/device-access/json.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
-#include <ntfs-browser/tuning/knobs.h>
-#include <ntfs-browser/tuning/tuning.h>
 
 #include "bench-tool.h"
+#include "tuning/knobs.h"
+#include "tuning/tuning.h"
 
 #ifdef _WIN32
   #include <windows.h>

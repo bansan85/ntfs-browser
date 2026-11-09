@@ -11,10 +11,10 @@ target_include_directories(
   NtfsDumpCore
   PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
-target_link_libraries(NtfsDumpCore PUBLIC ${PROJECT_NAME} NtfsDeviceAccess)
+target_link_libraries(NtfsDumpCore PUBLIC NtfsBrowserInternals NtfsDeviceAccess)
 
 add_executable(NtfsDump WIN32 "main.cpp")
-target_link_libraries(NtfsDump PRIVATE ${PROJECT_NAME} NtfsDumpCore)
+target_link_libraries(NtfsDump PRIVATE NtfsBrowserInternals NtfsDumpCore)
 if(WIN32)
   target_sources(NtfsDump PRIVATE "${NTFS_BROWSER_LONG_PATH_MANIFEST}")
 endif()

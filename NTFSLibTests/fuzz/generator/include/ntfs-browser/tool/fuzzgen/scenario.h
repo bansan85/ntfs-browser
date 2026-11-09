@@ -1,13 +1,13 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <functional>
 #include <string>
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/fuzzgen/build-features.h>
+
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

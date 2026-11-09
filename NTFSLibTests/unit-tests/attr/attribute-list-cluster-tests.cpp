@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <array>
 #include <memory>
 #include <optional>
@@ -13,17 +11,19 @@
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/attr/nonresident-index-support.h>
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/support/test-log-sink.h>
-#include <ntfs-browser/volume-options.h>
+
+#include "attr/mask.h"
+#include "attr/type.h"
+#include "cache/strategy.h"
+#include "io/file-record.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 using Catch::Matchers::ContainsSubstring;
 using NTFS_BROWSER_NAMESPACE::VolumeOptions;

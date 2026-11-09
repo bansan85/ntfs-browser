@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <array>
 #include <limits>
 #include <optional>
@@ -13,6 +11,7 @@
 
 #include "data/ntfs-bpb.h"
 #include "volume/volume-geometry.h"
+#include "win-types.h"
 
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Volume = NTFS_BROWSER_NAMESPACE::Volume;

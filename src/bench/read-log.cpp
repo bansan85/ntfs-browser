@@ -1,3 +1,5 @@
+#include "bench/read-log.h"
+
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -9,9 +11,9 @@
 #include <string>
 #include <vector>
 
-#include <ntfs-browser/bench/read-log.h>
-#include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
+
+#include "io/extended-path.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Bench {
 

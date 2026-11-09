@@ -11,11 +11,12 @@
 #include <optional>
 #include <string_view>
 
-#include <ntfs-browser/bench/bench.h>
-#include <ntfs-browser/bench/read-log.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/search/types.h>
-#include <ntfs-browser/tuning/tuning.h>
+
+#include "bench/bench.h"
+#include "bench/read-log.h"
+#include "tuning/tuning.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Example::NtfsScanBench {
 

@@ -1,7 +1,5 @@
 #include "data/index-entry.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -9,12 +7,13 @@
 #include <span>
 #include <vector>
 
-#include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/namespace.h>
 
 #include "data/filename.h"
 #include "data/index-entry-flag.h"
+#include "index-entry.h"
 #include "log/ntfs-common.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 

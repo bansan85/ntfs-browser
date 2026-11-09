@@ -1,7 +1,5 @@
 #include "attr/non-resident.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
@@ -13,24 +11,25 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/attr/header-common.h>
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/bench/bench.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/cache/view.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 
+#include "alloc/types.h"
+#include "attr/base.h"
 #include "attr/flags.h"
+#include "attr/header-common.h"
+#include "attr/type.h"
+#include "bench/bench.h"
 #include "bench/recorder.h"
+#include "cache/strategy.h"
+#include "cache/view.h"
 #include "data/header-non-resident.h"
 #include "data/run-entry.h"
+#include "io/file-record.h"
 #include "log/ntfs-common.h"
 #include "mft/file-reference.h"
+#include "mft/idx.h"
+#include "ntfs-volume.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Io {

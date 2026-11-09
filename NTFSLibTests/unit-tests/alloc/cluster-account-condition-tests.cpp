@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <optional>
 #include <utility>
@@ -8,14 +6,16 @@
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/alloc/cluster-account.h>
-#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/alloc/alloc-test-support.h>
 #include <ntfs-browser/test/alloc/cluster-account-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/mft/mft-tree-state-support.h>
-#include <ntfs-browser/volume-options.h>
+
+#include "alloc/cluster-account.h"
+#include "alloc/types.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace TestAlloc = NTFS_BROWSER_NAMESPACE::Test::Alloc;

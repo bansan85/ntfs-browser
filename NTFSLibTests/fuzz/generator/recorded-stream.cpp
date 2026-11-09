@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <memory>
 #include <stdexcept>
@@ -10,9 +8,10 @@
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fuzz/fuzz-core.h>
 #include <ntfs-browser/tool/fuzzgen/recorded-stream.h>
-#include <ntfs-browser/volume-options.h>
 
 #include "recording-reader.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

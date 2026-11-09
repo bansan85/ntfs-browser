@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <array>
 #include <cstring>
@@ -14,11 +12,12 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/namespace.h>
 
 #include "alloc/bad-cluster-list.h"
 #include "alloc/cluster-bitmap.h"
+#include "alloc/types.h"
+#include "win-types.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 using Alloc::ClusterBitmap;

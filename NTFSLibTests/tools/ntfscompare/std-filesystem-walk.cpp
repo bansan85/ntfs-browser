@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <chrono>
 #include <filesystem>
 #include <optional>
@@ -7,13 +5,14 @@
 #include <string>
 #include <system_error>
 
-#include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
 #include <ntfs-browser/tool/ntfscompare/std-filesystem-walk.h>
 
 #include "console.h"
+#include "io/extended-path.h"
 #include "time-convert.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare {
 

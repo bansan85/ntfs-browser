@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <filesystem>
 #include <set>
@@ -22,6 +20,7 @@
 #include <ntfs-browser/test/support/test-log-sink.h>
 
 #include "ntfsdir-in-process.h"
+#include "win-types.h"
 
 namespace Lib = NTFS_BROWSER_NAMESPACE::Search;
 namespace TestFake = NTFS_BROWSER_NAMESPACE::Test::FakeImage;

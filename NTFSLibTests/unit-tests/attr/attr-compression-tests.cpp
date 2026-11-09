@@ -13,8 +13,6 @@
 // AttrNonResident never read comp_unit_size, so compressed clusters came
 // back as raw, undecoded bytes.
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -34,19 +32,21 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <gsl/narrow>
 
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/lznt1/compression-test-constants.h>
 #include <ntfs-browser/test/support/optional-access.h>
 #include <ntfs-browser/test/support/test-log-sink.h>
-#include <ntfs-browser/volume-options.h>
+
+#include "attr/type.h"
+#include "cache/strategy.h"
+#include "index-entry.h"
+#include "io/file-record.h"
+#include "mft/idx.h"
+#include "ntfs-volume.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 

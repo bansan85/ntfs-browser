@@ -12,16 +12,17 @@
 #include <system_error>
 #include <utility>
 
-#include <ntfs-browser/bench/bench.h>
-#include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/bench-options.h>
 #include <ntfs-browser/tool/device-access/disk-identity.h>
 #include <ntfs-browser/tool/device-access/json.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
-#include <ntfs-browser/tuning/knobs.h>
-#include <ntfs-browser/tuning/tuning.h>
-#include <ntfs-browser/volume-options.h>
+
+#include "bench/bench.h"
+#include "io/extended-path.h"
+#include "tuning/knobs.h"
+#include "tuning/tuning.h"
+#include "volume-options.h"
 
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;

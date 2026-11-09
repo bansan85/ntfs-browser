@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <optional>
 #include <string>
@@ -9,13 +7,14 @@
 #include <catch2/catch_test_macros.hpp>
 #include <gsl/narrow>
 
-#include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/namespace.h>
 
 #include "data/filename-flag.h"
 #include "data/filename-namespace.h"
 #include "data/filename.h"
 #include "data/index-entry.h"
+#include "index-entry.h"
+#include "win-types.h"
 
 using NTFS_BROWSER_NAMESPACE::IndexEntry;
 using NTFS_BROWSER_NAMESPACE::IndexEntryView;

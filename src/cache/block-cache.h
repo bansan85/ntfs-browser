@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <cstdint>
 #include <list>
@@ -9,10 +7,11 @@
 #include <span>
 #include <unordered_map>
 
-#include <ntfs-browser/cache/stats.h>
 #include <ntfs-browser/namespace.h>
 
+#include "cache/stats.h"
 #include "internal-export.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Cache {
 

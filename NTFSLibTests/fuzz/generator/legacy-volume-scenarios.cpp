@@ -1,7 +1,5 @@
 #include "legacy-volume-scenarios.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <optional>
@@ -16,6 +14,7 @@
 #include "hex-bytes.h"
 #include "legacy-fixtures.h"
 #include "legacy-record.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

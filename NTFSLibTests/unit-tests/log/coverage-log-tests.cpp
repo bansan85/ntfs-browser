@@ -6,10 +6,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/support/test-log-sink.h>
 
+#include "log/log.h"
 #include "log/ntfs-common.h"
 
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;

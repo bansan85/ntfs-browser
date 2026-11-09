@@ -8,8 +8,9 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/namespace.h>
+
+#include "bench/bench.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Util {
 

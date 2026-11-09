@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <filesystem>
 #include <optional>
 #include <span>
@@ -12,20 +10,22 @@
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
-#include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/corpus/corpus-test-support.h>
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/support/md5-test-support.h>
 #include <ntfs-browser/test/support/optional-access.h>
-#include <ntfs-browser/volume-options.h>
+
+#include "attr/base.h"
+#include "attr/mask.h"
+#include "cache/strategy.h"
+#include "index-entry.h"
+#include "io/file-record.h"
+#include "mft/idx.h"
+#include "ntfs-volume.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 using NTFS_BROWSER_NAMESPACE::IndexEntry;
 using NTFS_BROWSER_NAMESPACE::Attr::AttrBase;

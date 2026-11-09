@@ -1,7 +1,5 @@
 #include "attribute-values.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <cstring>
 #include <string>
@@ -15,6 +13,7 @@
 #include "data/filename.h"
 #include "data/standard-information.h"
 #include "layer-line.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

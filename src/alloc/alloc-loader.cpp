@@ -1,7 +1,5 @@
 #include "alloc/alloc-loader.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <exception>
@@ -10,21 +8,22 @@
 #include <span>
 #include <utility>
 
-#include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/bench/bench.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/volume-options.h>
 
 #include "alloc/bad-cluster-list.h"
 #include "alloc/cluster-bitmap.h"
+#include "attr/base.h"
+#include "bench/bench.h"
 #include "bench/recorder.h"
+#include "cache/strategy.h"
 #include "io/file-reader.h"
+#include "io/file-record.h"
 #include "log/ntfs-common.h"
+#include "mft/idx.h"
 #include "mft/metadata-opener.h"
+#include "volume-options.h"
 #include "volume/volume-geometry.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Alloc {
 

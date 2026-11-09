@@ -1,13 +1,12 @@
 #include "efs/efs-stream.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <cassert>
 #include <cstring>
 
 #include <ntfs-browser/namespace.h>
 
 #include "log/ntfs-common.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Efs {
 

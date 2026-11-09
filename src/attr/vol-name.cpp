@@ -1,13 +1,12 @@
 #include "attr/vol-name.h"
 
-#include <ntfs-browser/win-types.h>
-
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 
 #include "attr/resident.h"
+#include "cache/strategy.h"
 #include "log/ntfs-common.h"
 #include "utf/utf.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Io {

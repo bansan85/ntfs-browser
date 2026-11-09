@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <filesystem>
@@ -17,8 +15,6 @@
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/mft/mft-tree-state-support.h>
@@ -27,7 +23,10 @@
 #include <ntfs-browser/test/support/sample-run.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
 
+#include "cache/strategy.h"
 #include "mft-tree-parent-support.h"
+#include "mft/tree.h"
+#include "win-types.h"
 
 namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
 

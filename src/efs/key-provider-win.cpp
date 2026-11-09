@@ -2,8 +2,6 @@
 
   #include "efs/key-provider-win.h"
 
-  #include <ntfs-browser/win-types.h>
-
   #include <filesystem>
   #include <fstream>
   #include <string>
@@ -12,12 +10,13 @@
   #include <ncrypt.h>
   #include <wincrypt.h>
 
-  #include <ntfs-browser/efs/efs.h>
   #include <ntfs-browser/namespace.h>
 
+  #include "efs/efs.h"
   #include "efs/fek.h"
   #include "log/ntfs-common.h"
   #include "util/util.h"
+  #include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Efs {
 

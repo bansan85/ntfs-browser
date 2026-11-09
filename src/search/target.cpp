@@ -11,16 +11,16 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/volume-options.h>
 
+#include "cache/strategy.h"
+#include "disk-reader.h"
+#include "io/extended-path.h"
 #include "log/ntfs-common.h"
+#include "ntfs-volume.h"
 #include "search/scan-probe.h"
 #include "utf/utf.h"
+#include "volume-options.h"
 
 #ifndef _WIN32
   #include <cerrno>

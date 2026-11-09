@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <functional>
 #include <map>
@@ -10,10 +8,11 @@
 #include <unordered_set>
 #include <vector>
 
-#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/namespace.h>
 
+#include "alloc/types.h"
 #include "internal-export.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Alloc {
 

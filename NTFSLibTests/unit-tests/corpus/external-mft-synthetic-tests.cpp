@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -19,6 +17,7 @@
 
 #include "external-mft-support.h"
 #include "volume/volume-geometry.h"
+#include "win-types.h"
 
 namespace {
 

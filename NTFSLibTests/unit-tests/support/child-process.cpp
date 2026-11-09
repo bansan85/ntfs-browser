@@ -10,7 +10,7 @@
 #include <ntfs-browser/namespace.h>
 
 #ifdef _WIN32
-  #include <ntfs-browser/win-types.h>
+  #include "win-types.h"
 #else
   #include <csignal>
   #include <cstring>

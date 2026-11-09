@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -23,6 +21,7 @@
 #include "search/mft-list-engine.h"
 #include "search/target.h"
 #include "utf/utf.h"
+#include "win-types.h"
 
 namespace TestSearch = NTFS_BROWSER_NAMESPACE::Test::Search;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;

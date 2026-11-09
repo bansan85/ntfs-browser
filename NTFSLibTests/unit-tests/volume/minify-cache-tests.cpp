@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <memory>
 #include <optional>
@@ -9,13 +7,14 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/cache/stats.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/cache/view.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 
+#include "cache/stats.h"
+#include "cache/strategy.h"
+#include "cache/view.h"
 #include "fullcache-walk-support.h"
+#include "ntfs-volume.h"
+#include "win-types.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 

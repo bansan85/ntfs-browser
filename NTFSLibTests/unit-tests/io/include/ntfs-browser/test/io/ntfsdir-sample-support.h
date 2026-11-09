@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstdio>
 #include <filesystem>
 #include <optional>
@@ -16,6 +14,8 @@
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/support/sample-run.h>
 #include <ntfs-browser/tool/device-access/local-time.h>
+
+#include "win-types.h"
 
 // What the tests of NtfsDir share: how to run it, the image it lists, and the
 // text it prints.

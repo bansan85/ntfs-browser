@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -14,14 +12,15 @@
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/record/carved-name.h>
 #include <ntfs-browser/test/corpus/corpus-test-support.h>
-#include <ntfs-browser/volume-options.h>
 
+#include "cache/strategy.h"
 #include "external-mft-support.h"
+#include "mft/tree.h"
+#include "record/carved-name.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace {
 

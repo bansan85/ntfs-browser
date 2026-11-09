@@ -1,4 +1,4 @@
-#include <ntfs-browser/win-types.h>
+#include "attr/base.h"
 
 #include <cstddef>
 #include <span>
@@ -6,17 +6,17 @@
 #include <string_view>
 #include <vector>
 
-#include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/attr/header-common.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 
+#include "alloc/types.h"
+#include "attr/header-common.h"
+#include "cache/strategy.h"
+#include "io/file-record.h"
 #include "log/ntfs-common.h"
+#include "ntfs-volume.h"
 #include "utf/utf.h"
 #include "util/small-pool.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Io {

@@ -1,7 +1,5 @@
 #include "byte-writer.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <filesystem>
 #include <fstream>
 #include <ios>
@@ -12,8 +10,10 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
+
+#include "io/extended-path.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

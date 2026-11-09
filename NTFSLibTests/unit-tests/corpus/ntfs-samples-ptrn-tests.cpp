@@ -1,19 +1,18 @@
-#include <ntfs-browser/win-types.h>
-
 #include <optional>
 #include <span>
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/corpus/corpus-test-support.h>
 #include <ntfs-browser/test/support/optional-access.h>
 
+#include "cache/strategy.h"
+#include "index-entry.h"
+#include "io/file-record.h"
 #include "ntfs-samples-support.h"
+#include "ntfs-volume.h"
+#include "win-types.h"
 
 using NTFS_BROWSER_NAMESPACE::IndexEntry;
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;

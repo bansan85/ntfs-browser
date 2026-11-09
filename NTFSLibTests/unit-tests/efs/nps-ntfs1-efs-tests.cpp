@@ -1,8 +1,6 @@
 // MakePfxKeyProvider() - this whole file's subject - only exists on Windows
-// (PFX import goes through CryptoAPI/CNG): see include/ntfs-browser/efs/efs.h.
+// (PFX import goes through CryptoAPI/CNG): see src/efs/efs.h.
 #ifdef _WIN32
-
-  #include <ntfs-browser/win-types.h>
 
   #include <array>
   #include <filesystem>
@@ -17,15 +15,17 @@
   #include <catch2/catch_test_macros.hpp>
   #include <gsl/narrow>
 
-  #include <ntfs-browser/attr/base.h>
-  #include <ntfs-browser/cache/strategy.h>
-  #include <ntfs-browser/efs/efs.h>
-  #include <ntfs-browser/io/file-record.h>
   #include <ntfs-browser/namespace.h>
-  #include <ntfs-browser/ntfs-volume.h>
   #include <ntfs-browser/test/corpus/nps-ntfs1-test-support.h>
   #include <ntfs-browser/test/support/md5-test-support.h>
-  #include <ntfs-browser/volume-options.h>
+
+  #include "attr/base.h"
+  #include "cache/strategy.h"
+  #include "efs/efs.h"
+  #include "io/file-record.h"
+  #include "ntfs-volume.h"
+  #include "volume-options.h"
+  #include "win-types.h"
 
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::Attr::AttrBase;

@@ -8,10 +8,10 @@
 #include <span>
 #include <string>
 
-#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/namespace.h>
 
 #include "arguments.h"
+#include "bench/bench.h"
 #include "engine.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Example::NtfsScanBench {

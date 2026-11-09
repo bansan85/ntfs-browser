@@ -3,8 +3,9 @@
 #include <memory>
 #include <string>
 
-#include <ntfs-browser/log/sink.h>
 #include <ntfs-browser/namespace.h>
+
+#include "log/sink.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 

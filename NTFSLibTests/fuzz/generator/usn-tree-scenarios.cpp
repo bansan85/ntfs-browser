@@ -1,7 +1,5 @@
 #include "usn-tree-scenarios.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <cstring>
@@ -18,6 +16,7 @@
 #include <ntfs-browser/tool/fuzzgen/scenario.h>
 
 #include "resource-locator.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

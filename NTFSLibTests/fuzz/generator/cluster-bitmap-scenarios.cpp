@@ -1,7 +1,5 @@
 #include "cluster-bitmap-scenarios.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <array>
 #include <cstddef>
 #include <utility>
@@ -16,6 +14,7 @@
 #include "bpb-edit.h"
 #include "data/ntfs-bpb.h"
 #include "resource-locator.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

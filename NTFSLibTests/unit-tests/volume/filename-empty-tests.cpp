@@ -1,16 +1,15 @@
-#include <ntfs-browser/win-types.h>
-
 #include <initializer_list>
 #include <limits>
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/filename.h>
 #include <ntfs-browser/namespace.h>
 
 #include "data/filename-flag.h"
 #include "data/filename-namespace.h"
 #include "data/filename.h"
+#include "filename.h"
+#include "win-types.h"
 
 namespace Data = NTFS_BROWSER_NAMESPACE::Data;
 using NTFS_BROWSER_NAMESPACE::Filename;

@@ -1,7 +1,5 @@
 #include "mft/slot-parsers.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -10,21 +8,22 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/bench/bench.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 
+#include "attr/mask.h"
+#include "attr/type.h"
+#include "bench/bench.h"
 #include "bench/recorder.h"
+#include "cache/strategy.h"
+#include "io/file-record.h"
 #include "log/ntfs-common.h"
 #include "mft/held-records.h"
 #include "mft/slot-entry.h"
 #include "mft/slot-reader.h"
 #include "mft/used-slots.h"
+#include "ntfs-volume.h"
 #include "util/chunk-pool.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Mft {
 

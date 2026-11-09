@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <filesystem>
 #include <memory>
@@ -14,13 +12,7 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/support/optional-access.h>
@@ -28,6 +20,14 @@
 #include <ntfs-browser/tool/ntfscompare/entry.h>
 #include <ntfs-browser/tool/ntfscompare/library-walk.h>
 #include <ntfs-browser/tool/ntfscompare/volume-open.h>
+
+#include "attr/mask.h"
+#include "cache/strategy.h"
+#include "index-entry.h"
+#include "io/file-record.h"
+#include "mft/tree.h"
+#include "ntfs-volume.h"
+#include "win-types.h"
 
 namespace ToolNtfsCompare = NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare;
 

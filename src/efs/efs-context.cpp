@@ -1,19 +1,18 @@
 #include "efs/efs-context.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <optional>
 #include <utility>
 
-#include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/namespace.h>
 
 #include "efs/cipher-bcrypt.h"
 #include "efs/cipher-cryptopp.h"
+#include "efs/efs.h"
 #include "efs/fek.h"
 #include "log/ntfs-common.h"
 #include "util/util.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Efs {
 

@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <filesystem>
 #include <memory>
 #include <ostream>
@@ -9,9 +7,11 @@
 #include <string>
 #include <vector>
 
-#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/volume-options.h>
+
+#include "disk-reader.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Test::Fuzz {
 

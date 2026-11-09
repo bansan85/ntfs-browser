@@ -20,12 +20,12 @@
 #include <sys/types.h>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/tool/device-access/device-path.h>
 #include <ntfs-browser/tool/device-access/json.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
 
 #include "bench-tool.h"
+#include "ntfs-volume.h"
 
 #ifdef _WIN32
   #include <windows.h>

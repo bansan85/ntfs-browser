@@ -1,7 +1,5 @@
 #include "usn/usn-journal-loader.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -15,22 +13,23 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/bench/bench.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/usn/types.h>
 
+#include "alloc/types.h"
+#include "attr/mask.h"
 #include "attr/resident.h"
 #include "attr/std-info.h"
+#include "bench/bench.h"
 #include "bench/recorder.h"
+#include "cache/strategy.h"
+#include "index-entry.h"
+#include "io/file-record.h"
 #include "log/ntfs-common.h"
+#include "mft/idx.h"
+#include "ntfs-volume.h"
+#include "usn/types.h"
 #include "usn/usn-record-scanner.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Attr {

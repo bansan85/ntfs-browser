@@ -1,12 +1,11 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
 
 #include "layer-line.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -22,7 +20,9 @@
 #include <ntfs-browser/test/mft/ntfsscanbench-sample-support.h>
 #include <ntfs-browser/test/support/sample-run.h>
 #include <ntfs-browser/tool/device-access/json.h>
-#include <ntfs-browser/tuning/knobs.h>
+
+#include "tuning/knobs.h"
+#include "win-types.h"
 
 namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
 

@@ -1,7 +1,5 @@
 #include "legacy-attribute-list-scenarios.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -23,6 +21,7 @@
 #include "data/index-root.h"
 #include "legacy-fixtures.h"
 #include "record-edit.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -13,11 +11,13 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 
-#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/throttled-disk-reader.h>
-#include <ntfs-browser/tuning/tuning.h>
+
+#include "disk-reader.h"
+#include "tuning/tuning.h"
+#include "win-types.h"
 
 namespace TestDiskReaders = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;

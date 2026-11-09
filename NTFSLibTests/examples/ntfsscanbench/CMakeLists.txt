@@ -3,9 +3,7 @@
 # one that does (tools/dir-walk). --engine=all runs the three in turn.
 # The measure of a Search::Scan and its verdicts, shared with the unit tests
 # (unit-tests/search/scan-via-*-tests.cpp). They reach the test seams of the
-# scan in src/search/scan-probe.h, which the library exports under
-# NTFS_BROWSER_EXPORT_INTERNALS_FOR_TESTS (see tools/fake-image/CMakeLists.txt):
-# this target MUST define it too.
+# scan in src/search/scan-probe.h.
 add_library(
   NtfsScanBenchCore
   STATIC
@@ -16,13 +14,11 @@ add_library(
 target_include_directories(
   NtfsScanBenchCore
   PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
-  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../../src"
 )
-target_compile_definitions(
+target_link_libraries(
   NtfsScanBenchCore
-  PRIVATE NTFS_BROWSER_EXPORT_INTERNALS_FOR_TESTS
+  PUBLIC NtfsBrowserInternals NtfsDeviceAccess
 )
-target_link_libraries(NtfsScanBenchCore PUBLIC ${PROJECT_NAME} NtfsDeviceAccess)
 
 add_executable(
   NtfsScanBench
@@ -47,7 +43,7 @@ find_package(Threads REQUIRED)
 target_link_libraries(
   NtfsScanBench
   PRIVATE
-    ${PROJECT_NAME}
+    NtfsBrowserInternals
     NtfsDeviceAccess
     NtfsDirWalk
     NtfsScanBenchCore

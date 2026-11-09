@@ -47,4 +47,4 @@ target_include_directories(
   NtfsDeviceAccess
   PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
-target_link_libraries(NtfsDeviceAccess PUBLIC ${PROJECT_NAME})
+target_link_libraries(NtfsDeviceAccess PUBLIC NtfsBrowserInternals)

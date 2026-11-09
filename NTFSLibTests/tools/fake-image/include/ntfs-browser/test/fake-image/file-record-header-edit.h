@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cassert>
 #include <cstring>
 #include <span>
@@ -9,6 +7,7 @@
 #include <ntfs-browser/namespace.h>
 
 #include "data/file-record-header.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Test::FakeImage {
 

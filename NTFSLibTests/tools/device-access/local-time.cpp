@@ -1,10 +1,10 @@
-#include <ntfs-browser/win-types.h>
-
 #include <limits>
 #include <optional>
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/local-time.h>
+
+#include "win-types.h"
 
 #ifndef _WIN32
   #include <ctime>

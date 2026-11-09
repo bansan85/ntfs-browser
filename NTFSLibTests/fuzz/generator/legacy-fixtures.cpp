@@ -1,7 +1,5 @@
 #include "legacy-fixtures.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -18,6 +16,7 @@
 #include "legacy-geometry.h"
 #include "resource-locator.h"
 #include "transient-damage-reader.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cerrno>
 #include <filesystem>
 #include <limits>
@@ -16,6 +14,8 @@
 #include <ntfs-browser/test/device-access/temp-dir.h>
 #include <ntfs-browser/tool/device-access/posix-device-disk-reader.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
+
+#include "win-types.h"
 
 namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
 

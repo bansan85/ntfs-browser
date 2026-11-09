@@ -1,7 +1,5 @@
 #include "compressed-file-scenarios.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
@@ -10,6 +8,7 @@
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
 
 #include "legacy-fixtures.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

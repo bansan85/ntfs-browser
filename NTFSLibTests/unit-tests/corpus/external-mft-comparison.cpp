@@ -1,7 +1,5 @@
 #include "external-mft-comparison.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -12,12 +10,13 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/mft/idx.h>
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/corpus/corpus-test-support.h>
 
 #include "external-mft-support.h"
+#include "mft/idx.h"
+#include "mft/tree.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Test::Corpus {
 

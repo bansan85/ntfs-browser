@@ -1,7 +1,5 @@
 #include "legacy-name-scenarios.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <optional>
@@ -20,6 +18,7 @@
 #include "legacy-record.h"
 #include "record-edit.h"
 #include "upcase-table.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

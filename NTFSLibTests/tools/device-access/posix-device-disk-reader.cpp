@@ -24,13 +24,13 @@
     #include <sys/sysmacros.h>
   #endif
 
-  #include <ntfs-browser/win-types.h>
-
   #include <ntfs-browser/namespace.h>
   #include <ntfs-browser/tool/device-access/disk-identity.h>
   #include <ntfs-browser/tool/device-access/host-media.h>
   #include <ntfs-browser/tool/device-access/text-convert.h>
-  #include <ntfs-browser/tuning/tuning.h>
+
+  #include "tuning/tuning.h"
+  #include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 

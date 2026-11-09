@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <vector>
 
@@ -8,6 +6,7 @@
 #include <ntfs-browser/namespace.h>
 
 #include "record/header.h"
+#include "win-types.h"
 
 namespace Record = NTFS_BROWSER_NAMESPACE::Record;
 

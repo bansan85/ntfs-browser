@@ -1,15 +1,14 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstdint>
 #include <list>
 #include <vector>
 
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 
+#include "io/file-record.h"
 #include "mft/extent-map.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 

@@ -1,0 +1,278 @@
+#pragma once
+
+#include <memory>
+#include <optional>
+#include <span>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+#include <ntfs-browser/namespace.h>
+
+#include "alloc/types.h"
+#include "attr/defines.h"
+#include "attr/type.h"
+#include "cache/stats.h"
+#include "cache/strategy.h"
+#include "cache/view.h"
+#include "disk-reader.h"
+#include "efs/efs.h"
+#include "internal-export.h"
+#include "usn/types.h"
+#include "volume-options.h"
+#include "win-types.h"
+
+#ifdef _WIN32
+  #include <tchar.h>
+#endif
+
+namespace NTFS_BROWSER_NAMESPACE {
+
+namespace Attr {
+
+struct HeaderCommon;
+
+}  // namespace Attr
+
+namespace UpCase {
+
+class Table;
+
+}  // namespace UpCase
+
+template <Cache::Strategy S>
+class NTFS_BROWSER_EXPORT_TESTS_ONLY NtfsVolume {
+ public:
+#ifdef _WIN32
+  // Opens a real disk/device by drive letter, or an arbitrary device/image
+  // path (eg. "\\\\.\\PhysicalDrive0", or a plain file for a disk image) via
+  // Win32DiskReader. Not available outside Windows -- construct NtfsVolume
+  // from an already-open IDiskReader there. options is fixed for the
+  // volume's lifetime; read it back through GetOptions().
+  explicit NtfsVolume(_TCHAR volume, const VolumeOptions& options = {});
+  explicit NtfsVolume(std::wstring_view path,
+                      const VolumeOptions& options = {});
+#endif
+  // Uses an already-open reader instead of opening a path (eg. an in-memory
+  // or sequential test double, which have no real path to open).
+  explicit NtfsVolume(std::unique_ptr<IDiskReader> reader,
+                      const VolumeOptions& options = {});
+  NtfsVolume(NtfsVolume&& other) noexcept = delete;
+  NtfsVolume(const NtfsVolume& other) = delete;
+  NtfsVolume& operator=(NtfsVolume&& other) noexcept = delete;
+  NtfsVolume& operator=(const NtfsVolume& other) = delete;
+  virtual ~NtfsVolume();
+
+ private:
+  // Every member and private method, kept out of this header.
+  class Impl;
+  std::unique_ptr<Impl> impl_;
+
+ public:
+  [[nodiscard]] bool IsVolumeOK() const noexcept;
+  // The options this volume was constructed with.
+  [[nodiscard]] const VolumeOptions& GetOptions() const noexcept;
+  [[nodiscard]] std::pair<BYTE, BYTE> GetVersion() const noexcept;
+  // Record slots $MFT holds: its declared size, capped at the clusters its
+  // data runs map, since the size field is not validated on disk.
+  [[nodiscard]] ULONGLONG GetRecordsCount() const noexcept;
+
+  [[nodiscard]] WORD GetSectorSize() const noexcept;
+  [[nodiscard]] DWORD GetClusterSize() const noexcept;
+  [[nodiscard]] DWORD GetFileRecordSize() const noexcept;
+  [[nodiscard]] DWORD GetIndexBlockSize() const noexcept;
+  [[nodiscard]] ULONGLONG GetMFTAddr() const noexcept;
+  // The volume serial number of the boot sector, as 64 bits. It tells two
+  // volumes apart: a copy of a volume keeps it.
+  [[nodiscard]] ULONGLONG GetSerialNumber() const noexcept;
+
+  [[nodiscard]] std::span<BYTE> GetClusterBuffer() const noexcept;
+
+  // Reads length bytes at addr. FullCache returns a Cache::View: the bytes
+  // stay valid while a copy of it lives and the volume is open. NoCache
+  // returns a bare span, valid until the next read on this volume.
+  [[nodiscard]] std::optional<Cache::ReadResult<S>> Read(LARGE_INTEGER& addr,
+                                                         DWORD length) const;
+  // Reads from addr into dest.
+  [[nodiscard]] bool ReadInto(LARGE_INTEGER& addr, std::span<BYTE> dest) const;
+
+  // Announces that length bytes at addr are about to be read, after the bytes
+  // announced before them. A hint the reader MAY act on (see
+  // IDiskReader::Prefetch()): it changes when the bytes are read, not which.
+  void Prefetch(ULONGLONG addr, ULONGLONG length) const;
+  // Forgets what Prefetch() announced and no read used yet.
+  void CancelPrefetch() const;
+  // Says which read pattern the reads that follow belong to, so that the
+  // reader MAY switch its read-ahead depth to the caps of
+  // VolumeOptions::tuning.reader for that pattern. A hint, like Prefetch():
+  // it changes when the bytes are read, never which.
+  void SetReadPattern(Tuning::Pattern pattern) const;
+
+  // The kind of device the volume is read from: VolumeOptions::media_kind when
+  // set, else as the device says. The probes of a directory walk read across a
+  // wider hole on a hard disk. An image file says the kind of the volume that
+  // hosts it, where Windows (or sysfs, on Linux) tells. Unknown for a fake
+  // reader, an image on a volume that does not say, or a device that does not
+  // say. Reads nothing.
+  [[nodiscard]] Tuning::MediaKind GetMediaKind() const;
+
+  // Frees every cached block that no Cache::View uses. The volume stays open,
+  // and a later read loads the data again. A no-op under NoCache.
+  void MinifyCache() const;
+  // The memory the cache holds right now. All zero under NoCache.
+  [[nodiscard]] Cache::Stats GetCacheStats() const;
+
+  [[nodiscard]] bool InstallAttrRawCB(Attr::Type attr_type,
+                                      Attr::RawCallback callback) noexcept;
+  void ClearAttrRawCB() noexcept;
+  // Whether InstallAttrRawCB() installed a callback that ClearAttrRawCB() did
+  // not remove since.
+  [[nodiscard]] bool HasAttrRawCB() const noexcept;
+
+  // Sets the source of the keys that decrypt EFS files. A null provider
+  // disables decryption altogether, and the default provider with it.
+  void SetEfsKeyProvider(
+      std::shared_ptr<Efs::IEfsKeyProvider> provider) noexcept;
+
+  // The installed provider. When none was ever installed, the first call
+  // creates the default one: the current user's certificate store, on Windows.
+  // Null where there is none, or after SetEfsKeyProvider(nullptr).
+  [[nodiscard]] std::shared_ptr<Efs::IEfsKeyProvider> GetEfsKeyProvider() const;
+
+  // Selects the cipher backend of this volume. Returns false, and keeps the
+  // current one, where the backend is unavailable: BCrypt exists on Windows
+  // only, and either backend can also be left out of the build entirely (see
+  // the NTFS_BROWSER_ENABLE_EFS_CRYPTOPP / NTFS_BROWSER_ENABLE_EFS_BCRYPT
+  // CMake options). When both are compiled in, BCrypt has no DESX, so a DESX
+  // file falls back to CryptoPp regardless of which backend is selected;
+  // with only BCrypt compiled in, a DESX file has no usable backend at all.
+  // A file record parsed earlier keeps the backend it saw.
+  [[nodiscard]] bool SetEfsCipherBackend(Efs::CipherBackend backend) noexcept;
+
+  // The backend SetEfsCipherBackend() last accepted. Defaults to whichever
+  // backend the build compiled in; CryptoPp if both are.
+  [[nodiscard]] Efs::CipherBackend GetEfsCipherBackend() const noexcept;
+
+  // Runs the raw attribute callback this volume has for att_type, if any.
+  // att_type MUST be below Attr::attr_nums. The callback sets discard.
+  void DispatchAttrRawCB(DWORD att_type, const Attr::HeaderCommon& ahc,
+                         bool& discard) const;
+
+  // True once the data extents of $MFT are mapped. Records from
+  // Mft::Idx::User on are then read through them, not from a fixed address.
+  [[nodiscard]] bool HasMftBase() const noexcept;
+  // Reads out.size() bytes of $MFT's data at offset, through its own extents.
+  // Returns the byte count read, or nothing when the read fails.
+  [[nodiscard]] std::optional<ULONGLONG> ReadMftData(ULONGLONG offset,
+                                                     std::span<BYTE> out) const;
+  // Reads out.size() bytes of $MFT's data, from the slot of record first_ref.
+  // False when the records below Mft::Idx::User are asked for (they are read
+  // from a fixed address instead), when $MFT is not mapped, or on a short read.
+  [[nodiscard]] bool ReadMftSlots(ULONGLONG first_ref,
+                                  std::span<BYTE> out) const;
+  // Announces the disk ranges a ReadMftSlots() of count slots from first_ref
+  // reads, through $MFT's own extents. Announces nothing where that read would
+  // fail at once.
+  void PrefetchMftSlots(ULONGLONG first_ref, ULONGLONG count) const;
+  // Announces the same disk ranges as PrefetchMftSlots(), on the standing lane
+  // of the reader (see IDiskReader::PrefetchStanding()): CancelPrefetch() does
+  // not withdraw them. A hint, like Prefetch(): it changes when the bytes are
+  // read, never which.
+  void PrefetchMftSlotsStanding(ULONGLONG first_ref, ULONGLONG count) const;
+  // Withdraws from the standing lane the ranges that overlap the disk ranges a
+  // ReadMftSlots() of count slots from first_ref reads.
+  void CancelMftSlotsStanding(ULONGLONG first_ref, ULONGLONG count) const;
+  // Reads out.size() bytes of the $MFTMirr copy of record file_ref. It reads
+  // nothing and returns false unless recover_errors is on, the boot sector
+  // names a usable $MFTMirr, and file_ref is below 4: the copy holds only
+  // $MFT, $MFTMirr, $LogFile and $Volume. The copy may be older than $MFT's
+  // own record.
+  [[nodiscard]] bool ReadMftMirrorRecord(ULONGLONG file_ref,
+                                         std::span<BYTE> out) const;
+
+  // The volume's $UpCase table, loaded on first use. When it cannot be read,
+  // the built-in Unicode simple uppercase mapping stands in.
+  [[nodiscard]] const UpCase::Table& GetUpCaseTable() const;
+
+  // State of one cluster, from the volume's $Bitmap and the bad list of
+  // $BadClus. The bitmap is loaded on first use, whatever include_deleted says.
+  // A cluster the bad list names is Bad, whatever its bit in the bitmap.
+  // Unknown when $Bitmap cannot be read, now or earlier: that failure is
+  // remembered and logged once. With recover_errors off a damaged $Bitmap is
+  // rejected whole; on, what parses is used. A bad list that cannot be read
+  // leaves the answer of the bitmap alone. A snapshot: neither file is read
+  // again, so a live device may differ. Not thread safe.
+  [[nodiscard]] Alloc::ClusterState GetClusterState(ULONGLONG lcn) const;
+
+  // State of clusters [lcn, lcn + clusters). A range is Allocated when any
+  // cluster is allocated and not bad; else Bad when any is bad; else OutOfRange
+  // when one lies past the volume's last cluster; else Unknown when the bitmap
+  // cannot say for one; else Free. An empty range is Free. The same snapshot
+  // rules apply.
+  [[nodiscard]] Alloc::ClusterState GetRangeState(ULONGLONG lcn,
+                                                  ULONGLONG clusters) const;
+
+  // Fills the state of each query, and how many clusters of it were allocated,
+  // free and bad. Queries are handled in LCN order, so the bitmap is read at
+  // most once per window of it, whatever the order of queries. The array keeps
+  // its order. Use it for many ranges at random places. A query the bitmap
+  // cannot answer stays Unknown, and does not spoil the others.
+  void GetRangeStates(std::span<Alloc::RangeQuery> queries) const;
+
+  // Fills runs with the state of every cluster of [lcn, lcn + clusters), as
+  // maximal runs of one Alloc::ClusterState, in LCN order: Allocated and Free
+  // from the bitmap, Bad from the bad list, which wins over a bit, Unknown
+  // where the bitmap cannot say, OutOfRange past the volume. The same snapshot
+  // rules and the same reads as GetRangeStates(), whose windows it shares: ask
+  // in ascending order to read each window once. An empty range gives no run.
+  // When $Bitmap cannot be used, the clusters are Unknown, the bad ones
+  // excepted.
+  void GetClusterRuns(ULONGLONG lcn, ULONGLONG clusters,
+                      std::vector<Alloc::ClusterRun>& runs) const;
+
+  // Keeps up to max_bytes of the cluster bitmap in memory, across the calls
+  // that follow, so that a window of it is read once and not once per call of
+  // GetRangeStates(). It changes no answer, and none of the reads of the first
+  // call. The default, 0, holds one window at a time and keeps none: a caller
+  // that makes many calls sets it for their duration, and sets 0 after, which
+  // frees what was kept. A window beyond the budget is read again by every call
+  // that needs it, as with 0. A bitmap of 1 MiB covers 32 GiB at 4 KiB per
+  // cluster.
+  void KeepBitmapWindows(ULONGLONG max_bytes) const;
+
+  // Free clusters and bytes. Empty only when $Bitmap is unusable. A bitmap
+  // shorter than the volume gives the free clusters among those it covers, and
+  // counts the rest as unknown_clusters. Padding bits past the last cluster
+  // never count. The bad clusters are reported apart, in clusters and in bytes,
+  // and are never counted free. A snapshot, like GetClusterState().
+  [[nodiscard]] std::optional<Alloc::SpaceSummary> GetSpaceSummary() const;
+
+  // The bad extents that the $Bad stream of $BadClus names, or null when that
+  // list is unusable (which is not the same as empty: an empty list means no
+  // bad cluster). Loaded on first use, whatever include_deleted says. With
+  // recover_errors off a damaged run list rejects the whole list; on, the runs
+  // that parse are used, and a list over its ceiling of 5 242 880 extents is
+  // cut and flagged truncated. A failure is remembered and logged once. The
+  // pointer lives as long as the volume. A snapshot: the list is never read
+  // again, so a live device may differ. The library never skips a bad cluster
+  // when it reads: what to do with one is the caller's choice. Not thread safe.
+  [[nodiscard]] const Alloc::BadClusters* GetBadClusters() const;
+
+  // The records of the volume's change journal, $UsnJrnl:$J of $Extend, in
+  // journal order, or null. Null in strict mode: with recover_errors off the
+  // journal is never read, nor is $Extend looked up for it. With recover_errors
+  // on, it is loaded on first use, whatever include_deleted says, and only the
+  // real ranges of the stream are read, so a sparse head costs nothing. Null
+  // also means there is no journal, or that its stream cannot be read at all:
+  // that is remembered, logged once, and never retried. An empty result means
+  // the journal exists and holds no usable record. A record whose bytes are
+  // damaged is skipped, the next one is found again, and the count of skipped
+  // stretches is in the result. Only the newest VolumeOptions::max_usn_records
+  // records are kept. The result owns its data: it does not depend on a cache
+  // view or on a buffer that the next read replaces, and the pointer lives as
+  // long as the volume. A snapshot: the journal is never read again, so a live
+  // device may differ. Not thread safe.
+  [[nodiscard]] const Usn::Journal* GetUsnJournal() const;
+};  // NtfsVolume
+
+}  // namespace NTFS_BROWSER_NAMESPACE

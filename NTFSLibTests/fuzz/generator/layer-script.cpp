@@ -1,7 +1,5 @@
 #include "layer-script.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <functional>
@@ -23,6 +21,7 @@
 #include "lznt1-compressor.h"
 #include "record-layer.h"
 #include "sparse-image.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

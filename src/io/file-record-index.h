@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -9,12 +7,13 @@
 #include <unordered_set>
 #include <vector>
 
-#include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/record/carved-name.h>
 
+#include "index-entry.h"
 #include "internal-export.h"
+#include "io/file-record.h"
+#include "record/carved-name.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 

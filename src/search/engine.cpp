@@ -4,10 +4,10 @@
 #include <memory>
 #include <utility>
 
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/search/types.h>
 
+#include "cache/strategy.h"
 #include "log/ntfs-common.h"
 #include "search/directory-engine.h"
 #include "search/field-filter.h"

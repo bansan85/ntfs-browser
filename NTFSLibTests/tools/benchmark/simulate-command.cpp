@@ -2,8 +2,6 @@
 // simulated clock, so a run is instant and repeatable: the benchmark script
 // uses it to check that its search finds a known optimum, with no disk.
 
-#include <ntfs-browser/win-types.h>
-
 #include <array>
 #include <cstdint>
 #include <cstdio>
@@ -15,20 +13,21 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/log/log.h>
-#include <ntfs-browser/mft/idx.h>
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/throttled-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/tool/device-access/json.h>
-#include <ntfs-browser/tuning/tuning.h>
-#include <ntfs-browser/volume-options.h>
 
 #include "bench-tool.h"
+#include "disk-reader.h"
+#include "log/log.h"
+#include "mft/idx.h"
+#include "mft/tree.h"
+#include "ntfs-volume.h"
+#include "tuning/tuning.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::Benchmark {
 

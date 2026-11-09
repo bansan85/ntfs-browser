@@ -1,12 +1,12 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <string>
 #include <utility>
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Test::Usn {
 

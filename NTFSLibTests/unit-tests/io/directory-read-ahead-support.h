@@ -1,19 +1,19 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
 
-#include <ntfs-browser/io/directory-read-ahead.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/throttled-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-#include <ntfs-browser/tuning/tuning.h>
-#include <ntfs-browser/volume-options.h>
+
+#include "io/directory-read-ahead.h"
+#include "tuning/tuning.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Cache {

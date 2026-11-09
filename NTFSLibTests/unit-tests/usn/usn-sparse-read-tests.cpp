@@ -1,16 +1,16 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstring>
 #include <string>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/usn/usn-test-support.h>
-#include <ntfs-browser/usn/types.h>
+
+#include "cache/strategy.h"
+#include "usn/types.h"
+#include "win-types.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;

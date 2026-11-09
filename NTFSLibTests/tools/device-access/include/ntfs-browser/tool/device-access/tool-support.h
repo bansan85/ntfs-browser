@@ -3,8 +3,9 @@
 #include <cstdio>
 #include <string_view>
 
-#include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
+
+#include "log/log.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 

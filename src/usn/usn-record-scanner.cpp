@@ -1,7 +1,5 @@
 #include "usn/usn-record-scanner.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <cstring>
@@ -14,12 +12,13 @@
 #include <gsl/narrow>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/usn/types.h>
 
 #include "data/usn-record.h"
 #include "log/ntfs-common.h"
 #include "mft/file-reference.h"
+#include "usn/types.h"
 #include "utf/utf.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Usn {
 

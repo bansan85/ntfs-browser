@@ -1,7 +1,5 @@
 #include "io/record-window.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -10,6 +8,8 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
+
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
 

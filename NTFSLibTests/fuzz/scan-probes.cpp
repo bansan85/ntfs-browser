@@ -1,7 +1,5 @@
 #include "scan-probes.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstdint>
 #include <cstdlib>
 #include <memory>
@@ -12,22 +10,24 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/alloc/cluster-account.h>
-#include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/io/directory-read-ahead.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/io/record-standing.h>
-#include <ntfs-browser/mft/idx.h>
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/record/carved-name.h>
 #include <ntfs-browser/test/fuzz/looping-disk-reader.h>
-#include <ntfs-browser/volume-options.h>
+
+#include "alloc/cluster-account.h"
+#include "alloc/types.h"
+#include "attr/mask.h"
+#include "cache/strategy.h"
+#include "disk-reader.h"
+#include "index-entry.h"
+#include "io/directory-read-ahead.h"
+#include "io/file-record.h"
+#include "io/record-standing.h"
+#include "mft/idx.h"
+#include "mft/tree.h"
+#include "ntfs-volume.h"
+#include "record/carved-name.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Test::Fuzz {
 

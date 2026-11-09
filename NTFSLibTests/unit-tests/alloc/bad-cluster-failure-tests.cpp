@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <optional>
 #include <span>
 #include <string_view>
@@ -8,19 +6,20 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/log/log.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/alloc/alloc-failure-support.h>
 #include <ntfs-browser/test/alloc/alloc-test-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
-#include <ntfs-browser/volume-options.h>
 
+#include "alloc/types.h"
+#include "attr/type.h"
+#include "cache/strategy.h"
 #include "data/ntfs-bpb.h"
+#include "log/log.h"
+#include "mft/idx.h"
+#include "ntfs-volume.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;

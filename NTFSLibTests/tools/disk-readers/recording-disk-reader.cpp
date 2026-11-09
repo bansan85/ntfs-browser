@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -12,9 +10,11 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/disk-readers/recording-disk-reader.h>
+
+#include "disk-reader.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders {
 

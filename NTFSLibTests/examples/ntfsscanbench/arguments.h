@@ -5,12 +5,13 @@
 #include <string_view>
 #include <vector>
 
-#include <ntfs-browser/alloc/cluster-account.h>
-#include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/search/types.h>
 #include <ntfs-browser/tool/device-access/bench-options.h>
-#include <ntfs-browser/volume-options.h>
+
+#include "alloc/cluster-account.h"
+#include "log/log.h"
+#include "volume-options.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Example::NtfsScanBench {
 

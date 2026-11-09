@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <array>
 #include <optional>
 #include <span>
@@ -10,16 +8,18 @@
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
-#include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/mft/idx.h>
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/alloc/alloc-test-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/mft/mft-tree-state-support.h>
 #include <ntfs-browser/test/support/test-log-sink.h>
-#include <ntfs-browser/volume-options.h>
+
+#include "alloc/types.h"
+#include "cache/strategy.h"
+#include "mft/idx.h"
+#include "mft/tree.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 using Catch::Matchers::ContainsSubstring;
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;

@@ -14,7 +14,7 @@
   #include <io.h>
 #endif
 
-#include <ntfs-browser/bench/bench.h>
+#include "bench/bench.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 

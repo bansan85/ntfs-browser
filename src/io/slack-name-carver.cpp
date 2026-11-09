@@ -1,7 +1,5 @@
 #include "io/slack-name-carver.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <memory>
@@ -9,23 +7,24 @@
 #include <span>
 #include <vector>
 
-#include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/filename.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/record/carved-name.h>
-#include <ntfs-browser/volume-options.h>
 
+#include "attr/base.h"
 #include "attr/file-name.h"
 #include "attr/std-info.h"
+#include "attr/type.h"
+#include "cache/strategy.h"
+#include "filename.h"
 #include "io/file-record-attr-types.h"
 #include "io/file-record-index.h"
+#include "io/file-record.h"
 #include "log/ntfs-common.h"
+#include "ntfs-volume.h"
+#include "record/carved-name.h"
 #include "record/header.h"
 #include "record/slack-carver.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
 

@@ -6,7 +6,8 @@
   #include <vector>
 
   #include <ntfs-browser/namespace.h>
-  #include <ntfs-browser/tuning/tuning.h>
+
+  #include "tuning/tuning.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 

@@ -1,17 +1,17 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
 #include <span>
 
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/volume-options.h>
+
+#include "cache/strategy.h"
+#include "disk-reader.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 // The probes of FuzzTestcase() that scan the $MFT or list directories over
 // readers of their own. They read in another order than the main probes, so

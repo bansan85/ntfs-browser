@@ -1,3 +1,5 @@
+#include "tuning/knobs.h"
+
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -11,9 +13,9 @@
 #include <type_traits>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tuning/knobs.h>
-#include <ntfs-browser/tuning/tuning.h>
-#include <ntfs-browser/volume-options.h>
+
+#include "tuning/tuning.h"
+#include "volume-options.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tuning {
 

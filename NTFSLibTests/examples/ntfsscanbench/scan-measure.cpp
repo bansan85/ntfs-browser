@@ -7,18 +7,18 @@
 #include <string_view>
 #include <utility>
 
-#include <ntfs-browser/bench/bench.h>
-#include <ntfs-browser/bench/platform-reader.h>
-#include <ntfs-browser/bench/replay.h>
-#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/example/ntfsscanbench/via-scan.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/search/scan.h>
 #include <ntfs-browser/search/types.h>
-#include <ntfs-browser/tuning/tuning.h>
 
+#include "bench/bench.h"
+#include "bench/platform-reader.h"
+#include "bench/replay.h"
+#include "disk-reader.h"
 #include "search/scan-probe.h"
 #include "search/target.h"
+#include "tuning/tuning.h"
 
 #ifndef _WIN32
   #include <ntfs-browser/tool/device-access/posix-device-disk-reader.h>

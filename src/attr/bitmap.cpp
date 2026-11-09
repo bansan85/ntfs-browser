@@ -1,10 +1,10 @@
 #include "attr/bitmap.h"
 
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 
 #include "attr/non-resident.h"
 #include "attr/resident.h"
+#include "cache/strategy.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Io {

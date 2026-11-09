@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -10,14 +8,16 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/mft/idx.h>
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/tool/ntfscompare/entry.h>
+
+#include "attr/mask.h"
+#include "index-entry.h"
+#include "io/file-record.h"
+#include "mft/idx.h"
+#include "mft/tree.h"
+#include "ntfs-volume.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Cache {
 

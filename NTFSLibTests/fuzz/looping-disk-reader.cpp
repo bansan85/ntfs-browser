@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstring>
 #include <fstream>
@@ -7,6 +5,8 @@
 #include <utility>
 
 #include <ntfs-browser/test/fuzz/looping-disk-reader.h>
+
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Test::Fuzz {
 

@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <functional>
 #include <stdexcept>
@@ -13,9 +11,10 @@
 #include <ntfs-browser/tool/fuzzgen/recorded-stream.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
 #include <ntfs-browser/tool/fuzzgen/scenario.h>
-#include <ntfs-browser/volume-options.h>
 
 #include "resource-locator.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -14,10 +12,11 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/record/carved-name.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 
+#include "record/carved-name.h"
 #include "record/slack-carver.h"
+#include "win-types.h"
 
 namespace Record = NTFS_BROWSER_NAMESPACE::Record;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;

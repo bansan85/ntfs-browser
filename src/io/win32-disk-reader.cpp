@@ -20,13 +20,13 @@
 #include <gsl/narrow>
 #include <winioctl.h>
 
-#include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tuning/tuning.h>
 
 #include "bench/recorder.h"
+#include "io/extended-path.h"
 #include "io/host-media-kind.h"
 #include "log/ntfs-common.h"
+#include "tuning/tuning.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
 

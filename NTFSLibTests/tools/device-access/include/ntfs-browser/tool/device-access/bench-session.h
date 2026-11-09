@@ -7,9 +7,10 @@
 #include <string>
 #include <vector>
 
-#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/bench-options.h>
+
+#include "bench/bench.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 

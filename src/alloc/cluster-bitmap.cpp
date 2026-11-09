@@ -1,7 +1,5 @@
 #include "alloc/cluster-bitmap.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <bit>
 #include <cstddef>
@@ -13,11 +11,12 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/namespace.h>
 
 #include "alloc/bad-cluster-list.h"
+#include "alloc/types.h"
 #include "log/ntfs-common.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Alloc {
 

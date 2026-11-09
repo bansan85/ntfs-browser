@@ -148,45 +148,45 @@ endif()
 
 set(
   ${PROJECT_NAME}_H
-  "../include/ntfs-browser/alloc/cluster-account.h"
-  "../include/ntfs-browser/alloc/types.h"
-  "../include/ntfs-browser/attr/defines.h"
-  "../include/ntfs-browser/attr/header-common.h"
-  "../include/ntfs-browser/attr/type.h"
-  "../include/ntfs-browser/attr/base.h"
-  "../include/ntfs-browser/bench/bench.h"
-  "../include/ntfs-browser/bench/platform-reader.h"
-  "../include/ntfs-browser/bench/read-log.h"
-  "../include/ntfs-browser/bench/replay.h"
-  "../include/ntfs-browser/bench/types.h"
-  "../include/ntfs-browser/disk-reader.h"
-  "../include/ntfs-browser/efs/efs.h"
+  "alloc/cluster-account.h"
+  "alloc/types.h"
+  "attr/defines.h"
+  "attr/header-common.h"
+  "attr/type.h"
+  "attr/base.h"
+  "bench/bench.h"
+  "bench/platform-reader.h"
+  "bench/read-log.h"
+  "bench/replay.h"
+  "bench/types.h"
+  "disk-reader.h"
+  "efs/efs.h"
   "../include/ntfs-browser/namespace.h.in"
-  "../include/ntfs-browser/io/directory-read-ahead.h"
-  "../include/ntfs-browser/io/extended-path.h"
-  "../include/ntfs-browser/io/file-record.h"
-  "../include/ntfs-browser/io/read-ahead-disk-reader.h"
-  "../include/ntfs-browser/io/record-standing.h"
-  "../include/ntfs-browser/index-entry.h"
-  "../include/ntfs-browser/log/log.h"
-  "../include/ntfs-browser/log/sink.h"
-  "../include/ntfs-browser/log/spdlog-adapter.h"
-  "../include/ntfs-browser/attr/mask.h"
-  "../include/ntfs-browser/mft/idx.h"
-  "../include/ntfs-browser/mft/tree.h"
-  "../include/ntfs-browser/record/carved-name.h"
+  "io/directory-read-ahead.h"
+  "io/extended-path.h"
+  "io/file-record.h"
+  "io/read-ahead-disk-reader.h"
+  "io/record-standing.h"
+  "index-entry.h"
+  "log/log.h"
+  "log/sink.h"
+  "log/spdlog-adapter.h"
+  "attr/mask.h"
+  "mft/idx.h"
+  "mft/tree.h"
+  "record/carved-name.h"
   "../include/ntfs-browser/search/reader-types.h"
   "../include/ntfs-browser/search/reader.h"
   "../include/ntfs-browser/search/scan.h"
   "../include/ntfs-browser/search/types.h"
-  "../include/ntfs-browser/ntfs-volume.h"
-  "../include/ntfs-browser/cache/stats.h"
-  "../include/ntfs-browser/cache/strategy.h"
-  "../include/ntfs-browser/cache/view.h"
-  "../include/ntfs-browser/tuning/knobs.h"
-  "../include/ntfs-browser/tuning/tuning.h"
-  "../include/ntfs-browser/usn/types.h"
-  "../include/ntfs-browser/volume-options.h"
+  "ntfs-volume.h"
+  "cache/stats.h"
+  "cache/strategy.h"
+  "cache/view.h"
+  "tuning/knobs.h"
+  "tuning/tuning.h"
+  "usn/types.h"
+  "volume-options.h"
   "alloc/alloc-loader.h"
   "alloc/bad-cluster-list.h"
   "alloc/claim-inventory.h"
@@ -328,9 +328,11 @@ add_library(
 
 include(GenerateExportHeader)
 # Per-symbol export/import, replacing a blanket
-# CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS: only include/ntfs-browser/*.h types that
-# cross the DLL boundary carry NTFS_BROWSER_EXPORT. A static build (the default)
-# gets an empty macro, so this header is safe to include either way.
+# CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS: only the types of the public headers
+# (include/ntfs-browser/search/*.h) carry NTFS_BROWSER_EXPORT. An internal
+# symbol that the tests reach carries NTFS_BROWSER_EXPORT_TESTS_ONLY
+# (internal-export.h). A static build (the default) gets an empty macro, so
+# this header is safe to include either way.
 generate_export_header(
   ${PROJECT_NAME}
   BASE_NAME NTFS_BROWSER
@@ -378,7 +380,9 @@ target_include_directories(
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
-  # Unlike MSVC, GCC doesn't search transitively-including files' directories.
+  # The internal headers. Private: a consumer of the library sees the public
+  # headers only. Unlike MSVC, GCC doesn't search transitively-including files'
+  # directories.
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
 )
 target_compile_definitions(${PROJECT_NAME} PUBLIC "_UNICODE" "UNICODE")

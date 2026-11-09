@@ -1,0 +1,79 @@
+#pragma once
+
+#include <optional>
+#include <span>
+#include <string_view>
+
+#include <ntfs-browser/namespace.h>
+
+#include "tuning/tuning.h"
+#include "win-types.h"
+
+namespace NTFS_BROWSER_NAMESPACE {
+
+// Abstracts "get raw bytes from a backing store" so FileReader<S> doesn't
+// depend on a Win32 file/device handle directly. An implementation decides
+// what addr/dest mean (eg. a disk offset, or an ignored parameter).
+class IDiskReader {
+ public:
+  IDiskReader() = default;
+  IDiskReader(const IDiskReader&) = delete;
+  IDiskReader& operator=(const IDiskReader&) = delete;
+  IDiskReader(IDiskReader&&) = delete;
+  IDiskReader& operator=(IDiskReader&&) = delete;
+  virtual ~IDiskReader() = default;
+
+  // Opens the backing store at path.
+  virtual bool Open(std::wstring_view path) = 0;
+
+  // Reads from addr into dest.
+  [[nodiscard]] virtual bool ReadInto(LARGE_INTEGER& addr,
+                                      std::span<BYTE> dest) const = 0;
+
+  // Size of the backing store in bytes, or nullopt when it has no fixed size.
+  [[nodiscard]] virtual std::optional<ULONGLONG> Size() const {
+    return std::nullopt;
+  }
+
+  // The kind of device behind the store, asked of the device and never
+  // measured. Unknown by default, and for any store that is not a disk or a
+  // volume: an image file, a fake.
+  [[nodiscard]] virtual Tuning::MediaKind GetMediaKind() const {
+    return Tuning::MediaKind::Unknown;
+  }
+
+  // Announces that the bytes [offset, offset + length) are about to be read,
+  // after the ranges announced before them. A hint: the reader MAY start
+  // reading them now, so that a later ReadInto() inside the range waits less.
+  // Only when the bytes are read changes, never which bytes a read asks for.
+  // Does nothing by default.
+  virtual void Prefetch(ULONGLONG /*offset*/, ULONGLONG /*length*/) const {}
+
+  // Forgets the ranges Prefetch() announced that no read has used yet.
+  virtual void CancelPrefetch() const {}
+
+  // Announces a range on the standing lane, a second queue of announcements
+  // that outlives the walk of one directory. A hint, like Prefetch(): the
+  // reader MAY start reading the range now, in announcement order, and only
+  // when the bytes are read changes, never which bytes a read asks for.
+  // CancelPrefetch() leaves the standing lane alone, and so does a read that
+  // Prefetch() served: only CancelStanding() withdraws a range from it. A
+  // reader that keeps no such lane ignores the call, as it does by default.
+  virtual void PrefetchStanding(ULONGLONG /*offset*/,
+                                ULONGLONG /*length*/) const {}
+
+  // Withdraws every range of the standing lane that overlaps
+  // [offset, offset + length). A read of a withdrawn range in flight is
+  // cancelled or completes, and its bytes are dropped. A length of 0 overlaps
+  // nothing. Does nothing by default.
+  virtual void CancelStanding(ULONGLONG /*offset*/,
+                              ULONGLONG /*length*/) const {}
+
+  // Says which read pattern the reads that follow belong to, so that a reader
+  // MAY switch the depth of its read ahead (see Tuning::ReaderTuning). A hint,
+  // like Prefetch(): it changes when the bytes are read, never which. Does
+  // nothing by default.
+  virtual void SetReadPattern(Tuning::Pattern /*pattern*/) const {}
+};
+
+}  // namespace NTFS_BROWSER_NAMESPACE

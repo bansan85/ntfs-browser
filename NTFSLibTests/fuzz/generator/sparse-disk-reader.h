@@ -1,15 +1,14 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <memory>
 #include <span>
 #include <string_view>
 
-#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 
+#include "disk-reader.h"
 #include "sparse-image.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

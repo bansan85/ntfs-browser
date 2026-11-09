@@ -1,7 +1,5 @@
 #include "io/file-record-attrs.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -22,30 +20,31 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/attr/header-common.h>
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 
 #include "attr/bitmap.h"
 #include "attr/data.h"
 #include "attr/file-name.h"
+#include "attr/header-common.h"
 #include "attr/index-alloc.h"
 #include "attr/index-root.h"
 #include "attr/list.h"
+#include "attr/mask.h"
 #include "attr/non-resident.h"
 #include "attr/slot.h"
 #include "attr/std-info.h"
+#include "attr/type.h"
 #include "attr/vol-info.h"
 #include "attr/vol-name.h"
+#include "cache/strategy.h"
 #include "data/header-non-resident.h"
 #include "data/header-resident.h"
 #include "io/file-record-efs.h"
 #include "io/file-record-impl.h"
+#include "io/file-record.h"
 #include "log/ntfs-common.h"
+#include "ntfs-volume.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Attr {

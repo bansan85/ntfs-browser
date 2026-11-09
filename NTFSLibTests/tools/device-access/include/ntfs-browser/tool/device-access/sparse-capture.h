@@ -1,14 +1,14 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <string>
 
-#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/namespace.h>
+
+#include "bench/bench.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 

@@ -1,17 +1,16 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <optional>
 #include <vector>
 
-#include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 
 #include "alloc/claim-inventory.h"
+#include "alloc/types.h"
+#include "cache/strategy.h"
 #include "mft/slot-entry.h"
+#include "mft/tree.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 

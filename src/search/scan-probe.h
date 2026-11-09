@@ -9,9 +9,9 @@
 #include <functional>
 #include <memory>
 
-#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 
+#include "disk-reader.h"
 #include "internal-export.h"
 #include "search/target.h"
 

@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
@@ -14,9 +12,11 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
+
+#include "cache/strategy.h"
+#include "mft/tree.h"
+#include "win-types.h"
 
 #ifdef _WIN32
   #include <windows.h>

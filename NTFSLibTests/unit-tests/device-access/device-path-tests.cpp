@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -12,6 +10,8 @@
 #include <ntfs-browser/test/support/long-path-support.h>
 #include <ntfs-browser/tool/device-access/device-path.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
+
+#include "win-types.h"
 
 namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
 

@@ -12,10 +12,13 @@ target_include_directories(
   NtfsUndelCore
   PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
-target_link_libraries(NtfsUndelCore PUBLIC ${PROJECT_NAME} NtfsDeviceAccess)
+target_link_libraries(
+  NtfsUndelCore
+  PUBLIC NtfsBrowserInternals NtfsDeviceAccess
+)
 
 add_executable(NtfsUndel WIN32 "main.cpp")
-target_link_libraries(NtfsUndel PRIVATE ${PROJECT_NAME} NtfsUndelCore)
+target_link_libraries(NtfsUndel PRIVATE NtfsBrowserInternals NtfsUndelCore)
 if(WIN32)
   target_sources(NtfsUndel PRIVATE "${NTFS_BROWSER_LONG_PATH_MANIFEST}")
 endif()

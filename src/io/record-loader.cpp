@@ -1,7 +1,5 @@
 #include "io/record-loader.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <exception>
 #include <memory>
@@ -12,19 +10,20 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/bench/bench.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/volume-options.h>
 
+#include "bench/bench.h"
 #include "bench/recorder.h"
+#include "cache/strategy.h"
 #include "data/file-record-header.h"
+#include "io/file-record.h"
 #include "log/ntfs-common.h"
+#include "mft/idx.h"
 #include "mft/record-offset.h"
+#include "ntfs-volume.h"
 #include "record/header.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
 

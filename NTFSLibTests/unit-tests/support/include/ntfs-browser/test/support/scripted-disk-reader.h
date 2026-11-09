@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -11,6 +9,8 @@
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
+
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 

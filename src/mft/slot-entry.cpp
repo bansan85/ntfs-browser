@@ -1,7 +1,5 @@
 #include "mft/slot-entry.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <exception>
 #include <memory>
@@ -10,21 +8,22 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/filename.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/mft/idx.h>
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 
 #include "alloc/claim-inventory.h"
+#include "alloc/types.h"
+#include "attr/base.h"
 #include "attr/file-name.h"
+#include "attr/type.h"
+#include "cache/strategy.h"
+#include "filename.h"
 #include "io/file-record-attr-types.h"
+#include "io/file-record.h"
 #include "log/ntfs-common.h"
+#include "mft/idx.h"
+#include "mft/tree.h"
+#include "ntfs-volume.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Mft {
 

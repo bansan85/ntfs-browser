@@ -2,7 +2,10 @@ if(WIN32)
   add_executable(NtfsFuzzer "main.cpp")
 
   # Reuses the sequential fake reader instead of duplicating it.
-  target_link_libraries(NtfsFuzzer PRIVATE ${PROJECT_NAME} NtfsTestDiskReaders)
+  target_link_libraries(
+    NtfsFuzzer
+    PRIVATE NtfsBrowserInternals NtfsTestDiskReaders
+  )
 
   if(BUILD_SHARED_LIBS)
     add_custom_command(
@@ -31,23 +34,11 @@ add_library(
   "scan-probes.cpp"
 )
 
-target_link_libraries(NtfsFuzzCore PUBLIC ${PROJECT_NAME})
+target_link_libraries(NtfsFuzzCore PUBLIC NtfsBrowserInternals)
 
 target_include_directories(
   NtfsFuzzCore
   PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
-)
-
-# FuzzJournalScanner() drives the journal scanner, an internal class: it needs
-# the src/ header, and the macro that makes the library export it (defined in
-# tools/fake-image/CMakeLists.txt on the library itself, so both sides agree).
-target_include_directories(
-  NtfsFuzzCore
-  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../src"
-)
-target_compile_definitions(
-  NtfsFuzzCore
-  PRIVATE NTFS_BROWSER_EXPORT_INTERNALS_FOR_TESTS
 )
 
 # Portable C++, no Win32 API, so it builds on Linux and Windows alike.

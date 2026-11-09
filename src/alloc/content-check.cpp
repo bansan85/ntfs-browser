@@ -1,7 +1,5 @@
 #include "alloc/content-check.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -9,6 +7,8 @@
 #include <span>
 
 #include <ntfs-browser/namespace.h>
+
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Alloc {
 

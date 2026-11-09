@@ -1,4 +1,4 @@
-#include <ntfs-browser/win-types.h>
+#include "bench/replay.h"
 
 #include <algorithm>
 #include <chrono>
@@ -8,13 +8,13 @@
 #include <span>
 #include <vector>
 
-#include <ntfs-browser/bench/replay.h>
-#include <ntfs-browser/bench/types.h>
-#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tuning/tuning.h>
 
 #include "bench/recorder.h"
+#include "bench/types.h"
+#include "disk-reader.h"
+#include "tuning/tuning.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Bench {
 

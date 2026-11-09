@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 
 #include <catch2/catch_test_macros.hpp>
@@ -7,6 +5,7 @@
 #include <ntfs-browser/namespace.h>
 
 #include "data/file-record-header.h"
+#include "win-types.h"
 
 using NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader;
 

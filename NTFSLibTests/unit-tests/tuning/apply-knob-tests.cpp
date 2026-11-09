@@ -13,9 +13,10 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tuning/knobs.h>
-#include <ntfs-browser/tuning/tuning.h>
-#include <ntfs-browser/volume-options.h>
+
+#include "tuning/knobs.h"
+#include "tuning/tuning.h"
+#include "volume-options.h"
 
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;
 using Catch::Matchers::ContainsSubstring;

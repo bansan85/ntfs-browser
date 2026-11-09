@@ -1,7 +1,5 @@
 #include "index-edit.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -16,6 +14,7 @@
 #include "data/index-entry.h"
 #include "data/index-root.h"
 #include "record-edit.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

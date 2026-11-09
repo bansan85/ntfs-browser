@@ -5,13 +5,14 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/alloc/alloc-failure-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/usn/usn-test-support.h>
+
+#include "cache/strategy.h"
+#include "io/file-record.h"
+#include "ntfs-volume.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace TestFakeImage = NTFS_BROWSER_NAMESPACE::Test::FakeImage;

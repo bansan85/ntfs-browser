@@ -17,10 +17,10 @@
 #include <windows.h>
 #include <winioctl.h>
 
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 
+#include "cache/strategy.h"
+#include "disk-reader.h"
 #include "io/file-reader.h"
 
 namespace {

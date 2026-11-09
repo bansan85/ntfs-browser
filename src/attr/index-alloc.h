@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -10,6 +8,7 @@
 #include <ntfs-browser/namespace.h>
 
 #include "attr/non-resident.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 

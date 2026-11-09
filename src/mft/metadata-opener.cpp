@@ -1,16 +1,15 @@
 #include "mft/metadata-opener.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <memory>
 
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 
+#include "attr/mask.h"
+#include "cache/strategy.h"
+#include "io/file-record.h"
 #include "mft/extent-map.h"
+#include "ntfs-volume.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Mft {
 

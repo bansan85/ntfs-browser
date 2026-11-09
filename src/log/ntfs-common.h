@@ -9,10 +9,10 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
 
 #include "internal-export.h"
+#include "log/log.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Log::Detail {
 

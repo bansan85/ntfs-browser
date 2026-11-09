@@ -1,7 +1,5 @@
 #include "io/file-record-extensions.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <list>
 #include <memory>
@@ -12,19 +10,20 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 
+#include "attr/base.h"
 #include "attr/list-chain.h"
+#include "attr/mask.h"
 #include "attr/slot.h"
+#include "attr/type.h"
+#include "cache/strategy.h"
 #include "io/file-record-impl.h"
+#include "io/file-record.h"
 #include "log/ntfs-common.h"
 #include "mft/file-reference.h"
+#include "ntfs-volume.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
 

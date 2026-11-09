@@ -1,4 +1,4 @@
-#include <ntfs-browser/win-types.h>
+#include "alloc/cluster-account.h"
 
 #include <algorithm>
 #include <array>
@@ -6,8 +6,9 @@
 #include <limits>
 #include <vector>
 
-#include <ntfs-browser/alloc/cluster-account.h>
 #include <ntfs-browser/namespace.h>
+
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Alloc {
 

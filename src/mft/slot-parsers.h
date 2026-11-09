@@ -1,22 +1,21 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <array>
 #include <cstddef>
 #include <limits>
 #include <memory>
 #include <vector>
 
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 
+#include "cache/strategy.h"
+#include "io/file-record.h"
 #include "log/ntfs-common.h"
 #include "mft/held-records.h"
 #include "mft/slot-entry.h"
 #include "mft/slot-reader.h"
 #include "util/chunk-pool.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 

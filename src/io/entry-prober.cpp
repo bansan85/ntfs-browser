@@ -1,7 +1,5 @@
 #include "io/entry-prober.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <iterator>
@@ -11,16 +9,17 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/bench/bench.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/tuning/tuning.h>
 
+#include "bench/bench.h"
 #include "bench/recorder.h"
+#include "cache/strategy.h"
+#include "io/file-record.h"
 #include "io/mft-runs.h"
 #include "log/ntfs-common.h"
+#include "ntfs-volume.h"
+#include "tuning/tuning.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
 

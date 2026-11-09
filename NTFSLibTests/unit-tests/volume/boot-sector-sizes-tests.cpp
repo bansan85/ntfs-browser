@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <initializer_list>
 #include <memory>
 #include <string>
@@ -8,11 +6,12 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 
 #include "boot-sector-support.h"
+#include "cache/strategy.h"
+#include "ntfs-volume.h"
+#include "win-types.h"
 
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;

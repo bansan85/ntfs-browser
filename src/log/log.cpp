@@ -1,3 +1,5 @@
+#include "log/log.h"
+
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -21,14 +23,13 @@
 #include <spdlog/sinks/sink.h>
 #include <spdlog/sinks/stdout_sinks.h>
 
-#include <ntfs-browser/bench/bench.h>
-#include <ntfs-browser/io/extended-path.h>
-#include <ntfs-browser/log/log.h>
-#include <ntfs-browser/log/sink.h>
 #include <ntfs-browser/namespace.h>
 
+#include "bench/bench.h"
 #include "bench/recorder.h"
+#include "io/extended-path.h"
 #include "log/ntfs-common.h"
+#include "log/sink.h"
 
 // Config::file_path is handed to the file sink as-is. The build defines
 // SPDLOG_WCHAR_FILENAMES on Windows for that: without it spdlog takes a

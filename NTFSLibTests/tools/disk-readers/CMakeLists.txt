@@ -18,12 +18,9 @@ add_library(
   "throttled-disk-reader.cpp"
 )
 
-# src/ resolves the on-disk layouts standalone-mft-disk-reader.cpp reads and
-# builds (boot sector, file record header, non-resident attribute header).
 target_include_directories(
   NtfsTestDiskReaders
   PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
-  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../../src"
 )
 
-target_link_libraries(NtfsTestDiskReaders PUBLIC ${PROJECT_NAME})
+target_link_libraries(NtfsTestDiskReaders PUBLIC NtfsBrowserInternals)

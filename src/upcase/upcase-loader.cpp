@@ -1,20 +1,19 @@
 #include "upcase/upcase-loader.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <memory>
 #include <optional>
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 
+#include "attr/base.h"
+#include "cache/strategy.h"
+#include "io/file-record.h"
+#include "mft/idx.h"
 #include "mft/metadata-opener.h"
 #include "upcase/upcase.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::UpCase {
 

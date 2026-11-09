@@ -8,13 +8,13 @@
 #include <string_view>
 #include <vector>
 
-#include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/tool-support.h>
 
 #include "arguments.h"
 #include "comparison-table.h"
 #include "engine.h"
+#include "log/log.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Example::NtfsScanBench {
 

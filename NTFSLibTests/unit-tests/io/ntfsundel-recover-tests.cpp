@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -14,6 +12,8 @@
 #include <ntfs-browser/search/reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/io/ntfsdir-sample-support.h>
+
+#include "win-types.h"
 
 namespace ExampleNtfsUndel = NTFS_BROWSER_NAMESPACE::Example::NtfsUndel;
 

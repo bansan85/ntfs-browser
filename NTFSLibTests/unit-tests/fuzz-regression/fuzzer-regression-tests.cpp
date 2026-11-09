@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <filesystem>
 #include <optional>
@@ -27,6 +25,7 @@
 #include "frozen/bits/elsa_std.h"
 #include "frozen/unordered_map.h"
 #include "fuzzer-expected-messages.h"
+#include "win-types.h"
 
 using NTFS_BROWSER_NAMESPACE::Test::FuzzRegression::expected_error_messages;
 using NTFS_BROWSER_NAMESPACE::Test::Support::TakeCapturedLog;

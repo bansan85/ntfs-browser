@@ -1,7 +1,5 @@
 #include "record-layer.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -14,6 +12,7 @@
 #include "index-layer.h"
 #include "layer-line.h"
 #include "legacy-record.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

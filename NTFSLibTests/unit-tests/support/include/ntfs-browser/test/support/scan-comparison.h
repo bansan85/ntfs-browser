@@ -4,9 +4,10 @@
 #include <string>
 #include <vector>
 
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
+
+#include "mft/tree.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 

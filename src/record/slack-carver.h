@@ -1,15 +1,14 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <span>
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/record/carved-name.h>
 
 #include "internal-export.h"
+#include "record/carved-name.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Record {
 

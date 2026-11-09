@@ -10,8 +10,6 @@
 //
 // usage: ntfscompare [--log=...] <folder>
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <filesystem>
 #include <functional>
@@ -25,9 +23,6 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/io/extended-path.h>
-#include <ntfs-browser/log/log.h>
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/device-path.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
@@ -40,6 +35,10 @@
 #include <ntfs-browser/tool/ntfscompare/volume-open.h>
 
 #include "console.h"
+#include "io/extended-path.h"
+#include "log/log.h"
+#include "mft/tree.h"
+#include "win-types.h"
 
 namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
 namespace ToolNtfsCompare = NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare;

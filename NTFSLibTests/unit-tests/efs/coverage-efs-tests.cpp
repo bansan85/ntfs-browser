@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <array>
 #include <cstring>
@@ -20,6 +18,7 @@
 #include "efs/efs-stream.h"
 #include "efs/fek.h"
 #include "efs/sector-cipher.h"
+#include "win-types.h"
 
 namespace {
 

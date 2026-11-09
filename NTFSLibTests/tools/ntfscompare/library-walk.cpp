@@ -1,13 +1,12 @@
-#include <ntfs-browser/win-types.h>
-
 #include <span>
 
-#include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/ntfscompare/library-walk.h>
 
+#include "index-entry.h"
+#include "mft/tree.h"
 #include "time-convert.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::NtfsCompare {
 

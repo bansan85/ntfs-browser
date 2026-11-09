@@ -1,18 +1,18 @@
 #include "io/mft-runs.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <span>
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/tuning/tuning.h>
+
+#include "cache/strategy.h"
+#include "mft/idx.h"
+#include "ntfs-volume.h"
+#include "tuning/tuning.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
 

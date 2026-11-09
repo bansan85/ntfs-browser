@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -10,12 +8,14 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
-#include <ntfs-browser/volume-options.h>
+
+#include "disk-reader.h"
+#include "io/file-record.h"
+#include "ntfs-volume.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Cache {

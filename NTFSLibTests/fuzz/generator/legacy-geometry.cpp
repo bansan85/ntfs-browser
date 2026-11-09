@@ -1,7 +1,5 @@
 #include "legacy-geometry.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <cstring>
 #include <vector>
@@ -14,6 +12,7 @@
 #include "data/index-block.h"
 #include "data/ntfs-bpb.h"
 #include "record-edit.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

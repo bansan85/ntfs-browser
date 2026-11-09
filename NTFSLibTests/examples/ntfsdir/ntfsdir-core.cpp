@@ -7,7 +7,6 @@
 
 #include <ntfs-browser/example/ntfsdir/arguments.h>
 #include <ntfs-browser/example/ntfsdir/ntfsdir-core.h>
-#include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/search/scan.h>
 #include <ntfs-browser/search/types.h>
@@ -18,6 +17,7 @@
 #include <ntfs-browser/tool/device-access/volume-target.h>
 
 #include "listing-printer.h"
+#include "log/log.h"
 #include "utf16-convert.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Example::NtfsDir {

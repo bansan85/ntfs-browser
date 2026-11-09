@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <chrono>
 #include <condition_variable>
@@ -20,14 +18,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 
-#include <ntfs-browser/alloc/cluster-account.h>
-#include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/cache/stats.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/alloc/alloc-test-support.h>
 #include <ntfs-browser/test/alloc/cluster-account-support.h>
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
@@ -36,10 +27,18 @@
 #include <ntfs-browser/test/mft/mft-tree-state-support.h>
 #include <ntfs-browser/test/usn/usn-journal-record.h>
 #include <ntfs-browser/test/usn/usn-test-support.h>
-#include <ntfs-browser/usn/types.h>
-#include <ntfs-browser/volume-options.h>
 
+#include "alloc/cluster-account.h"
+#include "alloc/types.h"
+#include "cache/stats.h"
+#include "cache/strategy.h"
+#include "disk-reader.h"
 #include "knob-effect-support.h"
+#include "mft/tree.h"
+#include "ntfs-volume.h"
+#include "usn/types.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace Alloc = NTFS_BROWSER_NAMESPACE::Alloc;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <array>
 #include <cstdint>
 #include <filesystem>
@@ -10,11 +8,13 @@
 #include <string>
 #include <vector>
 
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/volume-options.h>
+
+#include "cache/strategy.h"
+#include "mft/tree.h"
+#include "ntfs-volume.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Test::Corpus {
 

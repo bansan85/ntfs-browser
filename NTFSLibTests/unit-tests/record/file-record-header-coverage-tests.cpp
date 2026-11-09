@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstring>
 #include <span>
 #include <stdexcept>
@@ -7,13 +5,14 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/fake-image/file-record-header-edit.h>
 
+#include "cache/strategy.h"
 #include "data/file-record-header.h"
 #include "record/header.h"
+#include "win-types.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 namespace Data = NTFS_BROWSER_NAMESPACE::Data;

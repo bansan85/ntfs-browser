@@ -21,8 +21,6 @@
   #include <unistd.h>
 #endif
 
-#include <ntfs-browser/win-types.h>
-
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
@@ -31,6 +29,8 @@
 #include <ntfs-browser/test/device-access/temp-dir.h>
 #include <ntfs-browser/tool/device-access/line-buffer.h>
 #include <ntfs-browser/tool/device-access/output.h>
+
+#include "win-types.h"
 
 namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
 

@@ -7,10 +7,11 @@
 #include <string_view>
 #include <vector>
 
-#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tuning/tuning.h>
-#include <ntfs-browser/volume-options.h>
+
+#include "bench/bench.h"
+#include "tuning/tuning.h"
+#include "volume-options.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 

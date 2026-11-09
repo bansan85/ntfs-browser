@@ -3,14 +3,14 @@
 #include <system_error>
 #include <utility>
 
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/tool/device-access/device-path.h>
 #include <ntfs-browser/tool/ntfscompare/volume-open.h>
 
+#include "cache/strategy.h"
 #include "console.h"
+#include "io/extended-path.h"
+#include "ntfs-volume.h"
 
 using NTFS_BROWSER_NAMESPACE::NtfsVolume;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

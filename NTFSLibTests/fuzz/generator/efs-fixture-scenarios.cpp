@@ -1,7 +1,5 @@
 #include "efs-fixture-scenarios.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <functional>
@@ -22,12 +20,14 @@
 #include "legacy-fixtures.h"
 #include "legacy-record.h"
 #include "record-edit.h"
+#include "win-types.h"
 
 #if defined(NTFS_BROWSER_ENABLE_EFS_CRYPTOPP) || \
     (defined(_WIN32) && defined(NTFS_BROWSER_ENABLE_EFS_BCRYPT))
   #define NTFS_FUZZGEN_HAS_EFS_SUPPORT 1
-  #include <ntfs-browser/efs/efs.h>
   #include <ntfs-browser/test/efs/efs-test-support.h>
+
+  #include "efs/efs.h"
 #endif
 
 #include "data/header-non-resident.h"

@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -17,6 +15,8 @@
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/corpus/corpus-test-support.h>
+
+#include "win-types.h"
 
 namespace {
 

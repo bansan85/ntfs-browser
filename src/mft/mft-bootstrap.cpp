@@ -1,7 +1,5 @@
 #include "mft/mft-bootstrap.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
@@ -11,20 +9,21 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 
+#include "attr/base.h"
+#include "attr/mask.h"
 #include "attr/non-resident.h"
 #include "attr/slot.h"
+#include "attr/type.h"
+#include "cache/strategy.h"
 #include "data/attribute-list.h"
+#include "io/file-record.h"
 #include "log/ntfs-common.h"
 #include "mft/extent-map.h"
 #include "mft/file-reference.h"
+#include "mft/idx.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Attr {

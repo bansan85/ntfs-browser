@@ -1,7 +1,5 @@
 #include "tiny-stream-scenarios.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <string>
 #include <utility>
 #include <vector>
@@ -14,6 +12,7 @@
 #include "data/ntfs-bpb.h"
 #include "hex-bytes.h"
 #include "resource-locator.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

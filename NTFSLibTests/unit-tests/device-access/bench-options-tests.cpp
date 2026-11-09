@@ -12,11 +12,12 @@
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
-#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/bench-options.h>
-#include <ntfs-browser/tuning/tuning.h>
-#include <ntfs-browser/volume-options.h>
+
+#include "bench/bench.h"
+#include "tuning/tuning.h"
+#include "volume-options.h"
 
 namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
 

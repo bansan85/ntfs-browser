@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstdint>
 
 #include <catch2/catch_test_macros.hpp>
@@ -8,6 +6,7 @@
 #include <ntfs-browser/namespace.h>
 
 #include "util/local-file-time.h"
+#include "win-types.h"
 
 namespace Util = NTFS_BROWSER_NAMESPACE::Util;
 

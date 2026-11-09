@@ -4,9 +4,9 @@
 #include <memory>
 
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/usn/types.h>
 
 #include "internal-export.h"
+#include "usn/types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 

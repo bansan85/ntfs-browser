@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <array>
 #include <cstddef>
 #include <optional>
@@ -14,19 +12,20 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <gsl/narrow>
 
-#include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/attr/header-common.h>
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/attr/nonresident-index-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/support/test-log-sink.h>
-#include <ntfs-browser/volume-options.h>
 
+#include "attr/base.h"
+#include "attr/header-common.h"
+#include "attr/mask.h"
+#include "attr/type.h"
 #include "attribute-list-support.h"
+#include "cache/strategy.h"
+#include "mft/idx.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 

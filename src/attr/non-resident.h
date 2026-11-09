@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -9,13 +7,14 @@
 #include <unordered_map>
 #include <vector>
 
-#include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/cache/view.h>
 #include <ntfs-browser/namespace.h>
 
+#include "alloc/types.h"
+#include "attr/base.h"
 #include "attr/run-list.h"
+#include "cache/view.h"
 #include "internal-export.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 

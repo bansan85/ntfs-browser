@@ -1,17 +1,17 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <array>
 #include <filesystem>
 #include <memory>
 #include <string_view>
 #include <vector>
 
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/corpus/corpus-test-support.h>
+
+#include "io/file-record.h"
+#include "ntfs-volume.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Test::Corpus {
 

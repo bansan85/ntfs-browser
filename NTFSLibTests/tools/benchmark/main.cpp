@@ -23,16 +23,16 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/bench-options.h>
 #include <ntfs-browser/tool/device-access/device-path.h>
 #include <ntfs-browser/tool/device-access/json.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
-#include <ntfs-browser/volume-options.h>
 
 #include "bench-tool.h"
+#include "disk-reader.h"
+#include "io/extended-path.h"
+#include "volume-options.h"
 
 namespace ToolBenchmark = NTFS_BROWSER_NAMESPACE::Tool::Benchmark;
 namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;

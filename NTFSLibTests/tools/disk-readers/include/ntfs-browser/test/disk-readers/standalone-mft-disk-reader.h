@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <fstream>
 #include <optional>
@@ -10,10 +8,11 @@
 #include <string_view>
 #include <vector>
 
-#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 
 #include "data/header-non-resident.h"
+#include "disk-reader.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Data {

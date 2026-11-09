@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <optional>
 
 #include <catch2/catch_test_macros.hpp>
@@ -8,6 +6,7 @@
 
 #include "mft/file-reference.h"
 #include "mft/record-offset.h"
+#include "win-types.h"
 
 namespace Mft = NTFS_BROWSER_NAMESPACE::Mft;
 

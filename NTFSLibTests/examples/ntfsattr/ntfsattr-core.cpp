@@ -9,15 +9,16 @@
 #include <string_view>
 #include <vector>
 
-#include <ntfs-browser/attr/base.h>
 #include <ntfs-browser/example/ntfsattr/ntfsattr-core.h>
-#include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/log/log.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/tool-support.h>
 #include <ntfs-browser/tool/device-access/volume-target.h>
+
+#include "attr/base.h"
+#include "index-entry.h"
+#include "io/file-record.h"
+#include "log/log.h"
+#include "mft/idx.h"
 
 using namespace NTFS_BROWSER_NAMESPACE;
 

@@ -1,7 +1,5 @@
 #include "legacy-record.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <cstring>
@@ -13,6 +11,7 @@
 
 #include "record-edit.h"
 #include "update-sequence.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

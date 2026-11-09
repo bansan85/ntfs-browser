@@ -1,16 +1,16 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <optional>
 #include <utility>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/alloc/alloc-test-support.h>
+
+#include "mft/tree.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Cache {

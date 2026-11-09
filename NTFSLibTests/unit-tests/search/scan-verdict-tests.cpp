@@ -1,9 +1,10 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/example/ntfsscanbench/via-scan.h>
 #include <ntfs-browser/namespace.h>
+
+#include "bench/bench.h"
 
 namespace Bench = NTFS_BROWSER_NAMESPACE::Example::NtfsScanBench;
 namespace LibBench = NTFS_BROWSER_NAMESPACE::Bench;

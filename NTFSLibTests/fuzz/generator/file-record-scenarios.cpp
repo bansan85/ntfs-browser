@@ -1,7 +1,5 @@
 #include "file-record-scenarios.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -17,6 +15,7 @@
 #include "data/index-entry.h"
 #include "legacy-fixtures.h"
 #include "record-edit.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

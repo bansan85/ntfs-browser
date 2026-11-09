@@ -1,4 +1,4 @@
-// Tests for the runtime logging configuration (include/ntfs-browser/log/log.h):
+// Tests for the runtime logging configuration (src/log/log.h):
 // the --log option parser, per-target levels, and the console target's
 // split between stdout and stderr.
 
@@ -12,9 +12,9 @@
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
-#include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
 
+#include "log/log.h"
 #include "log/ntfs-common.h"
 #include "logging-test-support.h"
 

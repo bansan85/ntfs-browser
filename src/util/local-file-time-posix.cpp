@@ -1,8 +1,7 @@
-#include <ntfs-browser/win-types.h>
-
 #include <ntfs-browser/namespace.h>
 
 #include "util/local-file-time.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Util {
 

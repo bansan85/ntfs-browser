@@ -1,7 +1,5 @@
 #include "upcase/upcase.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -14,6 +12,8 @@
 #include <gsl/narrow>
 
 #include <ntfs-browser/namespace.h>
+
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::UpCase {
 namespace {

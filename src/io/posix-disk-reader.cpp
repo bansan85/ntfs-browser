@@ -21,12 +21,11 @@
     #include <sys/ioctl.h>
   #endif
 
-  #include <ntfs-browser/win-types.h>
-
   #include <ntfs-browser/namespace.h>
 
   #include "log/ntfs-common.h"
   #include "utf/utf.h"
+  #include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
 

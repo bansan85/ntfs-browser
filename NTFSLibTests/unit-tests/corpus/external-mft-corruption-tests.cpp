@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -19,13 +17,14 @@
 #include <gsl/narrow>
 #include <gsl/util>
 
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/corpus/corpus-test-support.h>
-#include <ntfs-browser/volume-options.h>
 
+#include "cache/strategy.h"
 #include "external-mft-support.h"
+#include "mft/tree.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace {
 

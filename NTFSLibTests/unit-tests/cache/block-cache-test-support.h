@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -10,6 +8,7 @@
 #include <ntfs-browser/namespace.h>
 
 #include "cache/block-cache.h"
+#include "win-types.h"
 
 namespace {
 

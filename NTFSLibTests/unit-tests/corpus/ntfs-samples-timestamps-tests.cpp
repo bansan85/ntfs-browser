@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <optional>
 #include <string_view>
 #include <tuple>
@@ -7,19 +5,20 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/corpus/corpus-test-support.h>
 #include <ntfs-browser/test/support/optional-access.h>
 
 #include "attr/file-name.h"
+#include "attr/mask.h"
 #include "attr/resident.h"
+#include "attr/type.h"
+#include "cache/strategy.h"
+#include "index-entry.h"
+#include "io/file-record.h"
 #include "ntfs-samples-support.h"
+#include "ntfs-volume.h"
+#include "win-types.h"
 
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 using NTFS_BROWSER_NAMESPACE::IndexEntry;

@@ -6,8 +6,6 @@
 // file that is damaged or salvaged, gets a line that counts its clusters by
 // condition: intact, rewritten by another file, and so on.
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <array>
 #include <cerrno>
@@ -26,14 +24,7 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/alloc/cluster-account.h>
-#include <ntfs-browser/bench/bench.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/log/log.h>
-#include <ntfs-browser/mft/idx.h>
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/tool/device-access/bench-options.h>
 #include <ntfs-browser/tool/device-access/bench-session.h>
 #include <ntfs-browser/tool/device-access/device-path.h>
@@ -43,13 +34,21 @@
 #include <ntfs-browser/tool/device-access/output.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
 #include <ntfs-browser/tool/device-access/tool-support.h>
-#include <ntfs-browser/tuning/tuning.h>
-#include <ntfs-browser/usn/types.h>
-#include <ntfs-browser/volume-options.h>
 
+#include "alloc/cluster-account.h"
 #include "arguments.h"
+#include "bench/bench.h"
+#include "cache/strategy.h"
 #include "display-paths.h"
 #include "engine.h"
+#include "log/log.h"
+#include "mft/idx.h"
+#include "mft/tree.h"
+#include "ntfs-volume.h"
+#include "tuning/tuning.h"
+#include "usn/types.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
 

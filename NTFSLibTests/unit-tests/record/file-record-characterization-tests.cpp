@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <array>
 #include <cstring>
@@ -16,21 +14,16 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <gsl/narrow>
 
-#include <ntfs-browser/attr/header-common.h>
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/fake-image/file-record-header-edit.h>
 #include <ntfs-browser/test/support/test-log-sink.h>
-#include <ntfs-browser/volume-options.h>
 
+#include "attr/header-common.h"
+#include "attr/mask.h"
+#include "attr/type.h"
+#include "cache/strategy.h"
 #include "data/file-record-flag.h"
 #include "data/file-record-header.h"
 #include "data/filename.h"
@@ -42,6 +35,12 @@
 #include "data/standard-information.h"
 #include "data/std-info-permission.h"
 #include "data/volume-information.h"
+#include "index-entry.h"
+#include "io/file-record.h"
+#include "mft/idx.h"
+#include "ntfs-volume.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace Attr = NTFS_BROWSER_NAMESPACE::Attr;
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;

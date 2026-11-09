@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -10,9 +8,11 @@
 
 #include <sys/types.h>
 
-#include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/sparse-capture.h>
+
+#include "io/extended-path.h"
+#include "win-types.h"
 
 #ifdef _WIN32
   #include <windows.h>

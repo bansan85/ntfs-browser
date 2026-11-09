@@ -8,15 +8,15 @@
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/support/long-path-support.h>
 #include <ntfs-browser/test/support/test-log-sink.h>
 
+#include "cache/strategy.h"
+#include "log/log.h"
 #include "log/ntfs-common.h"
+#include "ntfs-volume.h"
 
 #ifdef _WIN32
   #include "io/file-reader.h"

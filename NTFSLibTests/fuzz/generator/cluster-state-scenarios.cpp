@@ -1,18 +1,18 @@
 #include "cluster-state-scenarios.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <optional>
 #include <vector>
 
-#include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/account-volume.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/tool/fuzzgen/build-features.h>
 #include <ntfs-browser/tool/fuzzgen/recorded-stream.h>
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
+
+#include "alloc/types.h"
+#include "attr/type.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

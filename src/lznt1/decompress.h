@@ -25,14 +25,13 @@
 // Portable C++ only (no Win32/POSIX APIs), so it builds in both supported
 // configurations: MSVC/Windows and GCC/Linux.
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <span>
 
 #include <ntfs-browser/namespace.h>
 
 #include "../internal-export.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Lznt1 {
 

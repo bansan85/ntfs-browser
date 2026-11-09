@@ -1,7 +1,5 @@
 #include "attr/index-root.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstring>
 #include <optional>
 #include <span>
@@ -9,17 +7,18 @@
 #include <string_view>
 #include <vector>
 
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 
 #include "attr/resident.h"
+#include "attr/type.h"
+#include "cache/strategy.h"
 #include "data/index-entry-flag.h"
 #include "data/index-entry.h"
 #include "data/index-root.h"
+#include "index-entry.h"
 #include "log/ntfs-common.h"
+#include "ntfs-volume.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Io {

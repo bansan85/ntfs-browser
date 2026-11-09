@@ -1,14 +1,12 @@
-#include <ntfs-browser/win-types.h>
-
 #include <string>
 #include <vector>
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/cache/strategy.h>
-
 #include "boot-sector-support.h"
+#include "cache/strategy.h"
+#include "win-types.h"
 
 namespace Cache = NTFS_BROWSER_NAMESPACE::Cache;
 

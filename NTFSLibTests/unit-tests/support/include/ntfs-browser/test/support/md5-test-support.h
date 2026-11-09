@@ -1,11 +1,11 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <span>
 #include <string>
 
 #include <ntfs-browser/namespace.h>
+
+#include "win-types.h"
 
 // Set exactly when a build config makes Md5Hex() below available: mirrors
 // src/efs/efs.cpp's own backend choice (Crypto++ over BCrypt over neither).

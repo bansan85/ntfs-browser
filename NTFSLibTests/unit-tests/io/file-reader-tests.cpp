@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -21,18 +19,19 @@
 #include <catch2/catch_test_macros.hpp>
 #include <gsl/narrow>
 
-#include <ntfs-browser/cache/stats.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/cache/view.h>
-#include <ntfs-browser/disk-reader.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/disk-readers/counting-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/disk-readers/partition-disk-reader.h>
 #include <ntfs-browser/test/support/optional-access.h>
-#include <ntfs-browser/tuning/tuning.h>
 
+#include "cache/stats.h"
+#include "cache/strategy.h"
+#include "cache/view.h"
+#include "disk-reader.h"
 #include "io/file-reader.h"
+#include "tuning/tuning.h"
+#include "win-types.h"
 
 namespace {
 

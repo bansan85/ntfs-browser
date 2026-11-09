@@ -2,8 +2,9 @@
 
 #include <cstdint>
 
-#include <ntfs-browser/filename.h>
 #include <ntfs-browser/namespace.h>
+
+#include "filename.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 

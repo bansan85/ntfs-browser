@@ -8,10 +8,11 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/log/log.h>
-#include <ntfs-browser/log/sink.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/support/test-log-sink.h>
+
+#include "log/log.h"
+#include "log/sink.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 

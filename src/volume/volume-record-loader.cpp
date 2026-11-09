@@ -1,25 +1,24 @@
 #include "volume/volume-record-loader.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <string_view>
 #include <tuple>
 
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 
+#include "attr/mask.h"
 #include "attr/resident.h"
+#include "attr/type.h"
 #include "attr/vol-info.h"
 #include "attr/vol-name.h"
+#include "cache/strategy.h"
 #include "data/volume-information.h"
 #include "io/file-record-attr-types.h"
+#include "io/file-record.h"
 #include "log/ntfs-common.h"
+#include "mft/idx.h"
+#include "ntfs-volume.h"
 #include "utf/utf.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Volume {
 

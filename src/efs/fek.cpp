@@ -1,13 +1,12 @@
 #include "efs/fek.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstring>
 
 #include <ntfs-browser/namespace.h>
 
 #include "log/ntfs-common.h"
 #include "util/util.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Efs {
 

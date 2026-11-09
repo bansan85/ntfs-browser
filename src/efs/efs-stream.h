@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <optional>
 #include <span>
 #include <vector>
@@ -9,6 +7,7 @@
 #include <ntfs-browser/namespace.h>
 
 #include "../internal-export.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Efs {
 

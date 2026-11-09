@@ -2,9 +2,10 @@
 #include <memory>
 #include <string_view>
 
-#include <ntfs-browser/bench/platform-reader.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tuning/tuning.h>
+
+#include "bench/platform-reader.h"
+#include "tuning/tuning.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Bench {
 

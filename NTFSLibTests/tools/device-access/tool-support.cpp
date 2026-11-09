@@ -9,9 +9,10 @@
   #include <windows.h>
 #endif
 
-#include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
+
+#include "log/log.h"
 
 namespace Log = NTFS_BROWSER_NAMESPACE::Log;
 

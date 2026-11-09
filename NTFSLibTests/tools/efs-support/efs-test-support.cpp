@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstring>
 #include <optional>
@@ -10,6 +8,8 @@
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/efs/efs-test-support.h>
+
+#include "win-types.h"
 
 // The reference cipher is Crypto++ when it is compiled in, BCrypt otherwise.
 #ifdef NTFS_BROWSER_ENABLE_EFS_CRYPTOPP

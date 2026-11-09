@@ -1,4 +1,4 @@
-#include <ntfs-browser/win-types.h>
+#include "io/read-ahead-disk-reader.h"
 
 #include <algorithm>
 #include <atomic>
@@ -19,13 +19,13 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/bench/bench.h>
-#include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/io/read-ahead-disk-reader.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tuning/tuning.h>
 
+#include "bench/bench.h"
+#include "disk-reader.h"
 #include "log/ntfs-common.h"
+#include "tuning/tuning.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
 

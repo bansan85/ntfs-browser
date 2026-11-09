@@ -1,7 +1,5 @@
 #include "io/file-record-index.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
@@ -16,27 +14,28 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/attr/base.h>
-#include <ntfs-browser/attr/type.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/io/record-standing.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/record/carved-name.h>
-#include <ntfs-browser/volume-options.h>
 
+#include "attr/base.h"
 #include "attr/index-alloc.h"
 #include "attr/index-block.h"
 #include "attr/index-root.h"
 #include "attr/resident.h"
+#include "attr/type.h"
+#include "cache/strategy.h"
+#include "index-entry.h"
 #include "io/entry-prober.h"
 #include "io/file-record-attr-types.h"
+#include "io/file-record.h"
+#include "io/record-standing.h"
 #include "log/ntfs-common.h"
 #include "mft/file-reference.h"
+#include "ntfs-volume.h"
+#include "record/carved-name.h"
 #include "record/slack-carver.h"
 #include "upcase/upcase.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Attr {

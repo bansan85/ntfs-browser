@@ -149,7 +149,7 @@ target_include_directories(
 
 target_link_libraries(
   NtfsFuzzGenCore
-  PUBLIC ${PROJECT_NAME} NtfsFuzzCore NtfsFakeImage NtfsTestDiskReaders
+  PUBLIC NtfsBrowserInternals NtfsFuzzCore NtfsFakeImage NtfsTestDiskReaders
 )
 
 # The EFS inputs encrypt their data with the cipher of the unit tests.
@@ -240,7 +240,7 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -E touch "${NTFS_FUZZGEN_DATA_STAMP}"
   # The library is a DLL in a shared build: relinking the generator is not
   # enough to notice that it changed.
-  DEPENDS NtfsFuzzGen ${PROJECT_NAME} ${stamps}
+  DEPENDS NtfsFuzzGen NtfsBrowser ${stamps}
   COMMENT "Generating the fuzz inputs"
   VERBATIM
 )

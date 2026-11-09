@@ -3,13 +3,13 @@
 #include <string>
 #include <utility>
 
-#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/example/ntfsscanbench/via-scan.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/search/types.h>
 #include <ntfs-browser/tool/device-access/json.h>
 
 #include "arguments.h"
+#include "bench/bench.h"
 #include "engine.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Example::NtfsScanBench {

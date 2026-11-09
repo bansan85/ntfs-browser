@@ -9,10 +9,10 @@
 #include <ntfs-browser/tool/device-access/bench-session.h>
 #include <ntfs-browser/tool/device-access/json.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
-#include <ntfs-browser/volume-options.h>
 
 #include "arguments.h"
 #include "engine.h"
+#include "volume-options.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Example::NtfsScanBench {
 

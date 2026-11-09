@@ -22,14 +22,15 @@
 #include <malloc.h>  // _resetstkoflw
 #include <windows.h>
 
-#include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/log/log.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/test/disk-readers/sequential-disk-reader.h>
-#include <ntfs-browser/volume-options.h>
+
+#include "index-entry.h"
+#include "io/file-record.h"
+#include "log/log.h"
+#include "mft/idx.h"
+#include "ntfs-volume.h"
+#include "volume-options.h"
 
 using namespace NTFS_BROWSER_NAMESPACE;
 using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MakeGeneratorProducer;

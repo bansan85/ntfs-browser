@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -18,6 +16,7 @@
 
 #include "reader-support.h"
 #include "scan-support.h"
+#include "win-types.h"
 
 namespace TestSearch = NTFS_BROWSER_NAMESPACE::Test::Search;
 namespace TestFake = NTFS_BROWSER_NAMESPACE::Test::FakeImage;

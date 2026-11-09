@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -20,17 +18,18 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/generators/catch_generators_range.hpp>
 
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/corpus/corpus-test-support.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/usn/usn-test-support.h>
-#include <ntfs-browser/usn/types.h>
-#include <ntfs-browser/volume-options.h>
 
+#include "cache/strategy.h"
 #include "external-journal-samples.h"
 #include "external-journal-support.h"
 #include "external-mft-support.h"
+#include "usn/types.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace {
 

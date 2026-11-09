@@ -1,4 +1,4 @@
-#include <ntfs-browser/win-types.h>
+#include "mft/tree.h"
 
 #include <algorithm>
 #include <memory>
@@ -8,16 +8,12 @@
 
 #include <gsl/narrow>
 
-#include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/bench/bench.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/tuning/tuning.h>
-#include <ntfs-browser/usn/types.h>
 
 #include "alloc/claim-inventory.h"
+#include "alloc/types.h"
+#include "bench/bench.h"
+#include "cache/strategy.h"
 #include "log/ntfs-common.h"
 #include "mft/cluster-accounts.h"
 #include "mft/entry-links.h"
@@ -26,6 +22,10 @@
 #include "mft/path-builder.h"
 #include "mft/slot-scan.h"
 #include "mft/used-slots.h"
+#include "ntfs-volume.h"
+#include "tuning/tuning.h"
+#include "usn/types.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Mft {
 

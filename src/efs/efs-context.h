@@ -1,19 +1,18 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <functional>
 #include <memory>
 #include <span>
 #include <string>
 #include <vector>
 
-#include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/namespace.h>
 
 #include "efs/efs-stream.h"
+#include "efs/efs.h"
 #include "efs/sector-cipher.h"
 #include "internal-export.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 

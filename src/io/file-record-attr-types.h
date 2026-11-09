@@ -1,13 +1,12 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <type_traits>
 
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 
 #include "attr/resident.h"
+#include "cache/strategy.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
 

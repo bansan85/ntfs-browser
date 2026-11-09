@@ -1,7 +1,5 @@
 #include "counter-text.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <array>
 #include <charconv>
@@ -12,6 +10,8 @@
 #include <gsl/narrow>
 
 #include <ntfs-browser/namespace.h>
+
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

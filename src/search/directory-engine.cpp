@@ -1,7 +1,5 @@
 #include "search/directory-engine.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -13,25 +11,26 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/io/directory-read-ahead.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/io/record-standing.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/search/types.h>
-#include <ntfs-browser/tuning/tuning.h>
-#include <ntfs-browser/volume-options.h>
 
+#include "alloc/types.h"
+#include "attr/mask.h"
+#include "cache/strategy.h"
+#include "index-entry.h"
+#include "io/directory-read-ahead.h"
+#include "io/file-record.h"
+#include "io/record-standing.h"
 #include "log/ntfs-common.h"
+#include "mft/idx.h"
+#include "ntfs-volume.h"
 #include "search/engine.h"
 #include "search/match-sink.h"
 #include "search/target.h"
+#include "tuning/tuning.h"
 #include "utf/utf.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Search {
 

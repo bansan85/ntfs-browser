@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cerrno>
 #include <cstdio>
 #include <filesystem>
@@ -11,24 +9,26 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/bench/bench.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/index-entry.h>
-#include <ntfs-browser/io/directory-read-ahead.h>
-#include <ntfs-browser/io/file-record.h>
-#include <ntfs-browser/io/record-standing.h>
-#include <ntfs-browser/mft/idx.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/tool/device-access/device-path.h>
 #include <ntfs-browser/tool/device-access/local-time.h>
 #include <ntfs-browser/tool/device-access/output.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
 #include <ntfs-browser/tool/device-access/tool-support.h>
 #include <ntfs-browser/tool/dir-walk/directory-walk.h>
-#include <ntfs-browser/tuning/tuning.h>
-#include <ntfs-browser/volume-options.h>
+
+#include "attr/mask.h"
+#include "bench/bench.h"
+#include "cache/strategy.h"
+#include "index-entry.h"
+#include "io/directory-read-ahead.h"
+#include "io/file-record.h"
+#include "io/record-standing.h"
+#include "mft/idx.h"
+#include "ntfs-volume.h"
+#include "tuning/tuning.h"
+#include "volume-options.h"
+#include "win-types.h"
 
 #ifndef _WIN32
   #include <ntfs-browser/tool/device-access/posix-device-disk-reader.h>

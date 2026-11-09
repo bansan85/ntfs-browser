@@ -7,9 +7,10 @@
 #include <thread>
 #include <vector>
 
-#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/ordered-chunks.h>
+
+#include "bench/bench.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 

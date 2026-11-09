@@ -37,7 +37,7 @@ find_package(Threads REQUIRED)
 target_link_libraries(
   NtfsBrowserTests
   PRIVATE
-    ${PROJECT_NAME}
+    NtfsBrowserInternals
     NtfsFakeImage
     NtfsFuzzCore
     NtfsFuzzGenCore
@@ -46,19 +46,6 @@ target_link_libraries(
     spdlog::spdlog
     frozen::frozen
     Threads::Threads
-)
-
-# These tests reach several internal (non-public) NtfsBrowser symbols directly,
-# by including their src/ headers (see the target_include_directories below): on
-# a shared build, that only links if the library itself was built exporting
-# them. NTFS_BROWSER_EXPORT_INTERNALS_FOR_TESTS (src/internal-export.h) is what
-# makes that conditional, so it must be defined identically on both the library
-# and this target - a normal build of NtfsBrowser never defines it, keeping
-# those symbols out of its export table. The library's own define lives in
-# tools/fake-image/CMakeLists.txt.
-target_compile_definitions(
-  NtfsBrowserTests
-  PRIVATE NTFS_BROWSER_EXPORT_INTERNALS_FOR_TESTS
 )
 
 # Crypto++: support/md5-test-support.cpp's MD5 (the EFS test support has its
@@ -79,11 +66,6 @@ endif()
 if(WIN32 AND NTFS_BROWSER_ENABLE_EFS_BCRYPT)
   target_link_libraries(NtfsBrowserTests PRIVATE bcrypt)
 endif()
-
-target_include_directories(
-  NtfsBrowserTests
-  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../src"
-)
 
 # Avoids hardcoding NtfsFuzzerAfl's build-output path in the test.
 add_dependencies(NtfsBrowserTests NtfsFuzzerAfl)

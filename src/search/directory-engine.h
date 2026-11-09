@@ -2,10 +2,10 @@
 
 #include <stop_token>
 
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/search/types.h>
 
+#include "cache/strategy.h"
 #include "internal-export.h"
 #include "search/engine.h"
 #include "search/target.h"

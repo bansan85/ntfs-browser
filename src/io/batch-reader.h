@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -11,14 +9,15 @@
 #include <unordered_set>
 #include <vector>
 
-#include <ntfs-browser/alloc/types.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/directory-read-ahead.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/tuning/tuning.h>
 
+#include "alloc/types.h"
+#include "cache/strategy.h"
+#include "io/directory-read-ahead.h"
 #include "io/mft-runs.h"
 #include "io/read-ahead-held.h"
+#include "tuning/tuning.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 

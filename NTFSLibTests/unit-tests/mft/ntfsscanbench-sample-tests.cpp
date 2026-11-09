@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstdio>
 #include <filesystem>
 #include <optional>
@@ -23,6 +21,7 @@
 
 #include "data/std-info-permission.h"
 #include "mft-tree-parent-support.h"
+#include "win-types.h"
 
 namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
 

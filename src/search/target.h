@@ -7,12 +7,12 @@
 #include <string_view>
 #include <vector>
 
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
-#include <ntfs-browser/volume-options.h>
 
+#include "cache/strategy.h"
 #include "internal-export.h"
+#include "ntfs-volume.h"
+#include "volume-options.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Search {
 

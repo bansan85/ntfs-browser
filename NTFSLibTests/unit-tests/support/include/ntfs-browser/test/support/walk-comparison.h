@@ -1,13 +1,13 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <string>
 #include <vector>
 
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/io/record-standing.h>
 #include <ntfs-browser/namespace.h>
+
+#include "cache/strategy.h"
+#include "io/record-standing.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 

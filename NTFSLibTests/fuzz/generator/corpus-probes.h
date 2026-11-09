@@ -1,17 +1,17 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <functional>
 #include <initializer_list>
 #include <memory>
 #include <string_view>
 
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/disk-reader.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
+
+#include "cache/strategy.h"
+#include "disk-reader.h"
+#include "io/file-record.h"
+#include "ntfs-volume.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

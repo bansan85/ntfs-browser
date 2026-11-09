@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <array>
 #include <map>
@@ -16,6 +14,7 @@
 #include <ntfs-browser/tool/ntfscompare/compare-engine.h>
 
 #include "console.h"
+#include "win-types.h"
 
 #ifndef _WIN32
   #include <ntfs-browser/tool/device-access/driver-names.h>

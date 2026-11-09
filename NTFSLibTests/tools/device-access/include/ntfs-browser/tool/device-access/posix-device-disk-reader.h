@@ -2,14 +2,14 @@
 
 #ifndef _WIN32
 
-  #include <ntfs-browser/win-types.h>
-
   #include <optional>
   #include <span>
   #include <string_view>
 
-  #include <ntfs-browser/disk-reader.h>
   #include <ntfs-browser/namespace.h>
+
+  #include "disk-reader.h"
+  #include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 

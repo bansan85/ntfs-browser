@@ -1,15 +1,14 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/index-entry.h>
 #include <ntfs-browser/namespace.h>
 
 #include "data/index-entry-flag.h"
 #include "data/index-entry.h"
+#include "index-entry.h"
+#include "win-types.h"
 
 namespace Data = NTFS_BROWSER_NAMESPACE::Data;
 using NTFS_BROWSER_NAMESPACE::IndexEntry;

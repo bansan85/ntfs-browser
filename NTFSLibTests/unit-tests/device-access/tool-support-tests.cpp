@@ -4,9 +4,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/tool-support.h>
+
+#include "log/log.h"
 
 namespace ToolDeviceAccess = NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess;
 

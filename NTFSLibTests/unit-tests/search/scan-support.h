@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -13,6 +11,8 @@
 #include <ntfs-browser/search/scan.h>
 #include <ntfs-browser/search/types.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
+
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Test::Search {
 

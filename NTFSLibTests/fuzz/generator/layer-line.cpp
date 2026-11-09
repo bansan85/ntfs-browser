@@ -1,7 +1,5 @@
 #include "layer-line.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <charconv>
 #include <cstddef>
 #include <map>
@@ -14,6 +12,7 @@
 #include <ntfs-browser/namespace.h>
 
 #include "hex-bytes.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <array>
 #include <memory>
@@ -11,15 +9,16 @@
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
-#include <ntfs-browser/efs/efs.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/efs/efs-test-support.h>
 #include <ntfs-browser/test/support/test-log-sink.h>
 
 #include "efs/efs-context.h"
 #include "efs/efs-stream.h"
+#include "efs/efs.h"
 #include "efs/fek.h"
 #include "efs/sector-cipher.h"
+#include "win-types.h"
 
 namespace Efs = NTFS_BROWSER_NAMESPACE::Efs;
 namespace TestEfs = NTFS_BROWSER_NAMESPACE::Test::Efs;

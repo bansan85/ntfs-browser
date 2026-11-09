@@ -4,9 +4,10 @@
   #include <catch2/matchers/catch_matchers_string.hpp>
   #include <tchar.h>
 
-  #include <ntfs-browser/cache/strategy.h>
-  #include <ntfs-browser/ntfs-volume.h>
   #include <ntfs-browser/test/support/test-log-sink.h>
+
+  #include "cache/strategy.h"
+  #include "ntfs-volume.h"
 
 using Catch::Matchers::ContainsSubstring;
 

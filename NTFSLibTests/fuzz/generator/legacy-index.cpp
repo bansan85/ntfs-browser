@@ -1,7 +1,5 @@
 #include "legacy-index.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <cstring>
@@ -9,10 +7,10 @@
 #include <string_view>
 #include <vector>
 
-#include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 
+#include "attr/type.h"
 #include "data/filename-flag.h"
 #include "data/filename-namespace.h"
 #include "data/filename.h"
@@ -20,6 +18,7 @@
 #include "data/index-entry-flag.h"
 #include "data/index-entry.h"
 #include "data/index-root.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
 

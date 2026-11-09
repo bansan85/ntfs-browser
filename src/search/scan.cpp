@@ -9,11 +9,11 @@
 #include <thread>
 #include <utility>
 
-#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/search/scan.h>
 #include <ntfs-browser/search/types.h>
 
+#include "bench/bench.h"
 #include "bench/process-times.h"
 #include "log/ntfs-common.h"
 #include "search/engine.h"

@@ -1,0 +1,66 @@
+#pragma once
+
+#include <cstdint>
+#include <optional>
+#include <span>
+#include <string>
+#include <string_view>
+
+#include <ntfs-browser/namespace.h>
+
+#include "internal-export.h"
+#include "tuning/tuning.h"
+#include "volume-options.h"
+
+namespace NTFS_BROWSER_NAMESPACE::Tuning {
+
+// One tunable constant, by its stable name ("reader.max_reads"). The table of
+// knobs is the single list that the tools' profile loader, the benchmark
+// script and the documentation share: a constant that is not in it cannot be
+// set from a profile.
+struct Knob {
+  std::string_view name;
+  Family family;
+  // Bit i is set when the knob serves Pattern i.
+  std::uint8_t patterns;
+  // True when VolumeOptions keeps one value per pattern (the reader's caps).
+  bool per_pattern;
+  // Bounds of a value a profile MAY set, both included.
+  std::uint64_t min_value;
+  std::uint64_t max_value;
+  // The value the library has when nothing sets it.
+  std::uint64_t default_value;
+  // Bytes of memory one unit of the value holds or has in flight: 1 for a byte
+  // count, 1024 for a count of file records, 0 for a value that holds none (a
+  // gap, a threshold). A search that finds several values equally fast takes
+  // the one with the least value * memory_unit_bytes, and keeps the current one
+  // when that is 0 for all. The unit of a count is an estimate: it ranks the
+  // values of one knob, it is not a measure.
+  std::uint32_t memory_unit_bytes;
+  // Reads the knob. pattern is ignored unless per_pattern.
+  std::uint64_t (*get)(const VolumeOptions& options, Pattern pattern);
+  // Writes the knob. The value MUST be within the bounds.
+  void (*set)(VolumeOptions& options, Pattern pattern, std::uint64_t value);
+};
+
+// Every knob of families A, B and C, in a stable order.
+[[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY std::span<const Knob> Knobs();
+
+// The knob called name, or null.
+[[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY const Knob*
+    FindKnob(std::string_view name);
+
+// "A", "B" or "C".
+[[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY std::string_view
+    FamilyName(Family family);
+
+// Sets the knob called name to value, for pattern or, when pattern is empty,
+// for all the patterns it serves. Returns an empty string on success, else the
+// reason: an unknown name, a value out of range, or a pattern the knob does not
+// serve. Nothing changes on failure.
+[[nodiscard]] NTFS_BROWSER_EXPORT_TESTS_ONLY std::string
+    ApplyKnob(VolumeOptions& options, std::string_view name,
+              std::uint64_t value,
+              std::optional<Pattern> pattern = std::nullopt);
+
+}  // namespace NTFS_BROWSER_NAMESPACE::Tuning

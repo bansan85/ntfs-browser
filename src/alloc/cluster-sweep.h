@@ -1,13 +1,12 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <vector>
 
-#include <ntfs-browser/alloc/cluster-account.h>
 #include <ntfs-browser/namespace.h>
 
+#include "alloc/cluster-account.h"
 #include "internal-export.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Alloc {

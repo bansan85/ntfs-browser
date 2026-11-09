@@ -1,5 +1,5 @@
 // MakePfxKeyProvider() - this whole file's subject - only exists on Windows
-// (PFX import goes through CryptoAPI/CNG): see include/ntfs-browser/efs/efs.h.
+// (PFX import goes through CryptoAPI/CNG): see src/efs/efs.h.
 #ifdef _WIN32
 
   #include <algorithm>
@@ -15,15 +15,16 @@
   #include <catch2/matchers/catch_matchers_string.hpp>
   #include <gsl/narrow>
 
-  #include <ntfs-browser/efs/efs.h>
-  #include <ntfs-browser/io/file-record.h>
-  #include <ntfs-browser/mft/idx.h>
   #include <ntfs-browser/namespace.h>
-  #include <ntfs-browser/ntfs-volume.h>
   #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
   #include <ntfs-browser/test/efs/efs-test-support.h>
   #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
   #include <ntfs-browser/test/support/test-log-sink.h>
+
+  #include "efs/efs.h"
+  #include "io/file-record.h"
+  #include "mft/idx.h"
+  #include "ntfs-volume.h"
 
 namespace Fs = std::filesystem;
 

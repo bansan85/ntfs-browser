@@ -1,14 +1,14 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <vector>
 
-#include <ntfs-browser/attr/type.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/volume/volume-tree-support.h>
+
+#include "attr/type.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Test::Mft {
 

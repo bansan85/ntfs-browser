@@ -2,9 +2,9 @@
 
 #include <span>
 
-#include <ntfs-browser/alloc/types.h>
 #include <ntfs-browser/namespace.h>
 
+#include "alloc/types.h"
 #include "internal-export.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Alloc {

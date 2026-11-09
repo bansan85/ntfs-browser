@@ -6,9 +6,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
 
+#include "log/log.h"
 #include "log/ntfs-common.h"
 #include "logging-test-support.h"
 

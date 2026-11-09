@@ -1,14 +1,13 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstdint>
 #include <optional>
 
-#include <ntfs-browser/cache/view.h>
 #include <ntfs-browser/namespace.h>
 
+#include "cache/view.h"
 #include "volume/volume-geometry.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 

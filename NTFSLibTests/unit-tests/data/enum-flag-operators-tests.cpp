@@ -1,8 +1,8 @@
-#include <ntfs-browser/win-types.h>
-
 #include <cstdint>
 
 #include <catch2/catch_test_macros.hpp>
+
+#include "win-types.h"
 
 namespace {
 

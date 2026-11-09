@@ -1,5 +1,3 @@
-#include <ntfs-browser/win-types.h>
-
 #include <span>
 #include <stdexcept>
 #include <vector>
@@ -9,6 +7,7 @@
 #include <ntfs-browser/namespace.h>
 
 #include "lznt1/decompress.h"
+#include "win-types.h"
 
 TEST_CASE("LZNT1 rejects compressed output that overflows its bounds",
           "[lznt1][cov-nri]") {

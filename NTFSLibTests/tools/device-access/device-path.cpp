@@ -8,10 +8,11 @@
 #include <string_view>
 #include <system_error>
 
-#include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/device-path.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
+
+#include "io/extended-path.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 

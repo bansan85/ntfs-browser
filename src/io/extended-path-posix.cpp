@@ -2,8 +2,9 @@
 #include <string>
 #include <string_view>
 
-#include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
+
+#include "io/extended-path.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
 

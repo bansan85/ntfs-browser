@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ntfs-browser/win-types.h>
-
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -12,14 +10,15 @@
 #include <unordered_set>
 #include <vector>
 
-#include <ntfs-browser/attr/defines.h>
-#include <ntfs-browser/attr/mask.h>
-#include <ntfs-browser/io/file-record.h>
 #include <ntfs-browser/namespace.h>
 
+#include "attr/defines.h"
+#include "attr/mask.h"
 #include "attr/slot.h"
 #include "io/file-record-attr-types.h"
+#include "io/file-record.h"
 #include "record/header.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Alloc {

@@ -1,18 +1,17 @@
 #include "attr/std-info.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <cstddef>
 #include <stdexcept>
 
-#include <ntfs-browser/cache/strategy.h>
 #include <ntfs-browser/namespace.h>
 
 #include "attr/resident.h"
+#include "cache/strategy.h"
 #include "data/standard-information.h"
 #include "data/std-info-permission.h"
 #include "log/ntfs-common.h"
 #include "util/local-file-time.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Io {

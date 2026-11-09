@@ -1,7 +1,5 @@
 #include "bench/recorder.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -19,10 +17,11 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/bench/bench.h>
 #include <ntfs-browser/namespace.h>
 
+#include "bench/bench.h"
 #include "bench/process-times.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
 namespace Tuning {

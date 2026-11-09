@@ -1,21 +1,20 @@
 #include "volume/boot-sector-loader.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <array>
 #include <optional>
 #include <span>
 #include <utility>
 
-#include <ntfs-browser/bench/bench.h>
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/cache/view.h>
 #include <ntfs-browser/namespace.h>
 
+#include "bench/bench.h"
 #include "bench/recorder.h"
+#include "cache/strategy.h"
+#include "cache/view.h"
 #include "io/file-reader.h"
 #include "log/ntfs-common.h"
 #include "volume/volume-geometry.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Volume {
 

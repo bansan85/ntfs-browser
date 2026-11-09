@@ -1,7 +1,5 @@
 #include "mft/path-builder.h"
 
-#include <ntfs-browser/win-types.h>
-
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
@@ -12,11 +10,12 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/mft/tree.h>
 #include <ntfs-browser/namespace.h>
 
 #include "mft/entry-table.h"
 #include "mft/tree-testing.h"
+#include "mft/tree.h"
+#include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Mft {
 

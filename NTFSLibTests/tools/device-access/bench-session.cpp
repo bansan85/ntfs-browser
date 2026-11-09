@@ -11,14 +11,15 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/bench/bench.h>
-#include <ntfs-browser/io/extended-path.h>
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/tool/device-access/bench-session.h>
 #include <ntfs-browser/tool/device-access/json.h>
 #include <ntfs-browser/tool/device-access/sparse-capture.h>
-#include <ntfs-browser/tuning/knobs.h>
-#include <ntfs-browser/tuning/tuning.h>
+
+#include "bench/bench.h"
+#include "io/extended-path.h"
+#include "tuning/knobs.h"
+#include "tuning/tuning.h"
 
 namespace Bench = NTFS_BROWSER_NAMESPACE::Bench;
 namespace Tuning = NTFS_BROWSER_NAMESPACE::Tuning;

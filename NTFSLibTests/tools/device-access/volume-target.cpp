@@ -8,16 +8,17 @@
 #include <utility>
 #include <vector>
 
-#include <ntfs-browser/cache/strategy.h>
-#include <ntfs-browser/log/log.h>
 #include <ntfs-browser/namespace.h>
-#include <ntfs-browser/ntfs-volume.h>
 #include <ntfs-browser/tool/device-access/bench-options.h>
 #include <ntfs-browser/tool/device-access/device-path.h>
 #include <ntfs-browser/tool/device-access/text-convert.h>
 #include <ntfs-browser/tool/device-access/tool-support.h>
 #include <ntfs-browser/tool/device-access/volume-target.h>
-#include <ntfs-browser/volume-options.h>
+
+#include "cache/strategy.h"
+#include "log/log.h"
+#include "ntfs-volume.h"
+#include "volume-options.h"
 
 #ifndef _WIN32
   #include <ntfs-browser/tool/device-access/posix-device-disk-reader.h>
