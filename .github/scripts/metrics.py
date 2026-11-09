@@ -6,7 +6,10 @@ usage:
              [--coverage GAPS_JSON] [--no-churn]
 
 Writes to DIR (default build/metrics):
-  functions.csv  one row per function, every per-function metric
+  functions.csv  one row per function, every per-function metric, among them callees
+                 (distinct names followed by '(' in the body, a text scan of lizard's
+                 tokens). fan_in and fan_out are lizard raw counts, info only: they
+                 depend on the file order and on how many files define a name.
   files.csv      one row per file: function count and worst values
   duplicates.csv one row per duplicated code snippet, grouped by block
   summary.json   totals, averages, limit counts, duplication, coverage
@@ -94,7 +97,10 @@ FUNCTION_LIMITS = {
     "nloc": (40, 60),
     "nesting_depth": (3, 4),
     "params": (4, 5),
-    "fan_out": (10, 15),
+    # Distinct names called. Library, 2026-11: p50 2, p90 8, p95 10, p99 15, max 21. The
+    # alert is p95 (4.8% of functions), the limit flags the top 1.2%. Flat functions such as
+    # Log::Debug (2), Reader::Check (4) and the NtfsVolume constructors (4 to 5) stay far below.
+    "callees": (10, 14),
     "exits": (6, 8),
 }
 # Per-class limits. LCOM4 above 1 means the methods split into groups that share
@@ -144,6 +150,20 @@ TEST_MACRO = re.compile(r"\w*TEST_CASE\w*\s*\(")
 TEST_NAME = re.compile(r'(?:"(?:[^"\\]|\\.)*"\s*)+')
 TEST_LITERAL = re.compile(r'"((?:[^"\\]|\\.)*)"')
 
+# One identifier token, as lizard splits the source. Used to find the name of a call.
+IDENT_TOKEN = re.compile(r"[A-Za-z_]\w*")
+# A macro name: upper case only, such as REQUIRE or MAKEWORD. A macro call is no coupling.
+MACRO_NAME = re.compile(r"[A-Z][A-Z0-9_]*")
+# Words that take a parenthesis without being a call: statements, operators, specifiers
+# and the built-in types of a functional cast such as int(x).
+NOT_A_CALL = frozenset("""
+    if for while switch return sizeof alignof alignas decltype catch noexcept static_assert
+    static_cast dynamic_cast reinterpret_cast const_cast operator defined throw co_return
+    co_await co_yield requires typeid else do new delete and or not typename template
+    __declspec __attribute__ __has_include __has_cpp_attribute
+    void bool char short int long float double signed unsigned wchar_t char8_t char16_t char32_t
+""".split())
+
 # Minimum token run that counts as duplicated code: lizard's default.
 DUPLICATE_MIN_TOKENS = 70
 
@@ -160,9 +180,10 @@ FUNCTION_METRICS = [
     ("halstead_volume", "halstead_volume", "Halstead volume"),
     ("halstead_difficulty", "halstead_difficulty", "Halstead difficulty"),
     ("halstead_effort", "halstead_effort", "Halstead effort"),
-    ("fan_in", "fan_in", "fan-in"),
-    ("fan_out", "fan_out", "fan-out"),
-    ("general_fan_out", "general_fan_out", "general fan-out"),
+    # lizard's raw counts depend on the file order and on how many files define a name.
+    # They are information only, with no limit. See callees for a usable measure.
+    ("fan_in", "fan_in", "fan-in, lizard raw count, info only"),
+    ("fan_out", "fan_out", "fan-out, lizard raw count, info only"),
     ("exits", "exit_count", "exit points (return, throw...)"),
     ("gotos", "goto_count", "goto statements"),
     ("statements", "statement_count", "statements"),
@@ -201,13 +222,14 @@ CCN_COLUMNS = ["ccn", "ccn_mccabe", "ccn_modified", "ccn_no_logic",
 # Metrics that get a top-N table in summary.md.
 TOP_METRICS = ["ccn", "ccn_mccabe", "cognitive", "nesting_depth", "nd_mccabe",
                "nested_structures", "length", "params", "nloc", "halstead_effort",
-               "fan_out", "exits", "duplicate_blocks"]
+               "callees", "exits", "duplicate_blocks"]
 
 # Columns that hold a number, in CSV order. The per-function table adds
 # duplicate_blocks and complex_tags after them.
 NUMERIC_METRICS = [(c, m) for c, _, m in FUNCTION_METRICS] + [
     (c, m) for _, metrics in VARIANTS for c, _, m in metrics
 ] + [
+    ("callees", "distinct callee names"),
     ("duplicate_blocks", "duplicated blocks the function is part of"),
     ("coverage_pct", "line coverage, percent"),
     ("branch_gap_lines", "lines with a branch never taken"),
@@ -248,9 +270,59 @@ def analyze(extensions, paths, excludes):
     return exts, infos
 
 
+def template_start(tokens, close):
+    """Returns the index of the '<' that matches the '>' at close, or None if there is none."""
+    depth = 0
+    for i in range(close, -1, -1):
+        if tokens[i] in (";", "{", "}", "&&", "||"):
+            return None
+        depth += {">": 1, ">>": 2, "<": -1}.get(tokens[i], 0)
+        if depth == 0:
+            return i
+    return None
+
+
+def callee_count(tokens):
+    """Returns the number of distinct names a function body calls.
+
+    A call is an identifier directly followed by '('. A qualified or member call
+    counts its last name only. In Foo<T>(x) the name is the one before '<'. The
+    function's own name and parameter list are skipped. Keywords, macros, lambdas
+    and functional casts of built-in types are not calls. In a constructor, the member
+    initializers, such as member_(x), are not calls, but a call inside them is.
+    """
+    tokens = [token for token in tokens if not token.isspace()]
+    start = next((i for i, token in enumerate(tokens)
+                  if token == "(" and tokens[i - 1:i] != ["operator"]), len(tokens))
+    depth, end = 0, start
+    for end in range(start, len(tokens)):
+        depth += (tokens[end] == "(") - (tokens[end] == ")")
+        if depth == 0:
+            break
+    names = set()
+    level, in_body = 0, False
+    for i in range(end + 1, len(tokens)):
+        in_body = in_body or tokens[i] == "{"
+        level += (tokens[i] == "(") - (tokens[i] == ")")
+        # Before the body, member_(x) in an initializer list opens at level 1: no call.
+        if tokens[i] != "(" or (not in_body and level == 1):
+            continue
+        name = i - 1
+        if tokens[name] == ">":
+            opening = template_start(tokens, name)
+            if opening is None:
+                continue
+            name = opening - 1
+        if (name >= 0 and IDENT_TOKEN.fullmatch(tokens[name])
+                and not MACRO_NAME.fullmatch(tokens[name]) and tokens[name] not in NOT_A_CALL):
+            names.add(tokens[name])
+    return len(names)
+
+
 def function_row(fun):
     row = {"file": rel(fun.filename), "function": fun.long_name,
-           "start_line": fun.start_line, "end_line": fun.end_line}
+           "start_line": fun.start_line, "end_line": fun.end_line,
+           "callees": callee_count(getattr(fun, "tokens", []))}
     for column, attribute, _ in FUNCTION_METRICS:
         row[column] = number(getattr(fun, attribute))
     row["complex_tags"] = " ".join(f"{keyword}:{line}"
