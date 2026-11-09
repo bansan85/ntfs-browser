@@ -175,64 +175,67 @@ void WriteThrottleStats(Tool::DeviceAccess::JsonWriter& json,
   json.Field("wasted_ranges", stats.wasted_ranges);
 }
 
-}  // namespace
+// What the command line asks for, once read and checked.
+struct SimulationSetup {
+  std::uint64_t records = 0;
+  std::uint64_t tree_dirs = 0;
+  std::uint64_t tree_levels = 0;
+  std::uint64_t tree_files = 0;
+  // The shape of the volume: --shape=tree, else the list of $MFT fragments.
+  bool tree_shape = false;
+  std::string kind;
+  TestDiskReaders::DiskModel model;
+  NTFS_BROWSER_NAMESPACE::VolumeOptions options;
+  // The file of --write-image. Set: the command writes the image and stops.
+  std::optional<std::string> write_image;
+};
 
-int SimulateCommand(const Arguments& args) {
+// Reads and checks the options of the command. Nothing, after saying why on
+// stderr, when one is malformed or out of range.
+std::optional<SimulationSetup> ParseSimulation(const Arguments& args) {
+  SimulationSetup setup;
   bool malformed = false;
-  const std::uint64_t records =
-      args.Unsigned("records", default_records, malformed);
-  const std::uint64_t tree_dirs =
-      args.Unsigned("dirs", default_tree_dirs, malformed);
-  const std::uint64_t tree_levels =
-      args.Unsigned("levels", default_tree_levels, malformed);
-  const std::uint64_t tree_files =
-      args.Unsigned("files", default_tree_files, malformed);
-  const std::string kind = args.Value("model").value_or("ssd");
-  const TestDiskReaders::DiskModel model =
-      ModelFromArguments(args, kind, malformed);
-  if (malformed || (kind != "ssd" && kind != "hdd") ||
-      records <
+  setup.records = args.Unsigned("records", default_records, malformed);
+  setup.tree_dirs = args.Unsigned("dirs", default_tree_dirs, malformed);
+  setup.tree_levels = args.Unsigned("levels", default_tree_levels, malformed);
+  setup.tree_files = args.Unsigned("files", default_tree_files, malformed);
+  setup.kind = args.Value("model").value_or("ssd");
+  setup.model = ModelFromArguments(args, setup.kind, malformed);
+  if (malformed || (setup.kind != "ssd" && setup.kind != "hdd") ||
+      setup.records <
           static_cast<std::uint64_t>(NTFS_BROWSER_NAMESPACE::Mft::Idx::User) +
               1) {
     std::fprintf(stderr,
                  "simulate: --model is ssd or hdd, --records at least 17\n");
-    return 2;
+    return std::nullopt;
   }
 
   const std::optional<NTFS_BROWSER_NAMESPACE::VolumeOptions> tuned =
       TunedOptions(args, L"");
   if (!tuned) {
-    return 2;
+    return std::nullopt;
   }
-  NTFS_BROWSER_NAMESPACE::VolumeOptions options = *tuned;
-  options.include_deleted = args.Has("deleted");
-  options.recover_errors = args.Has("recover");
+  setup.options = *tuned;
+  setup.options.include_deleted = args.Has("deleted");
+  setup.options.recover_errors = args.Has("recover");
+  setup.tree_shape = args.Value("shape").value_or("list") == "tree";
+  setup.write_image = args.Value("write-image");
+  return setup;
+}
 
-  SilenceLibraryLog();
-
-  std::vector<BYTE> image =
-      args.Value("shape").value_or("list") == "tree"
-          ? BuildTreeImage(tree_dirs, tree_levels, tree_files)
-          : TestFakeImage::BuildFakeNtfsImageWithListMftScan(records,
-                                                             fragment_clusters);
-  // The image as a file: a volume the tools open without a disk.
-  if (const std::optional<std::string> path = args.Value("write-image")) {
-    if (!WriteImageFile(*path, image)) {
-      std::fprintf(stderr, "Cannot write %s\n", path->c_str());
-      return 1;
-    }
-    return 0;
-  }
-
+// Scans the image through the simulated disk and prints the JSON. 1 when the
+// volume does not open.
+int RunSimulation(const Arguments& args, const SimulationSetup& setup,
+                  std::vector<BYTE> image) {
   TestDiskReaders::SimulatedClock clock;
   auto memory =
       std::make_unique<TestDiskReaders::MemoryDiskReader>(std::move(image));
   auto throttled = std::make_unique<TestDiskReaders::ThrottledDiskReader>(
-      std::move(memory), model, clock, options.tuning.reader);
+      std::move(memory), setup.model, clock, setup.options.tuning.reader);
   const TestDiskReaders::ThrottledDiskReader* const disk = throttled.get();
   NTFS_BROWSER_NAMESPACE::NtfsVolume<
       NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>
-      volume(std::move(throttled), options);
+      volume(std::move(throttled), setup.options);
   if (!volume.IsVolumeOK()) {
     std::fprintf(stderr, "simulate: the synthetic volume does not open\n");
     return 1;
@@ -245,13 +248,39 @@ int SimulateCommand(const Arguments& args) {
   Tool::DeviceAccess::JsonWriter json;
   json.BeginObject();
   json.Field("format", json_format);
-  json.Field("model", kind);
-  json.Field("records", records);
+  json.Field("model", setup.kind);
+  json.Field("records", setup.records);
   json.Field("entries", static_cast<std::uint64_t>(tree.Entries().size()));
   json.Field("sim_ns", clock.NowNs());
   WriteThrottleStats(json, stats);
   json.EndObject();
   return EmitJson(args, json);
+}
+
+}  // namespace
+
+int SimulateCommand(const Arguments& args) {
+  const std::optional<SimulationSetup> setup = ParseSimulation(args);
+  if (!setup) {
+    return 2;
+  }
+
+  SilenceLibraryLog();
+
+  std::vector<BYTE> image =
+      setup->tree_shape ? BuildTreeImage(setup->tree_dirs, setup->tree_levels,
+                                         setup->tree_files)
+                        : TestFakeImage::BuildFakeNtfsImageWithListMftScan(
+                              setup->records, fragment_clusters);
+  // The image as a file: a volume the tools open without a disk.
+  if (setup->write_image) {
+    if (!WriteImageFile(*setup->write_image, image)) {
+      std::fprintf(stderr, "Cannot write %s\n", setup->write_image->c_str());
+      return 1;
+    }
+    return 0;
+  }
+  return RunSimulation(args, *setup, std::move(image));
 }
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Tool::Benchmark
