@@ -21,6 +21,7 @@ target_sources(
     "include/ntfs-browser/test/support/scripted-disk-reader.h"
     "sysfs-support.cpp"
     "test-log-sink.cpp"
+    "test-log-sink-tests.cpp"
     "include/ntfs-browser/test/support/test-log-sink.h"
     "walk-comparison.cpp"
     "include/ntfs-browser/test/support/walk-comparison.h"

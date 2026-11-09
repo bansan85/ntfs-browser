@@ -15,7 +15,8 @@ namespace NTFS_BROWSER_NAMESPACE::Test::Support {
 // does not also land in the runner's own stdout.
 // NTFS_BROWSER_NAMESPACE::Log::Configure() and SetSinks() replace the
 // library's sinks wholesale, so a test that calls either MUST call this
-// again afterwards.
+// again afterwards. It also discards what the sink holds: a test starts with
+// an empty capture, even when the test before it left lines behind.
 void InstallCaptureSink();
 
 // The capturing sink itself, for a test that installs it next to a sink of

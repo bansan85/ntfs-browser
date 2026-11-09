@@ -57,7 +57,11 @@ std::shared_ptr<CaptureSink>& Sink() {
 
 }  // namespace
 
-void InstallCaptureSink() { NTFS_BROWSER_NAMESPACE::Log::SetSinks({Sink()}); }
+void InstallCaptureSink() {
+  NTFS_BROWSER_NAMESPACE::Log::SetSinks({Sink()});
+  // A test that counts lines must not see the ones of the test before it.
+  static_cast<void>(Sink()->Take());
+}
 
 std::shared_ptr<NTFS_BROWSER_NAMESPACE::Log::ISink> CaptureSinkHandle() {
   return Sink();
