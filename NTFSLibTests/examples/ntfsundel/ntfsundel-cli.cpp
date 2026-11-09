@@ -4,9 +4,11 @@
 #include <cstdio>
 #include <filesystem>
 #include <format>
+#include <initializer_list>
 #include <iostream>
 #include <istream>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <set>
 #include <span>
@@ -123,39 +125,52 @@ bool ParseOwnOption(int argc, wchar_t* argv[], int& index, Arguments& args,
     return true;
   }
 
+  // Takes the value of the option under any of names. A value that is absent
+  // or empty is the error needs.
   std::wstring value;
-  ValueResult result = TakeValue(L"--record", argc, argv, index, value);
-  if (result != ValueResult::NotThis) {
+  const auto take = [&](std::initializer_list<std::wstring_view> names,
+                        std::wstring_view needs) {
+    ValueResult result = ValueResult::NotThis;
+    for (const std::wstring_view name : names) {
+      result = TakeValue(name, argc, argv, index, value);
+      if (result != ValueResult::NotThis) {
+        break;
+      }
+    }
+    if (result == ValueResult::Found && value.empty()) {
+      result = ValueResult::Missing;
+    }
+    if (result == ValueResult::Missing) {
+      error = needs;
+    }
+    return result;
+  };
+
+  constexpr std::wstring_view record_needs = L"--record needs a record number";
+  if (take({L"--record"}, record_needs) != ValueResult::NotThis) {
     const std::optional<std::uint64_t> record = ParseUnsigned(value);
-    if (result == ValueResult::Missing || !record) {
-      error = L"--record needs a record number";
+    if (!record) {
+      error = record_needs;
       return false;
     }
     args.records.push_back(*record);
     return true;
   }
 
-  result = TakeValue(L"--name", argc, argv, index, value);
+  ValueResult result = take({L"--name"}, L"--name needs a pattern");
   if (result != ValueResult::NotThis) {
-    if (result == ValueResult::Missing || value.empty()) {
-      error = L"--name needs a pattern";
-      return false;
+    if (result == ValueResult::Found) {
+      args.names.push_back(value);
     }
-    args.names.push_back(value);
-    return true;
+    return result == ValueResult::Found;
   }
 
-  result = TakeValue(L"--output", argc, argv, index, value);
-  if (result == ValueResult::NotThis) {
-    result = TakeValue(L"-o", argc, argv, index, value);
-  }
+  result = take({L"--output", L"-o"}, L"--output needs a folder");
   if (result != ValueResult::NotThis) {
-    if (result == ValueResult::Missing || value.empty()) {
-      error = L"--output needs a folder";
-      return false;
+    if (result == ValueResult::Found) {
+      args.output = value;
     }
-    args.output = value;
-    return true;
+    return result == ValueResult::Found;
   }
 
   handled = false;
@@ -204,21 +219,20 @@ std::wstring_view ChangeNote(NameChange change) {
   return {};
 }
 
-// Recovers the unnamed stream of file into directory. state is what
-// DescribeFile() found for the same record.
-Outcome RecoverOne(Lib::Reader& reader, const DeletedFile& file,
-                   const FileState& state, const Arguments& args,
-                   std::wstring_view directory, const Environment& env) {
-  if (!state.readable) {
-    Say(env.err, OpenFailureText(file.reference) + L"\n");
-    return Outcome::Failed;
-  }
-  if (!state.has_data) {
-    Say(env.err, std::format(L"Skipped record {} ({}): it has no data\n",
-                             file.reference, file.full_path));
-    return Outcome::NoData;
-  }
+// What a recovery run works with, the same for every file.
+struct RecoveryContext {
+  Lib::Reader& reader;
+  const Arguments& args;
+  const Environment& env;
+};
 
+// Decides whether the file may be recovered. Says why on env.err when it may
+// not, and warns when it may with a doubt. state is what DescribeFile() found
+// for the same record.
+bool ConfirmRecovery(const DeletedFile& file, const FileState& state,
+                     const RecoveryContext& context) {
+  const Arguments& args = context.args;
+  const Environment& env = context.env;
   const bool go_on =
       ShouldRecover(state.check, [&](const RecoveryCheck& check) {
         const std::wstring message = RecoveryMessage(check);
@@ -233,13 +247,33 @@ Outcome RecoverOne(Lib::Reader& reader, const DeletedFile& file,
         return false;
       });
   if (!go_on) {
-    return Outcome::Failed;
+    return false;
   }
   if (state.size > kConfirmFileSize && !args.include_doubtful) {
     Say(env.err,
         std::format(L"Skipped record {} ({}): the file is {} bytes. Use "
                     L"--include-doubtful to recover it anyway.\n",
                     file.reference, file.full_path, state.size));
+    return false;
+  }
+  return true;
+}
+
+// Recovers the unnamed stream of file into directory. state is what
+// DescribeFile() found for the same record.
+Outcome RecoverOne(const RecoveryContext& context, const DeletedFile& file,
+                   const FileState& state, std::wstring_view directory) {
+  const Environment& env = context.env;
+  if (!state.readable) {
+    Say(env.err, OpenFailureText(file.reference) + L"\n");
+    return Outcome::Failed;
+  }
+  if (!state.has_data) {
+    Say(env.err, std::format(L"Skipped record {} ({}): it has no data\n",
+                             file.reference, file.full_path));
+    return Outcome::NoData;
+  }
+  if (!ConfirmRecovery(file, state, context)) {
     return Outcome::Failed;
   }
 
@@ -253,7 +287,7 @@ Outcome RecoverOne(Lib::Reader& reader, const DeletedFile& file,
 
   RecoveryFile& target = *created.file;
   const CopyResult copied = CopyUnnamedData(
-      reader, file.handle, [](std::uint64_t) { return true; },
+      context.reader, file.handle, [](std::uint64_t) { return true; },
       [&target](std::span<const std::uint8_t> chunk) {
         return target.Write(chunk);
       });
@@ -328,9 +362,10 @@ std::optional<Listing> BuildListing(Lib::Reader& reader,
 
 // Recovers the files at positions into the folder output.
 int RecoverFiles(const Listing& listing,
-                 const std::vector<std::size_t>& positions, Lib::Reader& reader,
-                 const Arguments& args, const std::filesystem::path& output,
-                 const Environment& env) {
+                 const std::vector<std::size_t>& positions,
+                 const std::filesystem::path& output,
+                 const RecoveryContext& context) {
+  const Environment& env = context.env;
   std::error_code error;
   std::filesystem::create_directories(Device::ExtendedFsPath(output), error);
   if (error) {
@@ -342,9 +377,8 @@ int RecoverFiles(const Listing& listing,
   std::size_t recovered = 0;
   std::size_t failed = 0;
   for (const std::size_t position : positions) {
-    const Outcome outcome =
-        RecoverOne(reader, listing.files.at(position),
-                   listing.states.at(position), args, directory, env);
+    const Outcome outcome = RecoverOne(context, listing.files.at(position),
+                                       listing.states.at(position), directory);
     recovered += outcome == Outcome::Recovered ? 1 : 0;
     failed += outcome == Outcome::Failed ? 1 : 0;
   }
@@ -484,70 +518,100 @@ Selection SelectFiles(const std::vector<DeletedFile>& files,
   return selection;
 }
 
+namespace {
+
+// Reads one number of 1 to count, as a position from 0.
+std::optional<std::size_t> ParsePosition(std::string_view text,
+                                         std::size_t count) {
+  if (text.empty() || text.size() > max_position_digits) {
+    return std::nullopt;
+  }
+  std::size_t value = 0;
+  for (const char character : text) {
+    if (character < '0' || character > '9') {
+      return std::nullopt;
+    }
+    value = value * 10 + static_cast<std::size_t>(character - '0');
+  }
+  if (value == 0 || value > count) {
+    return std::nullopt;
+  }
+  return value - 1;
+}
+
+// The positions of a typed list, in the order typed, each once.
+class PositionList {
+ public:
+  // A list over files numbered from 1 to count.
+  explicit PositionList(std::size_t count) : seen_(count, false) {}
+
+  // Returns the number of files the positions may point at.
+  [[nodiscard]] std::size_t Count() const { return seen_.size(); }
+
+  // Appends position, unless the list already holds it.
+  void Add(std::size_t position) {
+    if (!seen_[position]) {
+      seen_[position] = true;
+      positions_.push_back(position);
+    }
+  }
+
+  // Hands over the positions. The list is spent after that.
+  [[nodiscard]] std::vector<std::size_t> Release() {
+    return std::move(positions_);
+  }
+
+ private:
+  std::vector<std::size_t> positions_;
+  std::vector<bool> seen_;
+};
+
+// Adds what one token of a typed list stands for: "all", a number, or a range
+// like "3-5". Returns false when the token is none of them.
+bool AddToken(std::string_view token, PositionList& list) {
+  if (token == "all" || token == "ALL" || token == "All") {
+    for (std::size_t i = 0; i < list.Count(); i++) {
+      list.Add(i);
+    }
+    return true;
+  }
+  const std::size_t dash = token.find('-');
+  const std::optional<std::size_t> first =
+      ParsePosition(token.substr(0, dash), list.Count());
+  if (!first) {
+    return false;
+  }
+  if (dash == std::string_view::npos) {
+    list.Add(*first);
+    return true;
+  }
+  const std::optional<std::size_t> last =
+      ParsePosition(token.substr(dash + 1), list.Count());
+  if (!last || *last < *first) {
+    return false;
+  }
+  for (std::size_t i = *first; i <= *last; i++) {
+    list.Add(i);
+  }
+  return true;
+}
+
+}  // namespace
+
 std::optional<std::vector<std::size_t>> ParseNumberList(std::string_view line,
                                                         std::size_t count) {
-  std::vector<std::size_t> positions;
-  std::vector<bool> seen(count, false);
-  const auto add = [&](std::size_t position) {
-    if (!seen[position]) {
-      seen[position] = true;
-      positions.push_back(position);
-    }
-  };
-
-  // Reads one number of 1 to count, as a position from 0.
-  const auto position_of =
-      [count](std::string_view text) -> std::optional<std::size_t> {
-    if (text.empty() || text.size() > max_position_digits) {
-      return std::nullopt;
-    }
-    std::size_t value = 0;
-    for (const char character : text) {
-      if (character < '0' || character > '9') {
-        return std::nullopt;
-      }
-      value = value * 10 + static_cast<std::size_t>(character - '0');
-    }
-    if (value == 0 || value > count) {
-      return std::nullopt;
-    }
-    return value - 1;
-  };
-
+  PositionList list(count);
   std::size_t start = 0;
   while (start < line.size()) {
     const std::size_t end = line.find_first_of(" ,\t\r", start);
     const std::string_view token =
         line.substr(start, end == std::string_view::npos ? end : end - start);
     start = end == std::string_view::npos ? line.size() : end + 1;
-    if (token.empty()) {
-      continue;
-    }
-
-    if (token == "all" || token == "ALL" || token == "All") {
-      for (std::size_t i = 0; i < count; i++) {
-        add(i);
-      }
-      continue;
-    }
-    const std::size_t dash = token.find('-');
-    const std::optional<std::size_t> first = position_of(token.substr(0, dash));
-    if (!first) {
+    if (!token.empty() && !AddToken(token, list)) {
       return std::nullopt;
-    }
-    if (dash == std::string_view::npos) {
-      add(*first);
-      continue;
-    }
-    const std::optional<std::size_t> last = position_of(token.substr(dash + 1));
-    if (!last || *last < *first) {
-      return std::nullopt;
-    }
-    for (std::size_t i = *first; i <= *last; i++) {
-      add(i);
     }
   }
-  return positions;
+  return list.Release();
 }
 
 FileState DescribeFile(Lib::Reader& reader, const DeletedFile& file) {
@@ -616,47 +680,120 @@ std::wstring CheckOutputVolume(const std::filesystem::path& source,
   return {};
 }
 
-int UndelTarget(const Arguments& args, const Environment& env) {
-  const bool recover_errors = args.common.volume_options.recover_errors;
+namespace {
 
+// Checks the target and the output folder, then opens the Reader on the
+// target. Says why on env.err and returns nothing when the run cannot go on.
+std::unique_ptr<Lib::Reader> OpenForRecovery(const Arguments& args,
+                                             const Environment& env) {
   const std::optional<std::filesystem::path> source =
       Device::TargetSource(args.target);
   if (!source) {
     Say(env.err,
         L"Cannot find a device or image file in " + args.target + L"\n");
-    return failure_exit_code;
+    return nullptr;
   }
 
-  const std::filesystem::path output = Device::PathFromWide(args.output);
   if (!args.output.empty()) {
-    const std::wstring refusal =
-        CheckOutputVolume(*source, output, env.volume_id);
+    const std::wstring refusal = CheckOutputVolume(
+        *source, Device::PathFromWide(args.output), env.volume_id);
     if (!refusal.empty()) {
       Say(env.err, refusal + L"\n");
-      return failure_exit_code;
+      return nullptr;
     }
   }
 
-  Lib::Reader reader(
-      {.target = ToUtf16(args.target), .recover_errors = recover_errors});
-  if (!reader.IsOpen()) {
+  auto reader = std::make_unique<Lib::Reader>(Lib::ReaderOptions{
+      .target = ToUtf16(args.target),
+      .recover_errors = args.common.volume_options.recover_errors});
+  if (!reader->IsOpen()) {
     Say(env.err, L"Cannot read an NTFS volume from " + Shown(*source) + L"\n");
+    return nullptr;
+  }
+  return reader;
+}
+
+// Prints one line per listed file, and a warning when the list is cut short.
+void PrintListing(const Listing& listing, const Environment& env) {
+  for (std::size_t i = 0; i < listing.files.size(); i++) {
+    Say(env.out,
+        FormatListLine(i + 1, listing.files[i], listing.states[i]) + L"\n");
+  }
+  if (listing.truncated) {
+    Say(env.err, TooManyFilesMessage() + L"\n");
+  }
+}
+
+// What to recover, or the exit code of a run that stops before.
+struct Choice {
+  std::vector<std::size_t> positions;
+  std::optional<int> exit_code;
+};
+
+// A choice that ends the run with code.
+Choice StopWith(int code) { return {.positions = {}, .exit_code = code}; }
+
+// Chooses the files that --all, --record and --name pick. A record that is
+// not listed, and a selection that picks nothing, end the run.
+Choice ChooseBySelection(const Listing& listing, const Arguments& args,
+                         const Environment& env) {
+  std::set<std::uint64_t> named;
+  for (const std::wstring& pattern : args.names) {
+    const std::optional<std::set<std::uint64_t>> found = FindNamedFiles(
+        args.target, args.common.volume_options.recover_errors, pattern);
+    if (!found) {
+      Say(env.err, L"The scan failed\n");
+      return StopWith(failure_exit_code);
+    }
+    named.insert(found->begin(), found->end());
+  }
+  Selection selection = SelectFiles(listing.files, args, named);
+  for (const std::uint64_t record : selection.missing_records) {
+    Say(env.err, std::format(L"Record {} is not in the list\n", record));
+  }
+  if (!selection.missing_records.empty()) {
+    return StopWith(failure_exit_code);
+  }
+  if (selection.positions.empty()) {
+    Say(env.err, L"No listed file matches\n");
+    return StopWith(failure_exit_code);
+  }
+  return {.positions = std::move(selection.positions), .exit_code = {}};
+}
+
+// Chooses the files to recover: the selection of the command line, else the
+// answer of the user, else nothing and a refusal.
+Choice ChoosePositions(const Listing& listing, const Arguments& args,
+                       const Environment& env) {
+  if (args.HasSelection()) {
+    return ChooseBySelection(listing, args, env);
+  }
+  if (env.interactive) {
+    std::vector<std::size_t> positions = AskForFiles(env, listing.files.size());
+    if (positions.empty()) {
+      return StopWith(0);
+    }
+    return {.positions = std::move(positions), .exit_code = {}};
+  }
+  Say(env.err, L"Nothing is selected. Give --all, --record or --name.\n");
+  return StopWith(failure_exit_code);
+}
+
+}  // namespace
+
+int UndelTarget(const Arguments& args, const Environment& env) {
+  const std::unique_ptr<Lib::Reader> reader = OpenForRecovery(args, env);
+  if (!reader) {
     return failure_exit_code;
   }
 
-  const std::optional<Listing> listing =
-      BuildListing(reader, args.target, recover_errors);
+  const std::optional<Listing> listing = BuildListing(
+      *reader, args.target, args.common.volume_options.recover_errors);
   if (!listing) {
     Say(env.err, L"The scan failed\n");
     return failure_exit_code;
   }
-  for (std::size_t i = 0; i < listing->files.size(); i++) {
-    Say(env.out,
-        FormatListLine(i + 1, listing->files[i], listing->states[i]) + L"\n");
-  }
-  if (listing->truncated) {
-    Say(env.err, TooManyFilesMessage() + L"\n");
-  }
+  PrintListing(*listing, env);
   if (args.output.empty()) {
     Say(env.err, std::format(L"{} deleted files. Add --output DIR and --all, "
                              L"--record or --name to recover some.\n",
@@ -664,41 +801,13 @@ int UndelTarget(const Arguments& args, const Environment& env) {
     return 0;
   }
 
-  std::vector<std::size_t> positions;
-  if (args.HasSelection()) {
-    std::set<std::uint64_t> named;
-    for (const std::wstring& pattern : args.names) {
-      const std::optional<std::set<std::uint64_t>> found =
-          FindNamedFiles(args.target, recover_errors, pattern);
-      if (!found) {
-        Say(env.err, L"The scan failed\n");
-        return failure_exit_code;
-      }
-      named.insert(found->begin(), found->end());
-    }
-    const Selection selection = SelectFiles(listing->files, args, named);
-    for (const std::uint64_t record : selection.missing_records) {
-      Say(env.err, std::format(L"Record {} is not in the list\n", record));
-    }
-    if (!selection.missing_records.empty()) {
-      return failure_exit_code;
-    }
-    positions = selection.positions;
-    if (positions.empty()) {
-      Say(env.err, L"No listed file matches\n");
-      return failure_exit_code;
-    }
-  } else if (env.interactive) {
-    positions = AskForFiles(env, listing->files.size());
-    if (positions.empty()) {
-      return 0;
-    }
-  } else {
-    Say(env.err, L"Nothing is selected. Give --all, --record or --name.\n");
-    return failure_exit_code;
+  const Choice choice = ChoosePositions(*listing, args, env);
+  if (choice.exit_code) {
+    return *choice.exit_code;
   }
-
-  return RecoverFiles(*listing, positions, reader, args, output, env);
+  return RecoverFiles(*listing, choice.positions,
+                      Device::PathFromWide(args.output),
+                      {.reader = *reader, .args = args, .env = env});
 }
 
 int RunNtfsUndel(int argc, wchar_t* argv[]) {
