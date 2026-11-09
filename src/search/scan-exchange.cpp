@@ -82,7 +82,7 @@ void ScanExchange::Store(const Entry& entry) {
 void ScanExchange::SetPercent(double percent) {
   log_.Checkpoint();
   const std::scoped_lock lock(mutex_);
-  percent_.store(percent, std::memory_order_relaxed);
+  percent_ = percent;
   NoteNews();
 }
 
@@ -171,7 +171,8 @@ void ScanExchange::Release() noexcept {
 }
 
 std::optional<double> ScanExchange::Percent() const noexcept {
-  const double percent = percent_.load(std::memory_order_relaxed);
+  const std::scoped_lock lock(mutex_);
+  const double percent = percent_;
   if (percent < 0.0) {
     return std::nullopt;
   }

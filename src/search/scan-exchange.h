@@ -1,7 +1,6 @@
 #pragma once
 
 #include <array>
-#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstddef>
@@ -131,7 +130,7 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY ScanExchange final : public EntrySink {
   static constexpr double no_percent = -1.0;
 
   std::size_t max_pending_;
-  std::mutex mutex_;
+  mutable std::mutex mutex_;
   std::condition_variable_any filled_;
   // Signals WaitForNews(). Always used with mutex_.
   std::condition_variable changed_;
@@ -155,7 +154,9 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY ScanExchange final : public EntrySink {
   // Wake() was called and no WaitForNews() has consumed it. Guarded by mutex_.
   bool wake_{false};
   State result_{State::NotStarted};
-  std::atomic<double> percent_{no_percent};
+  // Guarded by mutex_. A std::atomic<double> would need libatomic on a 32-bit
+  // target.
+  double percent_{no_percent};
   Log::Detail::WorkerLog log_;
 };
 
