@@ -39,10 +39,10 @@
 //
 // The library and its log are not thread safe, and the Scan keeps to that.
 // Whatever the worker logs, the opening of the volume included, is captured in
-// a buffer of the worker. Poll() replays it to the log sinks on the caller's
-// thread, in order, as it hands over the batches. The sinks are never called
-// from the worker thread. The log levels are the ones the sinks accept when
-// Start() runs.
+// a buffer of the worker. Poll() replays it to the log sink (SetLogSink() in
+// search/log.h) on the caller's thread, in order, as it hands over the batches.
+// The sink is never called from the worker thread. The log level is the one the
+// sink accepts when Start() runs.
 //
 // Pace. A Poll() delivers everything found since the previous one, as one
 // batch. Call it about every 100 ms. It calls the callback only when something
@@ -93,8 +93,9 @@
 // expression that does not compile, or one when the library has no regex
 // support, a range with its minimum above its maximum, a field that the engine
 // does not give), a damaged folder or an unreadable record goes to the library
-// log (Log::Error, Log::Warn). An exception in the worker is caught, logged,
-// and ends the scan as Failed. GetState() tells that the scan failed.
+// log: see search/log.h, which sets the function that receives it. An exception
+// in the worker is caught, logged, and ends the scan as Failed. GetState()
+// tells that the scan failed.
 
 #include <chrono>
 #include <functional>

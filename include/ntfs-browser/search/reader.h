@@ -46,7 +46,7 @@
 // record it parsed, so a loop of reads of one file parses it once.
 //
 // Errors. Nothing is thrown. A call returns a ReadResult with a ReadError. The
-// detail goes to the library log (Log::Error, Log::Warn).
+// detail goes to the library log (see search/log.h).
 
 #include <cstddef>
 #include <cstdint>
