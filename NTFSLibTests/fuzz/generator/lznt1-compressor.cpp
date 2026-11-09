@@ -98,83 +98,120 @@ std::vector<BYTE> Pack(const std::vector<Item>& items) {
   return out;
 }
 
+// The best match that the table finds for a position: its length in bytes (0
+// when none) and how far back it starts.
+struct Match {
+  std::size_t length = 0;
+  std::size_t offset = 0;
+};
+
+// The bits of the length field of a match at position pos of the chunk.
+unsigned LengthBits(std::size_t pos) { return token_bits - OffsetBits(pos); }
+
+// The latest places of every three-byte string of one chunk.
+class MatchTable {
+ public:
+  explicit MatchTable(std::span<const BYTE> plain) : plain_(plain) {}
+
+  // Adds the string that starts at pos. A position too near the end holds no
+  // three-byte string and is left out.
+  void Remember(std::size_t pos) {
+    if (pos + min_match > plain_.size()) {
+      return;
+    }
+    Places& places = table_[KeyAt(plain_, pos)];
+    if (places.count == places_per_string) {
+      places.at[0] = places.at[1];
+      --places.count;
+    }
+    places.at[places.count++] = pos;
+  }
+
+  // The longest match for the text at pos among the places of its string. The
+  // nearest place goes first: a longer match wins, an equal one does not.
+  [[nodiscard]] Match FindBest(std::size_t pos) const {
+    Match best;
+    if (pos + min_match > plain_.size()) {
+      return best;
+    }
+    const auto found = table_.find(KeyAt(plain_, pos));
+    if (found == table_.end()) {
+      return best;
+    }
+    const std::size_t max_length =
+        (std::size_t{1} << LengthBits(pos)) + min_match - 1;
+    for (std::size_t left = found->second.count; left > 0; --left) {
+      const std::size_t from = found->second.at[left - 1];
+      std::size_t length = 0;
+      while (pos + length < plain_.size() && length < max_length &&
+             plain_[from + length] == plain_[pos + length]) {
+        ++length;
+      }
+      if (length > best.length) {
+        best = {.length = length, .offset = pos - from};
+      }
+    }
+    return best;
+  }
+
+ private:
+  std::span<const BYTE> plain_;
+  std::unordered_map<std::uint32_t, Places> table_;
+};
+
+// The item for a match at position pos: the offset and the length share the
+// 16 bits of the token.
+Item MatchItem(const Match& match, std::size_t pos) {
+  const std::size_t coded =
+      ((match.offset - 1) << LengthBits(pos)) | (match.length - min_match);
+  return {.match = true, .token = gsl::narrow<WORD>(coded), .literal = 0};
+}
+
+// The two bytes of a chunk header, low byte first.
+std::vector<BYTE> HeaderBytes(WORD header) {
+  return {static_cast<BYTE>(header & byte_mask),
+          static_cast<BYTE>(header >> byte_bits)};
+}
+
+// The chunk of plain with its header. The body is the packed items. The chunk
+// keeps the plain bytes as is when the body does not shrink them.
+std::vector<BYTE> WrapChunk(std::span<const BYTE> plain,
+                            const std::vector<BYTE>& body) {
+  if (body.size() >= Lznt1Compressor::chunk_bytes) {
+    std::vector<BYTE> chunk =
+        HeaderBytes(gsl::narrow<WORD>(header_signature | (plain.size() - 1)));
+    chunk.insert(chunk.end(), plain.begin(), plain.end());
+    return chunk;
+  }
+  std::vector<BYTE> chunk =
+      HeaderBytes(gsl::narrow<WORD>(header_signature | header_compressed |
+                                    ((body.size() - 1) & header_size_mask)));
+  chunk.insert(chunk.end(), body.begin(), body.end());
+  return chunk;
+}
+
 }  // namespace
 
 std::vector<BYTE> Lznt1Compressor::Chunk(std::span<const BYTE> plain) {
   if (plain.empty() || plain.size() > chunk_bytes) {
     throw std::invalid_argument("an LZNT1 chunk holds 1 to 4096 bytes");
   }
-  std::unordered_map<std::uint32_t, Places> table;
-  const auto remember = [&](std::size_t pos) {
-    if (pos + min_match > plain.size()) {
-      return;
-    }
-    Places& places = table[KeyAt(plain, pos)];
-    if (places.count == places_per_string) {
-      places.at[0] = places.at[1];
-      --places.count;
-    }
-    places.at[places.count++] = pos;
-  };
-
+  MatchTable table(plain);
   std::vector<Item> items;
   std::size_t pos = 0;
   while (pos < plain.size()) {
-    const unsigned offset_bits = OffsetBits(pos);
-    const unsigned length_bits = token_bits - offset_bits;
-    const std::size_t max_length =
-        (std::size_t{1} << length_bits) + min_match - 1;
-    std::size_t best_length = 0;
-    std::size_t best_offset = 0;
-    if (pos + min_match <= plain.size()) {
-      const auto found = table.find(KeyAt(plain, pos));
-      if (found != table.end()) {
-        // The nearest place first: a longer match wins, an equal one does not.
-        for (std::size_t k = found->second.count; k-- > 0;) {
-          const std::size_t from = found->second.at[k];
-          std::size_t length = 0;
-          while (pos + length < plain.size() && length < max_length &&
-                 plain[from + length] == plain[pos + length]) {
-            ++length;
-          }
-          if (length > best_length) {
-            best_length = length;
-            best_offset = pos - from;
-          }
-        }
-      }
-    }
-    if (best_length >= min_match) {
-      const std::size_t coded =
-          ((best_offset - 1) << length_bits) | (best_length - min_match);
-      items.push_back(
-          {.match = true, .token = gsl::narrow<WORD>(coded), .literal = 0});
-      remember(pos);
-      pos += best_length;
+    const Match match = table.FindBest(pos);
+    if (match.length >= min_match) {
+      items.push_back(MatchItem(match, pos));
+      table.Remember(pos);
+      pos += match.length;
     } else {
       items.push_back({.match = false, .token = 0, .literal = plain[pos]});
-      remember(pos);
+      table.Remember(pos);
       ++pos;
     }
   }
-
-  std::vector<BYTE> body = Pack(items);
-  std::vector<BYTE> chunk;
-  if (body.size() >= chunk_bytes) {
-    // The chunk does not shrink: it is stored as is.
-    const WORD header =
-        gsl::narrow<WORD>(header_signature | (plain.size() - 1));
-    chunk = {static_cast<BYTE>(header & byte_mask),
-             static_cast<BYTE>(header >> byte_bits)};
-    chunk.insert(chunk.end(), plain.begin(), plain.end());
-    return chunk;
-  }
-  const WORD header = gsl::narrow<WORD>(header_signature | header_compressed |
-                                        ((body.size() - 1) & header_size_mask));
-  chunk = {static_cast<BYTE>(header & byte_mask),
-           static_cast<BYTE>(header >> byte_bits)};
-  chunk.insert(chunk.end(), body.begin(), body.end());
-  return chunk;
+  return WrapChunk(plain, Pack(items));
 }
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen
