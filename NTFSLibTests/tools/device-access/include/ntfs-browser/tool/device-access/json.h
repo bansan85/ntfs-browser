@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -13,7 +14,8 @@ namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess {
 struct JsonMember;
 
 // A parsed JSON value. The profile and the benchmark summary are small and
-// flat, so this holds a whole document in memory, with no dependency.
+// flat, so this holds a whole document in memory. It is plain data:
+// nlohmann/json reads and writes the text in json.cpp and no header shows it.
 struct JsonValue {
   enum class Kind : std::uint8_t { Null, Bool, Number, String, Object, Array };
 
@@ -38,16 +40,26 @@ struct JsonMember {
 };
 
 // Parses text as one JSON document. A duplicate key in an object, a trailing
-// byte, a nesting deeper than 32 levels and any malformed token are errors:
-// the result is empty and error says where.
+// byte, a nesting deeper than 32 levels, a byte that is not UTF-8 in a string
+// and any malformed token are errors: the result is empty and error says why.
+// A syntax error says where, as a line and a column.
 [[nodiscard]] std::optional<JsonValue> ParseJson(std::string_view text,
                                                  std::string& error);
 
 // Builds a JSON document, indented by two spaces. Commas and colons are the
 // writer's: the caller opens and closes objects and arrays, names members with
-// Key(), and gives values.
+// Key(), and gives values. The members keep the order they were written in.
 class JsonWriter {
  public:
+  // Starts an empty document. The state sits behind a pointer, so that no
+  // header shows nlohmann/json.
+  JsonWriter();
+  JsonWriter(const JsonWriter&) = delete;
+  JsonWriter& operator=(const JsonWriter&) = delete;
+  JsonWriter(JsonWriter&&) noexcept;
+  JsonWriter& operator=(JsonWriter&&) noexcept;
+  ~JsonWriter();
+
   void BeginObject();
   void EndObject();
   void BeginArray();
@@ -82,23 +94,13 @@ class JsonWriter {
     Bool(value);
   }
 
-  // The document so far, with a final newline.
+  // The document so far, with a final newline. A number that is not finite
+  // is written as null, and a byte that is not UTF-8 as U+FFFD.
   [[nodiscard]] std::string Take();
 
  private:
-  // Writes the separator and indentation that precede a value or a key.
-  void Separate();
-
-  // One open object or array, and whether it holds an element yet.
-  struct Level {
-    bool object;
-    bool empty;
-  };
-
-  std::string out_;
-  std::vector<Level> levels_;
-  // A key was written, and its value is next.
-  bool after_key_{false};
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
 };
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Tool::DeviceAccess

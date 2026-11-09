@@ -48,3 +48,5 @@ target_include_directories(
   PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 target_link_libraries(NtfsDeviceAccess PUBLIC NtfsBrowserInternals)
+# nlohmann/json stays in json.cpp: json.h includes none of it.
+target_link_libraries(NtfsDeviceAccess PRIVATE nlohmann_json::nlohmann_json)

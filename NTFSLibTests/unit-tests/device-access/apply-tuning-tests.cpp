@@ -346,7 +346,7 @@ TEST_CASE("The profile loader refuses a file it cannot use, naming it",
     const Profile profile("{\"format\": 1,");
     const std::string failure = profile.Failure();
     CHECK_THAT(failure, ContainsSubstring(profile.File() + ": "));
-    CHECK_THAT(failure, ContainsSubstring("(at byte "));
+    CHECK_THAT(failure, ContainsSubstring("parse error at line 1, column 14"));
   }
 
   SECTION("a key that appears twice") {

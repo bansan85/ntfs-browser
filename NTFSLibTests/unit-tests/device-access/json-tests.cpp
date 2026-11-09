@@ -1,5 +1,6 @@
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -115,8 +116,9 @@ TEST_CASE("ParseJson refuses a number out of range or malformed",
     INFO("text " << text);
     CHECK_FALSE(Refusal(text).empty());
   }
-  CHECK_THAT(Refusal("1e999"), ContainsSubstring("a number was expected"));
-  CHECK_THAT(Refusal("[1e999]"), ContainsSubstring("at byte 1"));
+  CHECK_THAT(Refusal("1e999"), ContainsSubstring("number overflow"));
+  CHECK_THAT(Refusal("-1e999"), ContainsSubstring("number overflow"));
+  CHECK_THAT(Refusal("1e-999"), ContainsSubstring("too small"));
 }
 
 TEST_CASE("ParseJson refuses a document with trailing data",
@@ -125,12 +127,11 @@ TEST_CASE("ParseJson refuses a document with trailing data",
        {"{} x", "1 2", "{}}", "[] []", "null null", "true false", "\"a\"\"b\"",
         "{},", "[1]]", "0 0"}) {
     INFO("text " << text);
-    CHECK_THAT(Refusal(text),
-               ContainsSubstring("unexpected data after the document"));
+    CHECK_THAT(Refusal(text), ContainsSubstring("expected end of input"));
   }
-  // The position of the first byte of the garbage.
-  CHECK_THAT(Refusal("{} x"), ContainsSubstring("at byte 3"));
-  CHECK_THAT(Refusal("  1 2"), ContainsSubstring("at byte 4"));
+  // The position of the garbage.
+  CHECK_THAT(Refusal("{} x"), ContainsSubstring("column 4"));
+  CHECK_THAT(Refusal("  1 2"), ContainsSubstring("column 5"));
   // White space after the document is not garbage.
   CHECK(Parse("{}  \n\t\r ").kind == Kind::Object);
 }
@@ -168,13 +169,11 @@ TEST_CASE("ParseJson refuses a cut or malformed document",
     INFO("text \"" << text << "\"");
     CHECK_FALSE(Refusal(text).empty());
   }
-  CHECK_THAT(Refusal(""), ContainsSubstring("ends inside a value"));
-  CHECK_THAT(Refusal("{\"a\" 1}"), ContainsSubstring("a colon was expected"));
-  CHECK_THAT(Refusal("[1 2]"),
-             ContainsSubstring("a comma or a closing bracket was expected"));
-  CHECK_THAT(Refusal("{\"a\":1 \"b\":2}"),
-             ContainsSubstring("a comma or a closing brace was expected"));
-  CHECK_THAT(Refusal("\"unclosed"), ContainsSubstring("not closed"));
+  CHECK_THAT(Refusal(""), ContainsSubstring("empty input"));
+  CHECK_THAT(Refusal("{\"a\" 1}"), ContainsSubstring("expected ':'"));
+  CHECK_THAT(Refusal("[1 2]"), ContainsSubstring("expected ']'"));
+  CHECK_THAT(Refusal("{\"a\":1 \"b\":2}"), ContainsSubstring("expected '}'"));
+  CHECK_THAT(Refusal("\"unclosed"), ContainsSubstring("missing closing quote"));
 }
 
 TEST_CASE("ParseJson takes a document nested 32 levels and refuses 33",
@@ -233,11 +232,13 @@ TEST_CASE("ParseJson reads the escapes of a string", "[device-access][json]") {
 }
 
 TEST_CASE("ParseJson refuses a malformed escape", "[device-access][json]") {
-  CHECK_THAT(Refusal(R"("\x")"), ContainsSubstring("unknown escape"));
-  CHECK_THAT(Refusal(R"("\U0041")"), ContainsSubstring("unknown escape"));
-  CHECK_THAT(Refusal(R"("\u12")"), ContainsSubstring("is cut"));
-  CHECK_THAT(Refusal(R"("\u12G4")"), ContainsSubstring("non-hexadecimal"));
-  CHECK_THAT(Refusal(R"("\u")"), ContainsSubstring("is cut"));
+  CHECK_THAT(Refusal(R"("\x")"),
+             ContainsSubstring("forbidden character after backslash"));
+  CHECK_THAT(Refusal(R"("\U0041")"),
+             ContainsSubstring("forbidden character after backslash"));
+  CHECK_THAT(Refusal(R"("\u12")"), ContainsSubstring("4 hex digits"));
+  CHECK_THAT(Refusal(R"("\u12G4")"), ContainsSubstring("4 hex digits"));
+  CHECK_THAT(Refusal(R"("\u")"), ContainsSubstring("4 hex digits"));
   CHECK_FALSE(Refusal("\"\\").empty());
   CHECK_FALSE(Refusal("\"abc\\").empty());
 }
@@ -245,16 +246,21 @@ TEST_CASE("ParseJson refuses a malformed escape", "[device-access][json]") {
 TEST_CASE("ParseJson refuses a lone or misplaced surrogate",
           "[device-access][json]") {
   // A high surrogate needs a low one right after it.
-  CHECK_THAT(Refusal(R"("\ud83d")"), ContainsSubstring("no low surrogate"));
-  CHECK_THAT(Refusal(R"("\ud83dx")"), ContainsSubstring("no low surrogate"));
+  CHECK_THAT(Refusal(R"("\ud83d")"),
+             ContainsSubstring("must be followed by U+DC00..U+DFFF"));
+  CHECK_THAT(Refusal(R"("\ud83dx")"),
+             ContainsSubstring("must be followed by U+DC00..U+DFFF"));
   CHECK_THAT(Refusal(R"("\ud83d\u0041")"),
-             ContainsSubstring("no low surrogate"));
+             ContainsSubstring("must be followed by U+DC00..U+DFFF"));
   CHECK_THAT(Refusal(R"("\ud83d\ud83d")"),
-             ContainsSubstring("no low surrogate"));
-  CHECK_THAT(Refusal(R"("\ud83d\n")"), ContainsSubstring("no low surrogate"));
+             ContainsSubstring("must be followed by U+DC00..U+DFFF"));
+  CHECK_THAT(Refusal(R"("\ud83d\n")"),
+             ContainsSubstring("must be followed by U+DC00..U+DFFF"));
   // A low surrogate alone, or before its high one.
-  CHECK_THAT(Refusal(R"("\ude00")"), ContainsSubstring("stands alone"));
-  CHECK_THAT(Refusal(R"("\ude00\ud83d")"), ContainsSubstring("stands alone"));
+  CHECK_THAT(Refusal(R"("\ude00")"),
+             ContainsSubstring("must follow U+D800..U+DBFF"));
+  CHECK_THAT(Refusal(R"("\ude00\ud83d")"),
+             ContainsSubstring("must follow U+D800..U+DBFF"));
   // The bounds of the ranges.
   CHECK(StringOf(R"(\ud7ff)") == "\xED\x9F\xBF");
   CHECK(StringOf(R"(\ue000)") == "\xEE\x80\x80");
@@ -273,8 +279,19 @@ TEST_CASE("ParseJson refuses a control character in a string",
     CHECK_THAT(Refusal(std::string("\"a") + control + "b\""),
                ContainsSubstring("control character"));
   }
-  // The bytes from 0x20 on, and those of UTF-8, are text.
-  CHECK(StringOf(" ~\x7f\xFF") == " ~\x7f\xFF");
+  // The bytes from 0x20 on, and valid UTF-8, are text.
+  CHECK(StringOf(" ~\x7f\xEF\xBF\xBF") == " ~\x7f\xEF\xBF\xBF");
+}
+
+TEST_CASE("ParseJson refuses a string that is not UTF-8",
+          "[device-access][json]") {
+  for (const std::string_view body :
+       {"\xFF", "\xC3", "\xC3(", "\xC0\x80", "\xED\xA0\x80", "\xF4\x90\x80\x80",
+        "\x80"}) {
+    INFO("body " << body);
+    CHECK_THAT(Refusal('"' + std::string(body) + '"'),
+               ContainsSubstring("UTF-8"));
+  }
 }
 
 TEST_CASE("JsonWriter writes an indented document", "[device-access][json]") {
@@ -414,6 +431,31 @@ TEST_CASE("A document nested to the limit parses back after the writer",
     at = &at->items.front();
   }
   CHECK(at->number == 1);
+}
+
+TEST_CASE("JsonWriter keeps a document valid", "[device-access][json]") {
+  JsonWriter json;
+  json.BeginArray();
+  json.Number(std::numeric_limits<double>::infinity());
+  json.Number(std::numeric_limits<double>::quiet_NaN());
+  json.String(
+      "a\xFF"
+      "b");
+  json.String(
+      "ed\xA0\x80"
+      "x");
+  json.EndArray();
+
+  const JsonValue root = Parse(json.Take());
+  REQUIRE(root.items.size() == 4);
+  CHECK(root.items.at(0).kind == Kind::Null);
+  CHECK(root.items.at(1).kind == Kind::Null);
+  CHECK(root.items.at(2).text ==
+        "a\xEF\xBF\xBD"
+        "b");
+  CHECK(root.items.at(3).text ==
+        "ed\xEF\xBF\xBD\xEF\xBF\xBD"
+        "x");
 }
 
 TEST_CASE("The writer of a duplicate key makes a document the parser refuses",

@@ -18,6 +18,7 @@ ctest --test-dir build/static -C Debug
 - `NtfsFuzzer` is Windows-only. The library, unit tests, the console tools (`NtfsAttr`, `NtfsDump`, `NtfsUndel`, `NtfsDir`, `NtfsScanBench`, `NtfsCompare`) and `NtfsFuzzerAfl` also build on Linux. There is no MFC in the build.
 - The build generates the fuzz inputs and the corpus traces into `build/<preset>/fuzz-generated/` (target `NtfsFuzzGenData`). `NtfsBrowserTests` depends on it. No such file is committed. See Fuzzing.
 - `NtfsScanBench` (`NTFSLibTests/examples/ntfsscanbench/`) lists a volume with `--engine=mftlist` (the `MftTree` scan), `nocache` or `fullcache` (the directory walk of `tools/dir-walk`, also the oracle of the read ahead tests), or `all` three with a table. It takes the benchmark options. `NtfsBench` stays the replay, simulate and disk benchmark tool.
+- The tools and tests read and write JSON through `NTFSLibTests/tools/device-access/json.h`, a thin layer over nlohmann/json (`3rdparty/nlohmann_json`, only `NtfsDeviceAccess` links it, in `json.cpp`). The library and every public header MUST NOT include it.
 - Source lists are explicit, never globbed. A new file MUST be added to `src/CMakeLists.txt` or to the `CMakeLists.txt` of its test or tool folder, inside the matching feature gate.
 
 ## Formatting

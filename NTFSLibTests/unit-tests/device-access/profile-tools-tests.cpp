@@ -357,7 +357,7 @@ TEST_CASE("A profile a tool cannot use ends the run with its reason",
       {"not a whole number",
        R"({"format": 1, "disks": {"Test Disk|1": {"common": {"mft.window_bytes": 1.5}}}})",
        "common.mft.window_bytes is not a whole number"},
-      {"not JSON", "{\"format\": 1,", "(at byte "},
+      {"not JSON", "{\"format\": 1,", "parse error at line 1, column 14"},
       {"wrong format", R"({"format": 3, "disks": {}})",
        "\"format\" MUST be 1"}};
 
