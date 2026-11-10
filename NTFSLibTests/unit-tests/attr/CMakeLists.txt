@@ -19,6 +19,7 @@ target_sources(
     "coverage-attrs-tests.cpp"
     "coverage-nonresident-index-tests.cpp"
     "index-entry-size-tests.cpp"
+    "index-entry-walker-tests.cpp"
     "include/ntfs-browser/test/attr/nonresident-index-support.h"
     "real-ranges-tests.cpp"
 )

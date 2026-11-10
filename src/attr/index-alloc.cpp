@@ -6,7 +6,6 @@
 #include <limits>
 #include <optional>
 #include <span>
-#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -15,26 +14,16 @@
 #include <ntfs-browser/namespace.h>
 
 #include "attr/index-block.h"
+#include "attr/index-entry-walker.h"
 #include "bench/bench.h"
 #include "bench/recorder.h"
 #include "cache/strategy.h"
 #include "data/file-record-header.h"
 #include "data/index-block.h"
-#include "data/index-entry-flag.h"
-#include "data/index-entry.h"
 #include "io/file-record.h"
 #include "log/ntfs-common.h"
 #include "ntfs-volume.h"
 #include "win-types.h"
-
-namespace NTFS_BROWSER_NAMESPACE {
-namespace Io {
-
-template <Cache::Strategy S>
-class FileRecord;
-
-}  // namespace Io
-}  // namespace NTFS_BROWSER_NAMESPACE
 
 namespace NTFS_BROWSER_NAMESPACE::Attr {
 
@@ -241,18 +230,6 @@ bool AttrIndexAlloc<S>::FixupIndexBlock(std::span<BYTE> block) {
 
 namespace {
 
-// Reports a defect in a block's entries. Returns true when the block must be
-// rejected whole: the entries parsed so far are then discarded too.
-bool RejectBlockOnDefect(bool recover, std::string_view defect,
-                         IndexBlock& ib_class) {
-  Log::Recoverable(recover, "{}", defect);
-  if (recover) {
-    return false;
-  }
-  ib_class.clear();
-  return true;
-}
-
 // Where the used part of a block ends. entries_end is the end of its end
 // entry. The header's own idea of the used size, when larger, is honoured: the
 // bytes between are not known to be unused. Never past the block.
@@ -282,61 +259,23 @@ bool AttrIndexAlloc<S>::ParseIndexEntries(std::span<BYTE> block,
     return false;
   }
 
-  const bool recover = this->volume_.GetOptions().recover_errors;
   // An entry's position comes from the disk, so it need not be aligned.
-  std::span<const BYTE> cur = std::span<const BYTE>(block)
-                                  .subspan(entry_offset_pos)
-                                  .subspan(ib_buf->entry_offset);
-  DWORD ie_total = 0;
-  // False once an entry had a defect that recovery let pass: the block then
-  // gives no slack, since where its used part ends is not known.
-  bool clean = true;
-
-  while (true) {
-    const size_t remaining = cur.size();
-    if (remaining < offsetof(Data::IndexEntry, stream)) {
-      return !RejectBlockOnDefect(
-          recover, "Index Block: index entry header exceeds block bounds",
-          ib_class);
-    }
-    const Data::IndexEntry head = Data::ReadIndexEntryHeader(cur);
-    if (head.size == 0 || head.size > remaining) {
-      return !RejectBlockOnDefect(
-          recover, "Index Block: index entry exceeds block bounds", ib_class);
-    }
-
-    ie_total += head.size;
-    if (ie_total > ib_buf->total_entry_size) {
-      return !RejectBlockOnDefect(recover,
-                                  "Index Block: index entry total exceeds the "
-                                  "block's declared entry size",
-                                  ib_class);
-    }
-
-    const Data::IndexEntry& aligned_index_entry =
-        Data::AlignIndexEntry(ib_class.RealignedStorage(), cur, head.size);
-    if (const std::optional<std::string_view> defect =
-            Data::ValidateIndexEntry(aligned_index_entry)) {
-      if (RejectBlockOnDefect(recover, *defect, ib_class)) {
-        return false;
-      }
-      clean = false;
-    }
-
-    ib_class.emplace_back(aligned_index_entry);
-
-    if ((head.flags & Data::IndexEntryFlag::Last) ==
-        Data::IndexEntryFlag::Last) {
-      Log::Trace("Last Index Entry");
-      if (clean) {
-        ib_class.SetUsedEnd(UsedEndOf(*ib_buf, block.size(),
-                                      (block.size() - cur.size()) + head.size));
-      }
-      return true;
-    }
-
-    cur = cur.subspan(head.size);  // Pick next
+  const std::span<const BYTE> first = std::span<const BYTE>(block)
+                                          .subspan(entry_offset_pos)
+                                          .subspan(ib_buf->entry_offset);
+  IndexEntryWalker walker(IndexEntryWalker::block_messages,
+                          this->volume_.GetOptions().recover_errors, ib_class,
+                          ib_class.RealignedStorage());
+  const IndexEntryWalker::Outcome outcome =
+      walker.Walk(first, ib_buf->total_entry_size);
+  // A block with a defect that recovery let pass gives no slack, since where
+  // its used part ends is not known.
+  if (outcome.clean_end) {
+    ib_class.SetUsedEnd(
+        UsedEndOf(*ib_buf, block.size(),
+                  (block.size() - first.size()) + *outcome.clean_end));
   }
+  return outcome.accepted;
 }
 
 template class AttrIndexAlloc<Cache::Strategy::FullCache>;

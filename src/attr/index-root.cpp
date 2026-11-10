@@ -1,51 +1,23 @@
 #include "attr/index-root.h"
 
 #include <cstring>
-#include <optional>
 #include <span>
 #include <stdexcept>
-#include <string_view>
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
 
+#include "attr/index-entry-walker.h"
 #include "attr/resident.h"
 #include "attr/type.h"
 #include "cache/strategy.h"
-#include "data/index-entry-flag.h"
-#include "data/index-entry.h"
 #include "data/index-root.h"
 #include "index-entry.h"
 #include "log/ntfs-common.h"
 #include "ntfs-volume.h"
 #include "win-types.h"
 
-namespace NTFS_BROWSER_NAMESPACE {
-namespace Io {
-
-template <Cache::Strategy S>
-class FileRecord;
-
-}  // namespace Io
-}  // namespace NTFS_BROWSER_NAMESPACE
-
 namespace NTFS_BROWSER_NAMESPACE::Attr {
-
-namespace {
-
-// Reports a defect in an index root's entries. Returns true when the attribute
-// must be rejected whole: the entries parsed so far are then discarded too.
-bool RejectRootOnDefect(bool recover, std::string_view defect,
-                        std::vector<IndexEntryView>& entries) {
-  Log::Recoverable(recover, "{}", defect);
-  if (recover) {
-    return false;
-  }
-  entries.clear();
-  return true;
-}
-
-}  // namespace
 
 template <typename Resident, Cache::Strategy S>
 AttrIndexRoot<Resident, S>::AttrIndexRoot(const HeaderCommon& ahc,
@@ -99,50 +71,13 @@ bool AttrIndexRoot<Resident, S>::ParseIndexEntries() {
   }
 
   // An entry's position comes from the disk, so it need not be aligned.
-  std::span<const BYTE> cur =
-      data.subspan(entry_offset_pos).subspan(index_root_copy->entry_offset);
-  DWORD ie_total = 0;
-
-  while (true) {
-    const size_t remaining = cur.size();
-    if (remaining < offsetof(Data::IndexEntry, stream)) {
-      return !RejectRootOnDefect(
-          recover, "Index Root: index entry header exceeds attribute bounds",
-          *this);
-    }
-    const Data::IndexEntry head = Data::ReadIndexEntryHeader(cur);
-    if (head.size == 0 || head.size > remaining) {
-      return !RejectRootOnDefect(
-          recover, "Index Root: index entry exceeds attribute bounds", *this);
-    }
-
-    ie_total += head.size;
-    if (ie_total > index_root_copy->total_entry_size) {
-      return !RejectRootOnDefect(
-          recover,
-          "Index Root: index entry total exceeds the attribute's declared "
-          "entry size",
-          *this);
-    }
-
-    const Data::IndexEntry& aligned_index_entry =
-        Data::AlignIndexEntry(realigned_, cur, head.size);
-    if (const std::optional<std::string_view> defect =
-            Data::ValidateIndexEntry(aligned_index_entry);
-        defect && RejectRootOnDefect(recover, *defect, *this)) {
-      return false;
-    }
-
-    emplace_back(aligned_index_entry);
-
-    if ((head.flags & Data::IndexEntryFlag::Last) ==
-        Data::IndexEntryFlag::Last) {
-      Log::Trace("Last Index Entry");
-      return true;
-    }
-
-    cur = cur.subspan(head.size);  // Pick next
-  }
+  IndexEntryWalker walker(IndexEntryWalker::root_messages, recover, *this,
+                          realigned_);
+  return walker
+      .Walk(
+          data.subspan(entry_offset_pos).subspan(index_root_copy->entry_offset),
+          index_root_copy->total_entry_size)
+      .accepted;
 }
 
 // Check if this IndexRoot contains Filename or IndexView

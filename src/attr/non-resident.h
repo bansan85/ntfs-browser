@@ -4,13 +4,13 @@
 #include <memory>
 #include <optional>
 #include <span>
-#include <unordered_map>
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
 
 #include "alloc/types.h"
 #include "attr/base.h"
+#include "attr/compression-units.h"
 #include "attr/non-resident-layout.h"
 #include "attr/run-list.h"
 #include "cache/view.h"
@@ -95,19 +95,15 @@ class AttrNonResident : public Attr::AttrBase<S> {
   // Decoded data runs, with this instance's own VCN count.
   RunList runs_;
 
-  // Clusters per compression unit (2^comp_unit_size); 0 means uncompressed.
-  ULONGLONG comp_unit_clusters_{0};
-
-  // Decompressed compression units, keyed by unit index; lifetime follows
-  // Strategy (FullCache keeps them, NoCache clears per ReadData()).
-  mutable std::unordered_map<ULONGLONG, std::vector<BYTE>> comp_unit_cache_;
+  // Set only on a compressed stream, which ReadData() then reads through it.
+  std::optional<CompressionUnits<S>> compression_;
 
   // Set only on an encrypted stream. Shared with the record's other encrypted
   // streams, which hold the same key.
   std::shared_ptr<const Efs::Context> efs_context_;
 
   // Answers the layout questions over runs_ and the header. Set at the end of
-  // the constructor body, once comp_unit_clusters_ is known.
+  // the constructor body, once compression_ is known.
   std::optional<NonResidentLayout<S>> layout_;
 
   void ParseDataRun();
@@ -130,11 +126,6 @@ class AttrNonResident : public Attr::AttrBase<S> {
       ReadVirtualClustersRaw(ULONGLONG vcn, ULONGLONG clusters,
                              std::span<BYTE> buffer) const;
 
-  // Compression support. See attr-non-resident.cpp for the compression-unit
-  // layout these implement.
-  [[nodiscard]] ULONGLONG UnitClusters(ULONGLONG unit_first_vcn) const noexcept;
-  [[nodiscard]] const std::vector<BYTE>*
-      GetCompressionUnit(ULONGLONG unit_index) const;
   // How reading one data run's clusters ended.
   enum class RunRead : BYTE {
     Done,       // Clusters read (or zero-filled, for a sparse run).
@@ -146,18 +137,6 @@ class AttrNonResident : public Attr::AttrBase<S> {
                                         ULONGLONG vcn,
                                         ULONGLONG clusters_to_read,
                                         std::span<BYTE> out) const;
-  [[nodiscard]] bool DecompressUnit(ULONGLONG unit_index,
-                                    ULONGLONG unit_first_vcn,
-                                    ULONGLONG real_clusters,
-                                    std::vector<BYTE>& unit) const;
-  [[nodiscard]] bool FillCompressionUnit(ULONGLONG unit_index,
-                                         ULONGLONG unit_first_vcn,
-                                         ULONGLONG unit_clusters,
-                                         ULONGLONG real_clusters,
-                                         std::vector<BYTE>& unit) const;
-  [[nodiscard]] std::optional<ULONGLONG>
-      ReadVirtualClustersCompressed(ULONGLONG vcn, ULONGLONG clusters,
-                                    std::span<BYTE> buffer) const;
 
  public:
   [[nodiscard]] const BYTE* GetData() const noexcept override;

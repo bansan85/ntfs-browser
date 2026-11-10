@@ -13,15 +13,6 @@
 #include "util/local-file-time.h"
 #include "win-types.h"
 
-namespace NTFS_BROWSER_NAMESPACE {
-namespace Io {
-
-template <Cache::Strategy S>
-class FileRecord;
-
-}  // namespace Io
-}  // namespace NTFS_BROWSER_NAMESPACE
-
 namespace NTFS_BROWSER_NAMESPACE::Attr {
 
 namespace {
@@ -36,6 +27,12 @@ const Data::StandardInformation& CheckedStdInfo(const Resident& attr) {
   }
 
   return *reinterpret_cast<const Data::StandardInformation*>(attr.GetData());
+}
+
+// Whether the attribute flags of info include flag.
+bool HasPermission(const Data::StandardInformation& info,
+                   Data::StdInfoPermission flag) noexcept {
+  return static_cast<bool>(info.permission & flag);
 }
 
 }  // namespace
@@ -77,79 +74,67 @@ void AttrStdInfo<Resident, S>::GetFileTime(FILETIME* write_tm,
 
 template <typename Resident, Cache::Strategy S>
 bool AttrStdInfo<Resident, S>::IsReadOnly() const noexcept {
-  return static_cast<bool>(std_info_.permission &
-                           Data::StdInfoPermission::ReadOnly);
+  return HasPermission(std_info_, Data::StdInfoPermission::ReadOnly);
 }
 
 template <typename Resident, Cache::Strategy S>
 bool AttrStdInfo<Resident, S>::IsHidden() const noexcept {
-  return static_cast<bool>(std_info_.permission &
-                           Data::StdInfoPermission::Hidden);
+  return HasPermission(std_info_, Data::StdInfoPermission::Hidden);
 }
 
 template <typename Resident, Cache::Strategy S>
 bool AttrStdInfo<Resident, S>::IsSystem() const noexcept {
-  return static_cast<bool>(std_info_.permission &
-                           Data::StdInfoPermission::System);
+  return HasPermission(std_info_, Data::StdInfoPermission::System);
 }
 
 template <typename Resident, Cache::Strategy S>
 bool AttrStdInfo<Resident, S>::IsArchive() const noexcept {
-  return static_cast<bool>(std_info_.permission &
-                           Data::StdInfoPermission::Archive);
+  return HasPermission(std_info_, Data::StdInfoPermission::Archive);
 }
 
 template <typename Resident, Cache::Strategy S>
 bool AttrStdInfo<Resident, S>::IsDevice() const noexcept {
-  return static_cast<bool>(std_info_.permission &
-                           Data::StdInfoPermission::Device);
+  return HasPermission(std_info_, Data::StdInfoPermission::Device);
 }
 
 template <typename Resident, Cache::Strategy S>
 bool AttrStdInfo<Resident, S>::IsNormal() const noexcept {
-  return static_cast<bool>(std_info_.permission &
-                           Data::StdInfoPermission::Normal);
+  return HasPermission(std_info_, Data::StdInfoPermission::Normal);
 }
 
 template <typename Resident, Cache::Strategy S>
 bool AttrStdInfo<Resident, S>::IsTemporary() const noexcept {
-  return static_cast<bool>(std_info_.permission &
-                           Data::StdInfoPermission::Temp);
+  return HasPermission(std_info_, Data::StdInfoPermission::Temp);
 }
 
 template <typename Resident, Cache::Strategy S>
 bool AttrStdInfo<Resident, S>::IsCompressed() const noexcept {
-  return static_cast<bool>(std_info_.permission &
-                           Data::StdInfoPermission::Compressed);
+  return HasPermission(std_info_, Data::StdInfoPermission::Compressed);
 }
 
 template <typename Resident, Cache::Strategy S>
 bool AttrStdInfo<Resident, S>::IsOffline() const noexcept {
-  return static_cast<bool>(std_info_.permission &
-                           Data::StdInfoPermission::Offline);
+  return HasPermission(std_info_, Data::StdInfoPermission::Offline);
 }
 
 template <typename Resident, Cache::Strategy S>
 bool AttrStdInfo<Resident, S>::IsNotContentIndexed() const noexcept {
-  return static_cast<bool>(std_info_.permission & Data::StdInfoPermission::Nci);
+  return HasPermission(std_info_, Data::StdInfoPermission::Nci);
 }
 
 template <typename Resident, Cache::Strategy S>
 bool AttrStdInfo<Resident, S>::IsEncrypted() const noexcept {
-  return static_cast<bool>(std_info_.permission &
-                           Data::StdInfoPermission::Encrypted);
+  return HasPermission(std_info_, Data::StdInfoPermission::Encrypted);
 }
 
 template <typename Resident, Cache::Strategy S>
 bool AttrStdInfo<Resident, S>::IsSparse() const noexcept {
-  return static_cast<bool>(std_info_.permission &
-                           Data::StdInfoPermission::Sparse);
+  return HasPermission(std_info_, Data::StdInfoPermission::Sparse);
 }
 
 template <typename Resident, Cache::Strategy S>
 bool AttrStdInfo<Resident, S>::IsReparsePoint() const noexcept {
-  return static_cast<bool>(std_info_.permission &
-                           Data::StdInfoPermission::Reparse);
+  return HasPermission(std_info_, Data::StdInfoPermission::Reparse);
 }
 
 // UTC filetime to Local filetime
