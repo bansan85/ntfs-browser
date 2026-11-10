@@ -26,9 +26,11 @@ namespace {
 namespace Fake = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
 namespace Lib = NTFS_BROWSER_NAMESPACE;
 
-// How long PollToEnd() waits for a scan: far more than any test scan needs, so
-// that only a stuck scan reaches it.
-constexpr std::chrono::seconds poll_deadline{60};
+// How long PollToEnd() waits for a scan that makes no progress: far more than
+// any test scan needs, so that only a stuck scan reaches it. A shared CI runner
+// can slow a busy poll loop a lot, so a total time limit would make a slow run
+// fail.
+constexpr std::chrono::seconds stall_limit{60};
 
 Row RowOf(const Lib::Entry& entry) {
   return {.name = std::u16string(entry.name),
@@ -90,9 +92,15 @@ Outcome RunScan(const Lib::Options& options) {
 }
 
 Lib::State PollToEnd(Lib::Scan& scan) {
-  const auto deadline = std::chrono::steady_clock::now() + poll_deadline;
+  auto deadline = std::chrono::steady_clock::now() + stall_limit;
+  std::uint64_t seen = scan.GetProgress().entries_found;
   while (!scan.Finished() && std::chrono::steady_clock::now() < deadline) {
     scan.Poll();
+    const std::uint64_t found = scan.GetProgress().entries_found;
+    if (found != seen) {
+      seen = found;
+      deadline = std::chrono::steady_clock::now() + stall_limit;
+    }
     std::this_thread::yield();
   }
   return scan.GetState();

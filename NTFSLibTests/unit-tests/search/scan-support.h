@@ -78,8 +78,9 @@ struct Outcome {
 // Runs a scan with options to its end, polling, and collects what it gave.
 [[nodiscard]] Outcome RunScan(const NTFS_BROWSER_NAMESPACE::Options& options);
 
-// Polls scan until it is over, or until a long deadline, and returns its state.
-// A scan that is not over by then is stuck and reports Running.
+// Polls scan until it is over and returns its state. It gives up when no new
+// entry arrives for a long time. A scan that is still not over then is stuck
+// and reports Running. A slow scan that goes on finding entries is not stuck.
 NTFS_BROWSER_NAMESPACE::State PollToEnd(NTFS_BROWSER_NAMESPACE::Scan& scan);
 
 // The names of rows, as UTF-8, in order.
