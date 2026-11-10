@@ -33,6 +33,7 @@ target_sources(
     "record-memo-tests.cpp"
     "record-offset-overflow-tests.cpp"
     "record-window-tests.cpp"
+    "run-block-loader-tests.cpp"
     "traverse-standing-tests.cpp"
 )
 

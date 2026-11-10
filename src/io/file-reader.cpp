@@ -22,6 +22,7 @@
 #include "disk-reader.h"
 #include "internal-export.h"
 #include "io/read-ahead-disk-reader.h"
+#include "io/run-block-loader.h"
 #include "log/ntfs-common.h"
 #include "tuning/tuning.h"
 #include "win-types.h"
@@ -70,94 +71,6 @@ std::shared_ptr<Cache::BlockCache> MakeCache(std::uint64_t max_cache_bytes,
   }
 }
 
-// Loads the blocks of one FullCache read. A block that the cache lacks comes
-// in with the missing blocks after it, up to the end of the range, in one disk
-// read. The run is cut into blocks as the copy reaches them, so a small
-// ceiling never evicts a block before its use.
-template <typename ReadFn>
-class RunBlockLoader {
- public:
-  RunBlockLoader(Cache::BlockCache& cache, std::int64_t block_bytes,
-                 std::int64_t max_run_bytes, std::uint64_t last_index,
-                 ReadFn read)
-      : cache_(cache),
-        block_bytes_(block_bytes),
-        max_run_blocks_(
-            static_cast<std::uint64_t>(max_run_bytes / block_bytes)),
-        last_index_(last_index),
-        read_(read) {}
-
-  // Loads the block at block_addr, or returns the cached one. Null when the
-  // disk read fails or comes back short: nothing is cached then.
-  std::shared_ptr<Cache::Block> Get(LARGE_INTEGER block_addr) {
-    const auto index =
-        static_cast<std::uint64_t>(block_addr.QuadPart / block_bytes_);
-    if (std::shared_ptr<Cache::Block> hit = cache_.Find(index)) {
-      return hit;
-    }
-    const bool in_run = run_count_ != 0 && index >= run_first_ &&
-                        index - run_first_ < run_count_;
-    if (!in_run && !ReadRun(index, block_addr)) {
-      return cache_.GetOrLoad(
-          index, [&](std::span<BYTE> dest) { return read_(block_addr, dest); });
-    }
-    auto block =
-        std::make_shared<Cache::Block>(static_cast<size_t>(block_bytes_));
-    const std::span<const BYTE> source{
-        run_bytes_.get(), static_cast<size_t>(run_count_ * block_bytes_)};
-    const std::span<const BYTE> part =
-        source.subspan(static_cast<size_t>((index - run_first_) * block_bytes_),
-                       static_cast<size_t>(block_bytes_));
-    std::ranges::copy(part, block->bytes.get());
-    cache_.Insert(index, block);
-    if (index - run_first_ + 1 == run_count_) {
-      run_count_ = 0;
-    }
-    return block;
-  }
-
- private:
-  // Reads the missing blocks from index on with one disk read, at most
-  // max_run_blocks_ of them and none past the range. False when there is only
-  // one, or when the read failed: the block is then read on its own.
-  bool ReadRun(std::uint64_t index, LARGE_INTEGER block_addr) {
-    std::uint64_t count = 1;
-    while (count < max_run_blocks_ && index + count <= last_index_ &&
-           !cache_.Contains(index + count)) {
-      ++count;
-    }
-    if (count == 1 || failed_) {
-      return false;
-    }
-    const auto run_size = static_cast<size_t>(count * block_bytes_);
-    if (run_capacity_ < run_size) {
-      // Grown only when this run is longer than any before it in this read.
-      run_capacity_ = run_size;
-      run_bytes_ = std::make_unique_for_overwrite<BYTE[]>(run_size);
-    }
-    if (!read_(block_addr, {run_bytes_.get(), run_size})) {
-      failed_ = true;
-      return false;
-    }
-    run_first_ = index;
-    run_count_ = count;
-    return true;
-  }
-
-  Cache::BlockCache& cache_;
-  std::int64_t block_bytes_;
-  std::uint64_t max_run_blocks_;
-  std::uint64_t last_index_;
-  ReadFn read_;
-  std::uint64_t run_first_{0};
-  std::uint64_t run_count_{0};
-  // Kept from one run to the next of the same read, so that its pages are
-  // faulted in once.
-  std::unique_ptr<BYTE[]> run_bytes_;
-  size_t run_capacity_{0};
-  bool failed_{false};
-};
-
 // Reads like reader.ReadInto(), and tells the bench recorder when the read
 // began, ended and what it covered.
 bool RecordedRead(IDiskReader& reader, LARGE_INTEGER& addr,
@@ -178,23 +91,39 @@ bool RecordedRead(IDiskReader& reader, LARGE_INTEGER& addr,
   return read;
 }
 
-// Copies the part of the range at cur that block holds to the front of out,
-// then moves out, cur and remaining past it.
+// Where the stitching of a range stands: the room left in the output, the
+// address of the next byte to copy, and how many bytes the range still needs.
+struct StitchCursor {
+  std::span<BYTE> out;
+  LARGE_INTEGER cur;
+  DWORD remaining;
+};
+
+// Copies the part of the range at cursor.cur that block holds to the front of
+// cursor.out, then moves the cursor past it.
 void CopyBlockPart(const Cache::Block& block, std::int64_t block_bytes,
-                   std::span<BYTE>& out, LARGE_INTEGER& cur, DWORD& remaining) {
-  const auto offset_in_block = gsl::narrow<DWORD>(cur.QuadPart % block_bytes);
+                   StitchCursor& cursor) {
+  const auto offset_in_block =
+      gsl::narrow<DWORD>(cursor.cur.QuadPart % block_bytes);
   const auto chunk = gsl::narrow<DWORD>(
-      std::min<LONGLONG>(block_bytes - offset_in_block, remaining));
+      std::min<LONGLONG>(block_bytes - offset_in_block, cursor.remaining));
 
   const std::span<const BYTE> bytes{block.bytes.get(),
                                     static_cast<size_t>(block_bytes)};
   // offset_in_block is a remainder modulo the block size = block_bytes.
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  memcpy(out.data(), &bytes[offset_in_block], chunk);
+  memcpy(cursor.out.data(), &bytes[offset_in_block], chunk);
 
-  out = out.subspan(chunk);
-  cur.QuadPart += chunk;
-  remaining -= chunk;
+  cursor.out = cursor.out.subspan(chunk);
+  cursor.cur.QuadPart += chunk;
+  cursor.remaining -= chunk;
+}
+
+// True when [addr, addr + length) has blocks to cache: a negative address has
+// none, and an end past LLONG_MAX would overflow the block arithmetic.
+bool RangeHasBlocks(const LARGE_INTEGER& addr, DWORD length) {
+  return addr.QuadPart >= 0 &&
+         addr.QuadPart <= std::numeric_limits<LONGLONG>::max() - length;
 }
 
 }  // namespace
@@ -438,10 +367,7 @@ std::enable_if_t<
     return Cache::View{};
   }
 
-  // A negative address has no block to cache. An end past LLONG_MAX would
-  // overflow the block arithmetic below.
-  if (addr.QuadPart < 0 ||
-      addr.QuadPart > std::numeric_limits<LONGLONG>::max() - length) {
+  if (!RangeHasBlocks(addr, length)) {
     Log::Error("Cannot read file at adress {}: range is out of bounds",
                addr.QuadPart);
     return {};
@@ -451,52 +377,57 @@ std::enable_if_t<
   // brings in.
   const auto last_index =
       static_cast<std::uint64_t>((addr.QuadPart + length - 1) / block_bytes_);
-  const auto read = [this](LARGE_INTEGER& at, std::span<BYTE> dest) {
-    return ReadFromReader(at, dest);
-  };
-  RunBlockLoader loader{*cache_, block_bytes_, max_run_bytes_, last_index,
-                        read};
-  const auto get_block = [&loader](LARGE_INTEGER block_addr) {
-    return loader.Get(block_addr);
-  };
+  RunBlockLoader loader{*cache_,
+                        {.block_bytes = block_bytes_,
+                         .max_run_bytes = max_run_bytes_,
+                         .last_index = last_index},
+                        [this](LARGE_INTEGER& at, std::span<BYTE> dest) {
+                          return ReadFromReader(at, dest);
+                        }};
 
-  const bool crosses_block = addr.QuadPart / block_bytes_ !=
-                             (addr.QuadPart + length - 1) / block_bytes_;
+  const bool crosses_block = addr.QuadPart / block_bytes_ != last_index;
+  return crosses_block ? ReadStitched(loader, addr, length)
+                       : ReadInsideBlock(loader, addr, length);
+}
 
-  if (!crosses_block) {
-    // Fast path: the request fits in a single block; return a zero-copy view.
-    const LARGE_INTEGER block_addr{.QuadPart = addr.QuadPart -
-                                               addr.QuadPart % block_bytes_};
-    const std::shared_ptr<Cache::Block> block = get_block(block_addr);
-    if (!block) {
-      return ReadUncached(addr, length);
-    }
-
-    const std::span<const BYTE> bytes =
-        std::span<const BYTE>{block->bytes.get(),
-                              static_cast<size_t>(block_bytes_)}
-            .subspan(gsl::narrow<size_t>(addr.QuadPart % block_bytes_), length);
-    Cache::View view{Cache::ViewKey{}, bytes, block, cache_};
-    cache_->Trim();
-    return view;
+// Fast path: the request fits in a single block, so the view is zero copy.
+template <Cache::Strategy S>
+std::optional<Cache::View>
+    FileReader<S>::ReadInsideBlock(RunBlockLoader& loader, LARGE_INTEGER addr,
+                                   DWORD length) const {
+  const LARGE_INTEGER block_addr{.QuadPart = addr.QuadPart -
+                                             addr.QuadPart % block_bytes_};
+  const std::shared_ptr<Cache::Block> block = loader.Get(block_addr);
+  if (!block) {
+    return ReadUncached(addr, length);
   }
 
-  // Slow path: stitch the range together one block at a time. The buffer
-  // belongs to the view alone, so the blocks stay free to be evicted.
-  const Cache::BlockCache::Stitched stitched = cache_->NewStitched(length);
-  std::span<BYTE> out = stitched.bytes;
+  const std::span<const BYTE> bytes =
+      std::span<const BYTE>{block->bytes.get(),
+                            static_cast<size_t>(block_bytes_)}
+          .subspan(gsl::narrow<size_t>(addr.QuadPart % block_bytes_), length);
+  Cache::View view{Cache::ViewKey{}, bytes, block, cache_};
+  cache_->Trim();
+  return view;
+}
 
-  LARGE_INTEGER cur = addr;
-  DWORD remaining = length;
-  while (remaining != 0) {
-    const LARGE_INTEGER block_addr{.QuadPart = cur.QuadPart -
-                                               cur.QuadPart % block_bytes_};
-    const std::shared_ptr<Cache::Block> block = get_block(block_addr);
+// Slow path: stitches the range together one block at a time. The buffer
+// belongs to the view alone, so the blocks stay free to be evicted.
+template <Cache::Strategy S>
+std::optional<Cache::View> FileReader<S>::ReadStitched(RunBlockLoader& loader,
+                                                       LARGE_INTEGER addr,
+                                                       DWORD length) const {
+  const Cache::BlockCache::Stitched stitched = cache_->NewStitched(length);
+  StitchCursor cursor{.out = stitched.bytes, .cur = addr, .remaining = length};
+  while (cursor.remaining != 0) {
+    const LARGE_INTEGER block_addr{
+        .QuadPart = cursor.cur.QuadPart - cursor.cur.QuadPart % block_bytes_};
+    const std::shared_ptr<Cache::Block> block = loader.Get(block_addr);
     if (!block) {
       return ReadUncached(addr, length);
     }
 
-    CopyBlockPart(*block, block_bytes_, out, cur, remaining);
+    CopyBlockPart(*block, block_bytes_, cursor);
     // The block is copied: it is free to go if the read outgrows the ceiling.
     cache_->Trim();
   }

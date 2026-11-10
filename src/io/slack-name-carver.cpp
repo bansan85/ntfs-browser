@@ -28,6 +28,26 @@
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
 
+namespace {
+
+// True when one of live_names is the name that candidate carries: the same
+// name, under the same parent when the candidate knows its parent.
+template <Cache::Strategy S>
+bool HoldsLiveName(
+    const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& live_names,
+    const Record::CarvedName& candidate) {
+  return std::ranges::any_of(
+      live_names, [&candidate](const std::unique_ptr<Attr::AttrBase<S>>& fn) {
+        const Filename& live =
+            *static_cast<const Attr::AttrFileName<ResidentOf<S>, S>*>(fn.get());
+        return live.GetFilename() == candidate.name &&
+               (!candidate.parent_known ||
+                live.GetParentReference() == candidate.parent_record);
+      });
+}
+
+}  // namespace
+
 template <Cache::Strategy S>
 SlackNameCarver<S>::SlackNameCarver(
     const FileRecord<S>& record,
@@ -71,15 +91,7 @@ std::vector<Record::CarvedName> SlackNameCarver<S>::FromRecord(
 
   const auto& live_names = record_.GetAttr(Attr::Type::FileName);
   std::erase_if(carved, [&live_names](const Record::CarvedName& candidate) {
-    return std::ranges::any_of(
-        live_names, [&candidate](const std::unique_ptr<Attr::AttrBase<S>>& fn) {
-          const Filename& live =
-              *static_cast<const Attr::AttrFileName<ResidentOf<S>, S>*>(
-                  fn.get());
-          return live.GetFilename() == candidate.name &&
-                 (!candidate.parent_known ||
-                  live.GetParentReference() == candidate.parent_record);
-        });
+    return HoldsLiveName<S>(live_names, candidate);
   });
 
   ConvertTimes(carved);

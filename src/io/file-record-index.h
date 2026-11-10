@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <unordered_set>
 #include <vector>
@@ -147,6 +148,10 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY DirectoryIndex {
 
   [[nodiscard]] static const std::vector<IndexEntryView>*
       FileNameIndexRootEntries(const Attr::AttrBase<S>& attr);
+  // Adds the names of the root's entries to live_names. False for an index of
+  // anything but file names, which holds no names to carve.
+  [[nodiscard]] bool
+      CollectLiveRootNames(std::unordered_set<std::wstring>& live_names) const;
   [[nodiscard]] std::optional<IndexEntry>
       FindSubEntryInOrder(std::wstring_view file_name,
                           const UpCase::Table& upcase) const;

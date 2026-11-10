@@ -279,6 +279,38 @@ bool IsNameHeader(BYTE length, BYTE name_space) noexcept {
   return length != 0 && name_space <= max_name_space;
 }
 
+// Reads into name the fields of the candidate at length_at that the leftover
+// still holds. False when one rules the candidate out: flag bits that no
+// $FILE_NAME has, or times that cannot be real.
+bool ReadTrustedFields(std::span<const BYTE> record, size_t length_at,
+                       size_t trusted_begin, CarvedName& name) {
+  if (IsTrusted(length_at, flags_offset, trusted_begin)) {
+    const DWORD flags = Load<DWORD>(record, FieldAt(length_at, flags_offset));
+    if ((flags & ~known_flag_bits) != 0) {
+      return false;
+    }
+  }
+  if (IsTrusted(length_at, create_time_offset, trusted_begin) &&
+      !ReadTimes(record, length_at, name)) {
+    return false;
+  }
+  if (IsTrusted(length_at, parent_ref_offset, trusted_begin)) {
+    ReadParent(record, length_at, name);
+  }
+  return true;
+}
+
+// Whether a candidate that lacks its parent or its times is still believable:
+// the name is long enough, and, when not even the attribute flags survive, it
+// is made of plain text only.
+bool IsBelievablePartial(std::u16string_view units, bool flags_trusted) {
+  if (units.size() < min_partial_name_length) {
+    return false;
+  }
+  // Not even the attribute flags survive: the characters are all there is.
+  return flags_trusted || std::ranges::all_of(units, IsPlainTextUnit);
+}
+
 // Tests the bytes with a $FILE_NAME length byte at length_at. Nullopt when
 // they are not a candidate. trusted_begin is the first offset of the leftover.
 std::optional<Found> ProbeAt(std::span<const BYTE> record, size_t length_at,
@@ -307,31 +339,14 @@ std::optional<Found> ProbeAt(std::span<const BYTE> record, size_t length_at,
   found.end = end;
   CarvedName& name = found.name;
   name.name_space = name_space;
-
-  const bool flags_trusted = IsTrusted(length_at, flags_offset, trusted_begin);
-  if (flags_trusted) {
-    const DWORD flags = Load<DWORD>(record, FieldAt(length_at, flags_offset));
-    if ((flags & ~known_flag_bits) != 0) {
-      return std::nullopt;
-    }
-  }
-  if (IsTrusted(length_at, create_time_offset, trusted_begin) &&
-      !ReadTimes(record, length_at, name)) {
+  if (!ReadTrustedFields(record, length_at, trusted_begin, name)) {
     return std::nullopt;
-  }
-  if (IsTrusted(length_at, parent_ref_offset, trusted_begin)) {
-    ReadParent(record, length_at, name);
   }
 
   name.partial = !name.parent_known || !name.times_known;
-  if (name.partial) {
-    if (length < min_partial_name_length) {
-      return std::nullopt;
-    }
-    // Not even the attribute flags survive: the characters are all there is.
-    if (!flags_trusted && !std::ranges::all_of(units, IsPlainTextUnit)) {
-      return std::nullopt;
-    }
+  const bool flags_trusted = IsTrusted(length_at, flags_offset, trusted_begin);
+  if (name.partial && !IsBelievablePartial(units, flags_trusted)) {
+    return std::nullopt;
   }
   name.name = Utf::Utf16ToWide(units);
   return found;

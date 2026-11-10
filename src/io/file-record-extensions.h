@@ -75,6 +75,11 @@ class FileRecord<S>::Impl::ExtensionImporter {
   [[nodiscard]] bool IsGenuine(const Io::FileRecord<S>& extension,
                                WORD sequence_number) const;
 
+  // Moves what extension holds for attr_type into the owner of the list, or
+  // only its claimed layouts when claim_only.
+  void Absorb(Io::FileRecord<S>& extension, Attr::Type attr_type,
+              bool claim_only);
+
   // The Impl of the record that owns the list. It MUST outlive this object.
   Impl& impl_;
   std::unordered_set<ULONGLONG>& attr_list_chain_;

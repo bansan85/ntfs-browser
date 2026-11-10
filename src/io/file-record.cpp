@@ -304,10 +304,10 @@ const std::vector<Alloc::StreamLayout>&
 
 template <Cache::Strategy S>
 void Io::FileRecord<S>::ImportAttrListEntry(
-    ULONGLONG record_number, WORD sequence_number, Attr::Type attr_type,
+    const AttrListEntryRef& entry,
     std::unordered_set<ULONGLONG>& attr_list_chain, bool recover) {
   typename Impl::ExtensionImporter importer(*impl_, attr_list_chain, recover);
-  importer.Import(record_number, sequence_number, attr_type);
+  importer.Import(entry.record_number, entry.sequence_number, entry.attr_type);
 }
 
 template <Cache::Strategy S>

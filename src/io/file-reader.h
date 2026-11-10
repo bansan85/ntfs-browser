@@ -35,6 +35,8 @@ class BlockCache;
 
 namespace Io {
 
+class RunBlockLoader;
+
 template <Cache::Strategy S>
 class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader {
  public:
@@ -124,6 +126,17 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FileReader {
 
  private:
   [[nodiscard]] std::optional<Cache::View> ReadUncached(LARGE_INTEGER addr,
+                                                        DWORD length) const;
+
+  // FullCache: the view of a range that lies in one block, from loader.
+  [[nodiscard]] std::optional<Cache::View>
+      ReadInsideBlock(RunBlockLoader& loader, LARGE_INTEGER addr,
+                      DWORD length) const;
+
+  // FullCache: the view of a range that crosses blocks, copied from the blocks
+  // that loader gives.
+  [[nodiscard]] std::optional<Cache::View> ReadStitched(RunBlockLoader& loader,
+                                                        LARGE_INTEGER addr,
                                                         DWORD length) const;
 
   // Every read the volume makes goes through here, so that a benchmark session

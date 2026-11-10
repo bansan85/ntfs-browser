@@ -25,6 +25,8 @@ class NtfsVolume;
 
 namespace Io {
 
+struct MftRun;
+
 // What the probe of the record an index entry names found: the header, and
 // nothing of the attributes.
 struct NamedState {
@@ -85,6 +87,14 @@ class EntryProber {
   // Probes the sorted, distinct records of chunk: plans the reads
   // (PlanProbeRuns()), announces them, then makes them.
   void ProbeChunk(std::span<const ULONGLONG> chunk);
+
+  // Announces the reads of runs to the volume's reader, before any is made.
+  void AnnounceRuns(std::span<const MftRun> runs);
+
+  // Reads one run of $MFT, hands it to the store when there is one, and probes
+  // its records. to_read is the list that the plan of the run was made from.
+  void ProbeRun(const MftRun& run, std::span<const ULONGLONG> to_read,
+                bool keeps);
 
   // Probes one record into the memo. bytes is the record as $MFT holds it, or
   // empty when ParseFileRecord() reads it itself.

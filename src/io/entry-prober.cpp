@@ -72,7 +72,6 @@ NamedState EntryProber<S>::Take(ULONGLONG record) {
 
 template <Cache::Strategy S>
 void EntryProber<S>::ProbeChunk(std::span<const ULONGLONG> chunk) {
-  const DWORD record_size = volume_->GetFileRecordSize();
   const bool keeps = store_ != nullptr && store_->keep;
   const ProbeRunRules rules = ProbeRunRulesOf(*volume_, keeps);
 
@@ -84,51 +83,62 @@ void EntryProber<S>::ProbeChunk(std::span<const ULONGLONG> chunk) {
                     [this](ULONGLONG record, std::span<const BYTE> held) {
                       ProbeOne(record, held);
                     });
-  const std::span<const ULONGLONG> to_read = plan.to_read;
 
   if (rules.mapped) {
-    // A forged slot makes the announcement log: the read of the record logs
-    // it, at the entry.
-    read_log_.Reset(levels_);
-    const Log::Detail::CaptureScope scope(read_log_);
-    for (const MftRun& run : plan.runs) {
-      volume_->PrefetchMftSlots(run.first_slot,
-                                run.last_slot - run.first_slot + 1);
-    }
+    AnnounceRuns(plan.runs);
   }
 
   for (size_t index = 0; index < plan.alone; index++) {
     ProbeOne(chunk[index], {});
   }
   for (const MftRun& run : plan.runs) {
-    run_bytes_.resize(gsl::narrow<size_t>(run.last_slot - run.first_slot + 1) *
-                      record_size);
-    bool read = false;
-    {
-      read_log_.Reset(levels_);
-      const Log::Detail::CaptureScope scope(read_log_);
-      const Bench::Detail::KindScope kind(Bench::ReadKind::ProbeRun);
-      read = volume_->ReadMftSlots(run.first_slot, run_bytes_);
-    }
-    if (read && keeps) {
-      store_->keep(run.first_slot, run_bytes_);
-    }
-    for (size_t index = run.begin; index < run.end; index++) {
-      const size_t offset =
-          gsl::narrow<size_t>(to_read[index] - run.first_slot) * record_size;
-      ProbeOne(
-          to_read[index],
-          read ? std::span<const BYTE>(run_bytes_).subspan(offset, record_size)
-               : std::span<const BYTE>());
-    }
-    if (store_ != nullptr && store_->ran) {
-      store_->ran(run.first_slot, run.last_slot - run.first_slot + 1);
-    }
+    ProbeRun(run, plan.to_read, keeps);
   }
 
   // What nothing read, such as a block the cache already held, is withdrawn.
   if (!plan.runs.empty()) {
     volume_->CancelPrefetch();
+  }
+}
+
+template <Cache::Strategy S>
+void EntryProber<S>::AnnounceRuns(std::span<const MftRun> runs) {
+  // A forged slot makes the announcement log: the read of the record logs it,
+  // at the entry.
+  read_log_.Reset(levels_);
+  const Log::Detail::CaptureScope scope(read_log_);
+  for (const MftRun& run : runs) {
+    volume_->PrefetchMftSlots(run.first_slot,
+                              run.last_slot - run.first_slot + 1);
+  }
+}
+
+template <Cache::Strategy S>
+void EntryProber<S>::ProbeRun(const MftRun& run,
+                              std::span<const ULONGLONG> to_read, bool keeps) {
+  const DWORD record_size = volume_->GetFileRecordSize();
+  run_bytes_.resize(gsl::narrow<size_t>(run.last_slot - run.first_slot + 1) *
+                    record_size);
+  bool read = false;
+  {
+    read_log_.Reset(levels_);
+    const Log::Detail::CaptureScope scope(read_log_);
+    const Bench::Detail::KindScope kind(Bench::ReadKind::ProbeRun);
+    read = volume_->ReadMftSlots(run.first_slot, run_bytes_);
+  }
+  if (read && keeps) {
+    store_->keep(run.first_slot, run_bytes_);
+  }
+  for (size_t index = run.begin; index < run.end; index++) {
+    const size_t offset =
+        gsl::narrow<size_t>(to_read[index] - run.first_slot) * record_size;
+    ProbeOne(
+        to_read[index],
+        read ? std::span<const BYTE>(run_bytes_).subspan(offset, record_size)
+             : std::span<const BYTE>());
+  }
+  if (store_ != nullptr && store_->ran) {
+    store_->ran(run.first_slot, run.last_slot - run.first_slot + 1);
   }
 }
 

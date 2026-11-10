@@ -100,8 +100,10 @@ AttrList<Resident, S>::AttrList(const HeaderCommon& ahc,
                static_cast<DWORD>(al_record.attr_type));
 
     file_record.ImportAttrListEntry(
-        al_record.base_ref.segment_number, al_record.base_ref.sequence_number,
-        al_record.attr_type, attr_list_chain, recover);
+        {.record_number = al_record.base_ref.segment_number,
+         .sequence_number = al_record.base_ref.sequence_number,
+         .attr_type = al_record.attr_type},
+        attr_list_chain, recover);
 
     if (overwritable &&
         al_record.record_size < Data::attribute_list_entry_header_size) {

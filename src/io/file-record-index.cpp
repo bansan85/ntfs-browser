@@ -171,6 +171,18 @@ SearchStep StepFor(const IndexEntryView& entry, const IndexSearch& search) {
   return entry.IsSubNodePtr() ? SearchStep::Descend : SearchStep::Skip;
 }
 
+// The candidates of findings that no live name hides, once the carve is done.
+std::vector<Record::CarvedName> TakeUnseenCandidates(SlackFindings& findings) {
+  std::erase_if(findings.candidates, [&](const Record::CarvedName& candidate) {
+    return findings.live_names.contains(candidate.name);
+  });
+  if (findings.capped) {
+    Log::Info("CarveSlackNames() recovery: stopped at {} candidates",
+              max_index_slack_candidates);
+  }
+  return std::move(findings.candidates);
+}
+
 }  // namespace
 
 template <Cache::Strategy S>
@@ -648,34 +660,37 @@ std::vector<Record::CarvedName> Io::DirectoryIndex<S>::CarveSlackNames() const {
   }
 
   SlackFindings findings;
-  const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& roots =
-      record_.GetAttr(Attr::Type::IndexRoot);
-  if (!roots.empty()) {
-    // An index of anything but file names holds no names to carve.
-    const std::vector<IndexEntryView>* root_entries =
-        FileNameIndexRootEntries(*roots.front());
-    if (root_entries == nullptr) {
-      return {};
-    }
-    for (const IndexEntryView& entry : *root_entries) {
-      if (entry.HasName()) {
-        findings.live_names.emplace(entry.GetFilename());
-      }
-    }
+  if (!CollectLiveRootNames(findings.live_names)) {
+    return {};
   }
 
   auto* alloc =
       static_cast<Attr::AttrIndexAlloc<S>*>(alloc_attrs.front().get());
   scanner.CarveSlack(*alloc, findings);
+  return TakeUnseenCandidates(findings);
+}
 
-  std::erase_if(findings.candidates, [&](const Record::CarvedName& candidate) {
-    return findings.live_names.contains(candidate.name);
-  });
-  if (findings.capped) {
-    Log::Info("CarveSlackNames() recovery: stopped at {} candidates",
-              max_index_slack_candidates);
+// Adds the names of the root's entries to live_names. False for an index of
+// anything but file names, which holds no names to carve.
+template <Cache::Strategy S>
+bool Io::DirectoryIndex<S>::CollectLiveRootNames(
+    std::unordered_set<std::wstring>& live_names) const {
+  const std::vector<std::unique_ptr<Attr::AttrBase<S>>>& roots =
+      record_.GetAttr(Attr::Type::IndexRoot);
+  if (roots.empty()) {
+    return true;
   }
-  return std::move(findings.candidates);
+  const std::vector<IndexEntryView>* root_entries =
+      FileNameIndexRootEntries(*roots.front());
+  if (root_entries == nullptr) {
+    return false;
+  }
+  for (const IndexEntryView& entry : *root_entries) {
+    if (entry.HasName()) {
+      live_names.emplace(entry.GetFilename());
+    }
+  }
+  return true;
 }
 
 template class DirectoryIndex<Cache::Strategy::NoCache>;

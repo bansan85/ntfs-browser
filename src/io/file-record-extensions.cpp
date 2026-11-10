@@ -198,15 +198,22 @@ void Io::FileRecord<S>::Impl::ExtensionImporter::Import(ULONGLONG record_number,
     impl_.self->NoteOverwrittenAttrList();
   }
 
+  Absorb(frnew, attr_type, claim_only);
+}
+
+// A claim-only extension gives its layouts, and any other gives the
+// attributes it parsed: they move, so the extension is left without them.
+template <Cache::Strategy S>
+void Io::FileRecord<S>::Impl::ExtensionImporter::Absorb(
+    Io::FileRecord<S>& extension, Attr::Type attr_type, bool claim_only) {
   if (claim_only) {
     impl_.claimed_layouts.insert(impl_.claimed_layouts.end(),
-                                 frnew.impl_->claimed_layouts.begin(),
-                                 frnew.impl_->claimed_layouts.end());
+                                 extension.impl_->claimed_layouts.begin(),
+                                 extension.impl_->claimed_layouts.end());
     return;
   }
-  // Insert new found AttrList to fr.AttrList
   std::vector<std::unique_ptr<Attr::AttrBase<S>>>& vec =
-      frnew.GetAttr(attr_type);
+      extension.GetAttr(attr_type);
   for (std::unique_ptr<Attr::AttrBase<S>>& veci : vec) {
     impl_.attr_list.at(Attr::AttrIndex(attr_type)).push_back(std::move(veci));
   }

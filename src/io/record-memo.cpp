@@ -1,6 +1,7 @@
 #include "io/record-memo.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -36,13 +37,27 @@ constexpr std::size_t flags_at = 0x16;
 // the bytes a probe reads of both would overlap.
 constexpr std::size_t header_end = 0x18;
 
-// Where a place keeps what it holds: the slot number plus one comes first, and
-// the array and the sector ends follow these four WORDs.
+// Where a place keeps what it holds: the slot number plus one comes first, the
+// four WORDs of kept_words follow, then the array and the sector ends.
 constexpr std::size_t place_offset_of_us = 8;
 constexpr std::size_t place_size_of_us = 10;
 constexpr std::size_t place_seq_no = 12;
 constexpr std::size_t place_flags = 14;
 constexpr std::size_t place_array = 16;
+
+// A WORD of the header that a place keeps, and where the place puts it.
+struct KeptWord {
+  std::size_t header_at;
+  std::size_t place_at;
+};
+
+// The WORDs that a place keeps from the header, in the order of the place.
+constexpr std::array<KeptWord, 4> kept_words{{
+    {.header_at = offset_of_us_at, .place_at = place_offset_of_us},
+    {.header_at = size_of_us_at, .place_at = place_size_of_us},
+    {.header_at = seq_no_at, .place_at = place_seq_no},
+    {.header_at = flags_at, .place_at = place_flags},
+}};
 
 // Bytes that a WORD takes.
 constexpr std::size_t word_bytes = sizeof(WORD);
@@ -59,6 +74,45 @@ WORD ReadWord(std::span<const BYTE> bytes, std::size_t at) noexcept {
 std::size_t ArrayBytes(std::size_t record_size, WORD size_of_us) noexcept {
   return word_bytes * (1 + Data::FileRecordHeader::UpdateSequenceBlockCount(
                                record_size, size_of_us));
+}
+
+// Copies the WORD of from at from_at to to_at of to.
+void CopyWord(std::span<const BYTE> from, std::size_t from_at,
+              std::span<BYTE> to, std::size_t to_at) {
+  std::ranges::copy(from.subspan(from_at, word_bytes),
+                    to.subspan(to_at).begin());
+}
+
+// True when what a probe reads of a record sits in the header, the array and
+// the sector ends, apart from each other: the array must not touch the header,
+// nor the end of the first sector.
+bool IsKeepable(std::span<const BYTE> bytes, std::size_t offset_of_us,
+                std::size_t array_bytes) noexcept {
+  DWORD magic = 0;
+  std::memcpy(&magic, bytes.data(), sizeof(magic));
+  return magic == Data::FileRecordHeader::file_record_magic &&
+         offset_of_us >= header_end &&
+         offset_of_us + array_bytes <= sector_stride - word_bytes;
+}
+
+// Copies the last WORD of every sector of bytes to the sector ends of place.
+void StoreSectorEnds(std::span<const BYTE> bytes, std::span<BYTE> place,
+                     std::size_t sectors) {
+  const std::size_t ends = place_array + (word_bytes * (1 + sectors));
+  for (std::size_t sector = 0; sector < sectors; sector++) {
+    CopyWord(bytes, ((sector + 1) * sector_stride) - word_bytes, place,
+             ends + (sector * word_bytes));
+  }
+}
+
+// Copies the sector ends of place back to the last WORD of every sector of out.
+void RestoreSectorEnds(std::span<const BYTE> place, std::span<BYTE> out,
+                       std::size_t sectors) {
+  const std::size_t ends = place_array + (word_bytes * (1 + sectors));
+  for (std::size_t sector = 0; sector < sectors; sector++) {
+    CopyWord(place, ends + (sector * word_bytes), out,
+             ((sector + 1) * sector_stride) - word_bytes);
+  }
 }
 
 }  // namespace
@@ -115,15 +169,7 @@ void RecordMemo::PutOne(ULONGLONG slot, std::span<const BYTE> bytes) {
   const std::size_t offset_of_us = ReadWord(bytes, offset_of_us_at);
   const std::size_t array_bytes =
       ArrayBytes(record_size_, ReadWord(bytes, size_of_us_at));
-  DWORD magic = 0;
-  std::memcpy(&magic, bytes.data(), sizeof(magic));
-
-  // A record is kept only if what a probe reads of it sits in the header, the
-  // array and the sector ends, apart from each other: the array must not touch
-  // the header, nor the end of the first sector.
-  if (magic != Data::FileRecordHeader::file_record_magic ||
-      offset_of_us < header_end ||
-      offset_of_us + array_bytes > sector_stride - word_bytes) {
+  if (!IsKeepable(bytes, offset_of_us, array_bytes)) {
     if (held == marker) {
       std::ranges::fill(place.first(sizeof(held)), BYTE{0});
     }
@@ -131,22 +177,12 @@ void RecordMemo::PutOne(ULONGLONG slot, std::span<const BYTE> bytes) {
   }
 
   std::memcpy(place.data(), &marker, sizeof(marker));
-  const auto copy_word = [&](std::size_t to, std::size_t from) {
-    std::ranges::copy(bytes.subspan(from, word_bytes),
-                      place.subspan(to).begin());
-  };
-  copy_word(place_offset_of_us, offset_of_us_at);
-  copy_word(place_size_of_us, size_of_us_at);
-  copy_word(place_seq_no, seq_no_at);
-  copy_word(place_flags, flags_at);
+  for (const KeptWord& word : kept_words) {
+    CopyWord(bytes, word.header_at, place, word.place_at);
+  }
   std::ranges::copy(bytes.subspan(offset_of_us, array_bytes),
                     place.subspan(place_array).begin());
-  const std::size_t ends = place_array + (word_bytes * (1 + sectors_));
-  for (std::size_t sector = 0; sector < sectors_; sector++) {
-    std::ranges::copy(
-        bytes.subspan(((sector + 1) * sector_stride) - word_bytes, word_bytes),
-        place.subspan(ends + (sector * word_bytes)).begin());
-  }
+  StoreSectorEnds(bytes, place, sectors_);
 }
 
 std::span<const BYTE> RecordMemo::Find(ULONGLONG slot) {
@@ -164,24 +200,15 @@ std::span<const BYTE> RecordMemo::Find(ULONGLONG slot) {
   const std::span<BYTE> out(rebuilt_);
   const DWORD magic = Data::FileRecordHeader::file_record_magic;
   std::memcpy(out.data(), &magic, sizeof(magic));
-  const auto copy_word = [&](std::size_t to, std::size_t from) {
-    std::ranges::copy(place.subspan(from, word_bytes), out.subspan(to).begin());
-  };
-  copy_word(offset_of_us_at, place_offset_of_us);
-  copy_word(size_of_us_at, place_size_of_us);
-  copy_word(seq_no_at, place_seq_no);
-  copy_word(flags_at, place_flags);
+  for (const KeptWord& word : kept_words) {
+    CopyWord(place, word.place_at, out, word.header_at);
+  }
   const std::size_t offset_of_us = ReadWord(place, place_offset_of_us);
   const std::size_t array_bytes =
       ArrayBytes(record_size_, ReadWord(place, place_size_of_us));
   std::ranges::copy(place.subspan(place_array, array_bytes),
                     out.subspan(offset_of_us).begin());
-  const std::size_t ends = place_array + (word_bytes * (1 + sectors_));
-  for (std::size_t sector = 0; sector < sectors_; sector++) {
-    std::ranges::copy(
-        place.subspan(ends + (sector * word_bytes), word_bytes),
-        out.subspan(((sector + 1) * sector_stride) - word_bytes).begin());
-  }
+  RestoreSectorEnds(place, out, sectors_);
   return rebuilt_;
 }
 

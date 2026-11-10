@@ -175,6 +175,33 @@ enum class AttrWalk : BYTE {
   Abort       // The attribute is malformed.
 };
 
+// Checks that the total_size of the attribute header head, read from the front
+// of cur, leaves room for the header itself and for the compressed size field
+// that a compressed attribute adds. Next, or Abort when it is too small.
+AttrWalk CheckHeaderSize(std::span<const BYTE> cur,
+                         const Attr::HeaderCommon& head) {
+  const DWORD min_total_size =
+      head.non_resident != 0 ? Data::header_non_resident_base_size
+                             : static_cast<DWORD>(sizeof(Data::HeaderResident));
+  if (head.total_size < min_total_size) {
+    Log::Warn("Attribute total_size too small for its header.");
+    return AttrWalk::Abort;
+  }
+
+  if (head.non_resident != 0) {
+    Data::HeaderNonResident non_resident{};
+    std::memcpy(&non_resident, cur.data(), sizeof(non_resident));
+    if (Data::HasCompressedSizeField(non_resident) &&
+        head.total_size < min_total_size + Data::compressed_size_field_size) {
+      Log::Warn(
+          "Compressed attribute total_size too small for its compressed "
+          "size field.");
+      return AttrWalk::Abort;
+    }
+  }
+  return AttrWalk::Next;
+}
+
 // Reads the attribute header at the front of cur, and checks that it and its
 // attribute fit in a record of recordSize bytes, dataPtr bytes into it.
 AttrWalk ReadAttrHeader(std::span<const BYTE> cur, DWORD data_ptr,
@@ -200,27 +227,7 @@ AttrWalk ReadAttrHeader(std::span<const BYTE> cur, DWORD data_ptr,
   if (static_cast<ULONGLONG>(data_ptr) + head.total_size > record_size) {
     return AttrWalk::RanOut;
   }
-
-  const DWORD min_total_size =
-      head.non_resident != 0 ? Data::header_non_resident_base_size
-                             : static_cast<DWORD>(sizeof(Data::HeaderResident));
-  if (head.total_size < min_total_size) {
-    Log::Warn("Attribute total_size too small for its header.");
-    return AttrWalk::Abort;
-  }
-
-  if (head.non_resident != 0) {
-    Data::HeaderNonResident non_resident{};
-    std::memcpy(&non_resident, cur.data(), sizeof(non_resident));
-    if (Data::HasCompressedSizeField(non_resident) &&
-        head.total_size < min_total_size + Data::compressed_size_field_size) {
-      Log::Warn(
-          "Compressed attribute total_size too small for its compressed "
-          "size field.");
-      return AttrWalk::Abort;
-    }
-  }
-  return AttrWalk::Next;
+  return CheckHeaderSize(cur, head);
 }
 
 // Every non-resident instance's index into attrs, grouped by stream name: two

@@ -162,15 +162,23 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FileRecord {
   // ParseAttrs().
   [[nodiscard]] const std::vector<Alloc::StreamLayout>&
       GetClaimedLayouts() const noexcept;
+
+  // What an $ATTRIBUTE_LIST entry names: the base reference of the extension
+  // record that holds the attributes, and their type.
+  struct AttrListEntryRef {
+    ULONGLONG record_number;
+    WORD sequence_number;
+    Attr::Type attr_type;
+  };
+
   // Moves the attributes of one $ATTRIBUTE_LIST entry, from the extension
   // record that holds them, into this record. A contained or unwanted
-  // attribute is skipped. record_number and sequence_number are the entry's
-  // base reference. attr_list_chain holds the (record, attribute type) pairs
-  // already resolved along the current $ATTRIBUTE_LIST chain. Throws when the
-  // extension record cannot be parsed, or, unless recover is set, when it
-  // belongs to another file.
-  void ImportAttrListEntry(ULONGLONG record_number, WORD sequence_number,
-                           Attr::Type attr_type,
+  // attribute is skipped. entry is the entry's base reference and type.
+  // attr_list_chain holds the (record, attribute type) pairs already resolved
+  // along the current $ATTRIBUTE_LIST chain. Throws when the extension record
+  // cannot be parsed, or, unless recover is set, when it belongs to another
+  // file.
+  void ImportAttrListEntry(const AttrListEntryRef& entry,
                            std::unordered_set<ULONGLONG>& attr_list_chain,
                            bool recover);
   // Whether the options set bypass_deleted_gate. A directory record that
