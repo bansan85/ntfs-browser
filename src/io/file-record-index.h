@@ -51,18 +51,6 @@ class AttrIndexAlloc;
 
 namespace Io {
 
-// How the recovery scan walks one $INDEX_ALLOCATION attribute.
-struct OrphanScanPlan {
-  // VCN step from one index block to the next.
-  ULONGLONG clusters_per_block;
-  // Blocks the attribute declares.
-  ULONGLONG declared_blocks;
-  // Blocks the scan visits.
-  ULONGLONG scan_limit;
-  // True when the scan visits fewer blocks than declared.
-  bool capped;
-};
-
 // One name lookup down a B+ tree: the name, the volume's collation, and the
 // index block VCNs the walk has already visited. The B+ tree collates through
 // $UpCase, so two names that differ only by case are equal keys, and both can
@@ -182,10 +170,6 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY DirectoryIndex {
                        size_t depth) const;
   void ScanOrphanedIndexBlocks(
       WalkTarget<S>& target, std::unordered_set<ULONGLONG>& visited_vcns) const;
-  [[nodiscard]] OrphanScanPlan
-      PlanOrphanScan(const Attr::AttrIndexAlloc<S>& alloc) const;
-  void ReportOrphanedBlock(Attr::AttrIndexAlloc<S>& alloc, ULONGLONG vcn,
-                           WalkTarget<S>& target) const;
 };
 
 }  // namespace Io
