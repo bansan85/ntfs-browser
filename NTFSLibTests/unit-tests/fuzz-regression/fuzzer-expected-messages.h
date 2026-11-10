@@ -42,7 +42,7 @@ struct ExpectedMessages {
 
 // The messages each saved regression testcase must log, by file name. The
 // count is the number of saved testcases: a test checks that none is missing.
-inline constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 263>
+inline constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 271>
     expected_error_messages{
         {"0724c913e1b2f0607bb5cd3ebfacb596db4458e9",
          {true,
@@ -838,6 +838,40 @@ inline constexpr frozen::unordered_map<std::string_view, ExpectedMessages, 263>
          {true,
           {"Cannot find directory ntfs-fuzz-absent",
            "The filter on size has a minimum above its maximum",
+           "Record 4294967295 does not parse"}}},
+        {"mft_path_chain_loop",
+         {true,
+          {"MFT scan: 26 slots, 11 in use, 2 deleted, 13 unreadable, 0 "
+           "skipped"}}},
+        {"api_mft_list_path_loop",
+         {true,
+          {"MFT scan: 26 slots, 7 in use, 4 deleted, 14 unreadable, 0 skipped",
+           "Record 4294967295 does not parse"}}},
+        {"api_reader_damaged_names",
+         {true,
+          {"Attribute Parse error: 0x0030",
+           "File Name attribute name exceeds attribute bounds.",
+           "Record 4294967295 does not parse"}}},
+        {"cluster_state_rival_orders",
+         {true,
+          {"MFT scan clusters: 5 files counted, 0 intact, 2 reallocated, 0 "
+           "bad, 0 sparse"}}},
+        {"cluster_state_merged_rivals",
+         {true,
+          {"MFT scan clusters: 1 files counted, 0 intact, 6 reallocated, 0 "
+           "bad, 0 sparse"}}},
+        {"cluster_state_bad_in_runs",
+         {true,
+          {"MFT scan clusters: 2 files counted, 0 intact, 4 reallocated, 0 "
+           "bad, 0 sparse",
+           "MFT scan data: 4 intact, 1 reallocated, 0 unknown, 1 bad"}}},
+        {"api_mft_list_rivals",
+         {true,
+          {"MFT scan: 26 slots, 7 in use, 5 deleted, 14 unreadable, 0 skipped",
+           "Record 4294967295 does not parse"}}},
+        {"api_mft_list_bad_in_runs",
+         {true,
+          {"MFT scan: 26 slots, 8 in use, 5 deleted, 12 unreadable, 0 skipped",
            "Record 4294967295 does not parse"}}},
 };
 

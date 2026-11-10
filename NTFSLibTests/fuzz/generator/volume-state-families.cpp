@@ -5,6 +5,7 @@
 
 #include "alloc-scan-scenarios.h"
 #include "bad-cluster-scenarios.h"
+#include "cluster-rival-scenarios.h"
 #include "cluster-state-scenarios.h"
 #include "usn-journal-scenarios.h"
 #include "usn-tree-scenarios.h"
@@ -15,6 +16,7 @@ void VolumeStateFamilies::Register(ScenarioRegistry& registry) {
   AllocScanScenarios::Register(registry);
   BadClusterScenarios::Register(registry);
   ClusterStateScenarios::Register(registry);
+  ClusterRivalScenarios::Register(registry);
   UsnJournalScenarios::Register(registry);
   UsnTreeScenarios::Register(registry);
 }

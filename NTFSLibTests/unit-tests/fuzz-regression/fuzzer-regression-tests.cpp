@@ -450,5 +450,13 @@ NTFS_REGRESSION_TESTCASE("api_mft_list_folder_mixed_tree")
 NTFS_REGRESSION_TESTCASE("api_directory_folder_mixed_tree")
 NTFS_REGRESSION_TESTCASE("api_mft_list_folder_mft_tree")
 NTFS_REGRESSION_TESTCASE("api_directory_folder_mft_tree")
+NTFS_REGRESSION_TESTCASE("mft_path_chain_loop")
+NTFS_REGRESSION_TESTCASE("api_mft_list_path_loop")
+NTFS_REGRESSION_TESTCASE("api_reader_damaged_names")
+NTFS_REGRESSION_TESTCASE("cluster_state_rival_orders")
+NTFS_REGRESSION_TESTCASE("cluster_state_merged_rivals")
+NTFS_REGRESSION_TESTCASE("cluster_state_bad_in_runs")
+NTFS_REGRESSION_TESTCASE("api_mft_list_rivals")
+NTFS_REGRESSION_TESTCASE("api_mft_list_bad_in_runs")
 
 #undef NTFS_REGRESSION_TESTCASE
