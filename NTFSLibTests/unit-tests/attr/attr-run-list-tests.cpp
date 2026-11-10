@@ -1,7 +1,9 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <limits>
 #include <memory>
+#include <optional>
 #include <ostream>
 #include <string>
 #include <utility>
@@ -189,6 +191,19 @@ TEMPLATE_TEST_CASE_SIG(
                Catch::Matchers::ContainsSubstring("DataRun decode error 2"));
   }
 
+  SECTION("a VCN that wraps past 2^64") {
+    const auto wrapping = [] {
+      return NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+          BuildFakeNtfsImageWithWrappingVcn(FakeRunHost::Data);
+    };
+    CHECK_THAT(
+        parse_log(wrapping(), {}),
+        Catch::Matchers::ContainsSubstring("DataRun decode error: VCN wraps"));
+    CHECK_THAT(
+        parse_log(wrapping(), {.recover_errors = true}),
+        Catch::Matchers::ContainsSubstring("DataRun decode error: VCN wraps"));
+  }
+
   SECTION("a run past the declared VCN bound") {
     CHECK(parse_log(bad_bound(), {})
               .find("DataRun decode error: VCN exceeds bound") !=
@@ -240,5 +255,50 @@ TEMPLATE_TEST_CASE_SIG(
     // The REQUIRE above checks the size of dataAttrs.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CHECK_FALSE(data_attrs[0]->ReadData(0, buffer).has_value());
+  }
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "The layout of a stream tells a zero-length run and a run that overflows",
+    "[attr-run-list]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
+  const auto layout_of = [](std::vector<BYTE> runs,
+                            std::optional<ULONGLONG> last_vcn) {
+    const NtfsVolume<S> volume(
+        std::make_unique<
+            NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+            NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+                BuildFakeNtfsImageWithRunBytes(FakeRunHost::Data,
+                                               std::move(runs), last_vcn)),
+        VolumeOptions{.recover_errors = true});
+    REQUIRE(volume.IsVolumeOK());
+    FileRecord<S> record(volume);
+    REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
+    REQUIRE(record.ParseAttrs());
+    const auto& data_attrs = record.GetAttr(Attr::Type::Data);
+    REQUIRE(data_attrs.size() == 1);
+    // The REQUIRE above checks the size of dataAttrs.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    return data_attrs[0]->GetLayout();
+  };
+
+  SECTION("a run of no cluster") {
+    // One length byte of 0 and one offset byte, then a run of one cluster.
+    const auto layout = layout_of({0x11, 0x00, 0x05, 0x11, 0x01, 0x01},
+                                  std::numeric_limits<ULONGLONG>::max());
+
+    CHECK_FALSE(layout.well_formed);
+    CHECK(layout.runs.size() == 1);
+  }
+
+  SECTION("a run whose end overflows 64 bits") {
+    std::vector<BYTE> runs{0x18};
+    runs.insert(runs.end(), 8, BYTE{0xFF});
+    runs.push_back(0x05);
+
+    const auto layout =
+        layout_of(std::move(runs), std::numeric_limits<ULONGLONG>::max());
+
+    CHECK_FALSE(layout.well_formed);
   }
 }

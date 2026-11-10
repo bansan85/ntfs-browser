@@ -452,6 +452,35 @@ TEST_CASE("Stopping after the second pass skips the link", "[bench][stop]") {
   CHECK(FindPhase(stopped.report, Bench::Phase::Link) == nullptr);
 }
 
+TEST_CASE("Stopping after the link leaves an incomplete tree",
+          "[bench][stop]") {
+  SessionScan stopped;
+  {
+    const TestSupport::StopAfterGuard stop(Bench::Phase::Link);
+    stopped = ScanInSession<Cache::Strategy::NoCache>(
+        ListImage(), VolumeOptions{.include_deleted = true}, OneThread());
+  }
+
+  CHECK_FALSE(stopped.stats.complete);
+  CHECK(RequirePhase(stopped.report, Bench::Phase::Link).count == 1);
+}
+
+TEST_CASE("Stopping after the cluster sweep leaves an incomplete tree",
+          "[bench][stop]") {
+  Mft::MftTree::ScanOptions scan = OneThread();
+  scan.cluster_account = Alloc::ClusterAccountLevel::CountsAndMap;
+  SessionScan stopped;
+  {
+    const TestSupport::StopAfterGuard stop(Bench::Phase::ClusterSweep);
+    stopped = ScanInSession<Cache::Strategy::NoCache>(
+        ListImage(), VolumeOptions{.include_deleted = true}, scan);
+  }
+
+  CHECK_FALSE(stopped.stats.complete);
+  CHECK(RequirePhase(stopped.report, Bench::Phase::ClusterSweep).count == 1);
+  CHECK(FindPhase(stopped.report, Bench::Phase::Link) == nullptr);
+}
+
 TEST_CASE("A new stop request clears the previous one", "[bench][stop]") {
   {
     const TestSupport::StopAfterGuard stop(Bench::Phase::Open);

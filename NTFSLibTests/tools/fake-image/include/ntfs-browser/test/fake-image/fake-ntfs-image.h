@@ -1989,6 +1989,21 @@ inline constexpr ULONGLONG wrapping_lcn =
 [[nodiscard]] std::vector<BYTE>
     BuildFakeNtfsImageWithNegativeLcn(FakeRunHost host);
 
+// Same volume as BuildFakeNtfsImage(), with a one-cluster stream, of the given
+// kind, whose run list is the bytes of runs followed by the terminator. The
+// header declares last_vcn as its last VCN. Without one, it declares the last
+// VCN of its one cluster.
+[[nodiscard]] std::vector<BYTE> BuildFakeNtfsImageWithRunBytes(
+    FakeRunHost host, std::vector<BYTE> runs,
+    std::optional<ULONGLONG> last_vcn = std::nullopt);
+
+// Same volume as BuildFakeNtfsImage(), with a stream, of the given kind, whose
+// first run is a hole of 2^64 - 1 clusters and whose second run is a hole of
+// two. The header declares the largest last VCN, so the first run passes the
+// bound, and the VCN of the second one wraps past 2^64.
+[[nodiscard]] std::vector<BYTE>
+    BuildFakeNtfsImageWithWrappingVcn(FakeRunHost host);
+
 // MFT slot PutUsnJournal() writes $UsnJrnl at. Slot 12 is free on the 26-slot
 // MftTree base. On a real volume $UsnJrnl sits past the system files; this one
 // stays below mft_tree_docs_idx, so no existing record is touched.

@@ -507,6 +507,41 @@ std::vector<BYTE> BuildFakeNtfsImageWithOverflowingLcnSum(FakeRunHost host) {
   return BuildImageWithRawRuns(host, std::move(runs), 2);
 }
 
+std::vector<BYTE>
+    BuildFakeNtfsImageWithRunBytes(FakeRunHost host, std::vector<BYTE> runs,
+                                   std::optional<ULONGLONG> last_vcn) {
+  runs.push_back(0x00);  // terminate the run list
+
+  const std::vector<FakeDataRun> placeholder{{{}, 1}};
+  const FakeNonResidentOverrides overrides{.last_vcn = last_vcn,
+                                           .raw_runs = std::move(runs)};
+  const auto permission =
+      NTFS_BROWSER_NAMESPACE::Data::StdInfoPermission::Archive;
+
+  const FakeRecord record =
+      (host == FakeRunHost::Data)
+          ? MakeNonResidentDataRecord(permission, 0, cluster_size, placeholder,
+                                      overrides)
+          : MakeIndexAllocationDirRecord(permission, {.comp_unit_size = 0,
+                                                      .real_size = cluster_size,
+                                                      .runs = placeholder,
+                                                      .overrides = overrides});
+  return BuildCompressionImage(record, {}, {});
+}
+
+std::vector<BYTE> BuildFakeNtfsImageWithWrappingVcn(FakeRunHost host) {
+  // A hole of 2^64 - 1 clusters (eight length bytes, no offset byte), then a
+  // hole of two (one length byte).
+  constexpr BYTE hole_with_eight_length_bytes = 0x08;
+  constexpr BYTE hole_with_one_length_byte = 0x01;
+  std::vector<BYTE> runs{hole_with_eight_length_bytes};
+  runs.insert(runs.end(), sizeof(ULONGLONG), BYTE{0xFF});
+  runs.push_back(hole_with_one_length_byte);
+  runs.push_back(2);
+  return BuildFakeNtfsImageWithRunBytes(host, std::move(runs),
+                                        std::numeric_limits<ULONGLONG>::max());
+}
+
 std::vector<BYTE> BuildFakeNtfsImageWithNegativeLcn(FakeRunHost host) {
   // Two's-complement encoding of the LCN delta -1, in one offset byte.
   constexpr BYTE minus_one_byte = 0xFF;

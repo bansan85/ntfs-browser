@@ -3,6 +3,7 @@
 #include <span>
 #include <vector>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <ntfs-browser/namespace.h>
@@ -162,4 +163,25 @@ TEST_CASE("a batch fills the allocated and free counts of each query",
           "[alloc][volume]") {
   CheckBatchFillsTheCounts<Cache::Strategy::NoCache>();
   CheckBatchFillsTheCounts<Cache::Strategy::FullCache>();
+}
+
+TEMPLATE_TEST_CASE_SIG(
+    "a volume keeps the bitmap windows it read once it is asked to",
+    "[alloc][volume]", ((Cache::Strategy S), S), Cache::Strategy::NoCache,
+    Cache::Strategy::FullCache) {
+  const auto opened = OpenWithShape<S>();
+  const auto& volume = *opened.volume;
+  constexpr ULONGLONG keep_bytes = 1024 * 1024;
+
+  CHECK(volume.GetClusterState(40) == ClusterState::Allocated);
+  volume.KeepBitmapWindows(keep_bytes);
+
+  CHECK(volume.GetClusterState(40) == ClusterState::Allocated);
+  CHECK(volume.GetClusterState(39) == ClusterState::Free);
+  std::vector<Alloc::ClusterRun> runs;
+  volume.GetClusterRuns(39, 5, runs);
+  REQUIRE(runs.size() == 3);
+  CHECK(runs.at(0).state == ClusterState::Free);
+  CHECK(runs.at(1).state == ClusterState::Allocated);
+  CHECK(runs.at(2).state == ClusterState::Free);
 }

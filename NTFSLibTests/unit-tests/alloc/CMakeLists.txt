@@ -15,6 +15,7 @@ target_sources(
     "cluster-account-content-tests.cpp"
     "cluster-account-map-tests.cpp"
     "cluster-account-scan-tests.cpp"
+    "cluster-sweep-edge-tests.cpp"
     "cluster-bitmap-tests.cpp"
     "data-state-fold-tests.cpp"
     "file-record-data-state-tests.cpp"
