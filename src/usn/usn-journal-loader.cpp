@@ -164,40 +164,33 @@ std::unique_ptr<Journal> BuildJournal(ReadState& state) {
   return journal;
 }
 
-// Finds $Extend\$UsnJrnl and reads its $J into journal. Null when a step
-// fails. A step that throws is the caller's to catch.
+// The file reference of $Extend\$UsnJrnl, or nothing when $Extend does not
+// parse or does not hold it.
 template <Cache::Strategy S>
-std::unique_ptr<Journal> ReadJournal(const NtfsVolume<S>& volume) {
-  const Bench::Detail::KindScope kind(Bench::ReadKind::Journal);
+std::optional<ULONGLONG> FindJournalReference(const NtfsVolume<S>& volume) {
   Io::FileRecord<S> extend(volume);
   extend.SetParseOptions({.bypass_deleted_gate = true});
   if (!extend.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Extend)) ||
       !extend.ParseAttrs()) {
     Log::Debug("USN journal: $Extend does not parse");
-    return nullptr;
+    return std::nullopt;
   }
   const std::optional<IndexEntry> entry =
       extend.FindSubEntry(journal_file_name);
   if (!entry) {
     Log::Debug("USN journal: $Extend has no $UsnJrnl");
-    return nullptr;
+    return std::nullopt;
   }
+  return entry->GetFileReference();
+}
 
-  Io::FileRecord<S> record(volume);
-  record.SetParseOptions(
-      {.attr_mask = Attr::Mask::Data, .bypass_deleted_gate = true});
-  if (!record.ParseFileRecord(entry->GetFileReference()) ||
-      !record.ParseAttrs()) {
-    Log::Debug("USN journal: $UsnJrnl does not parse");
-    return nullptr;
-  }
-  const Attr::AttrBase<S>* stream = record.FindStream(journal_stream_name);
-  if (stream == nullptr) {
-    Log::Debug("USN journal: $UsnJrnl has no $J stream");
-    return nullptr;
-  }
-
-  const Alloc::StreamRanges ranges = stream->GetRealRanges();
+// Reads every real range of stream through the scanner, and builds the
+// journal. Null when nothing at all could be read: the stream is unusable, not
+// empty.
+template <Cache::Strategy S>
+std::unique_ptr<Journal> ReadStream(const NtfsVolume<S>& volume,
+                                    const Attr::AttrBase<S>& stream) {
+  const Alloc::StreamRanges ranges = stream.GetRealRanges();
   if (!ranges.complete) {
     Log::Info(
         "USN journal: the run list of $J is damaged, what it maps is read");
@@ -208,17 +201,41 @@ std::unique_ptr<Journal> ReadJournal(const NtfsVolume<S>& volume) {
                   .journal = {}};
   bool read_failed = false;
   for (const Alloc::ByteRange& range : ranges.ranges) {
-    if (!ReadRange(*stream, range, state,
+    if (!ReadRange(stream, range, state,
                    volume.GetOptions().tuning.usn.read_chunk_bytes)) {
       read_failed = true;
     }
   }
-  // Nothing at all could be read: the stream is unusable, not empty.
   if (read_failed && state.journal.scanned_bytes == 0) {
     return nullptr;
   }
 
   return BuildJournal(state);
+}
+
+// Finds $Extend\$UsnJrnl and reads its $J into journal. Null when a step
+// fails. A step that throws is the caller's to catch.
+template <Cache::Strategy S>
+std::unique_ptr<Journal> ReadJournal(const NtfsVolume<S>& volume) {
+  const Bench::Detail::KindScope kind(Bench::ReadKind::Journal);
+  const std::optional<ULONGLONG> reference = FindJournalReference(volume);
+  if (!reference) {
+    return nullptr;
+  }
+
+  Io::FileRecord<S> record(volume);
+  record.SetParseOptions(
+      {.attr_mask = Attr::Mask::Data, .bypass_deleted_gate = true});
+  if (!record.ParseFileRecord(*reference) || !record.ParseAttrs()) {
+    Log::Debug("USN journal: $UsnJrnl does not parse");
+    return nullptr;
+  }
+  const Attr::AttrBase<S>* stream = record.FindStream(journal_stream_name);
+  if (stream == nullptr) {
+    Log::Debug("USN journal: $UsnJrnl has no $J stream");
+    return nullptr;
+  }
+  return ReadStream(volume, *stream);
 }
 
 }  // namespace

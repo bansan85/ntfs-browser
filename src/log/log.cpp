@@ -295,67 +295,101 @@ std::shared_ptr<ISink> MakeFileSink(const std::filesystem::path& path,
 
 namespace {
 
+// What the first two colons of a --log argument cut out of it.
+template <typename CharT>
+struct OptionParts {
+  std::basic_string_view<CharT> target;
+  std::basic_string_view<CharT> level;
+  std::basic_string_view<CharT> path;
+  // False when the argument has no second colon, so no path field.
+  bool has_path;
+};
+
+// Cuts "--log=<target>:<level>[:<path>]" into its fields. Nothing when the
+// prefix or the first colon is missing. Only the first two colons split the
+// option, so "C:\dir\ntfs.log" survives as one path field.
+template <typename CharT>
+std::optional<OptionParts<CharT>>
+    SplitOption(std::basic_string_view<CharT> arg) noexcept {
+  if (arg.size() < option_prefix.size() ||
+      !EqualsAscii(arg.substr(0, option_prefix.size()), option_prefix)) {
+    return std::nullopt;
+  }
+
+  constexpr auto separator = static_cast<CharT>(':');
+  constexpr auto npos = std::basic_string_view<CharT>::npos;
+
+  const std::basic_string_view<CharT> value = arg.substr(option_prefix.size());
+  const size_t target_end = value.find(separator);
+  if (target_end == npos) {
+    return std::nullopt;
+  }
+
+  const std::basic_string_view<CharT> rest = value.substr(target_end + 1);
+  const size_t level_end = rest.find(separator);
+  const bool has_path = level_end != npos;
+  return OptionParts<CharT>{.target = value.substr(0, target_end),
+                            .level = rest.substr(0, level_end),
+                            .path = has_path ? rest.substr(level_end + 1)
+                                             : std::basic_string_view<CharT>{},
+                            .has_path = has_path};
+}
+
+// A target --log names: the level it sets, and the path it takes when it takes
+// one (null for the console).
+struct OptionTarget {
+  std::string_view name;
+  Level Config::* level;
+  std::filesystem::path Config::* path;
+};
+
+// The targets --log accepts.
+constexpr std::array<OptionTarget, 2> option_targets{
+    OptionTarget{console_target, &Config::console_level, nullptr},
+    OptionTarget{file_target, &Config::file_level, &Config::file_path}};
+
 // ParseOption(), over whichever character type the executable's argv has.
 template <typename CharT>
 bool ParseOptionImpl(std::basic_string_view<CharT> arg,
                      Config& config) noexcept {
-  if (arg.size() < option_prefix.size() ||
-      !EqualsAscii(arg.substr(0, option_prefix.size()), option_prefix)) {
+  const auto parts = SplitOption(arg);
+  if (!parts) {
     return false;
   }
-
-  constexpr auto separator = static_cast<CharT>(':');
-
-  const std::basic_string_view<CharT> value = arg.substr(option_prefix.size());
-  const size_t target_end = value.find(separator);
-  if (target_end == std::basic_string_view<CharT>::npos) {
-    return false;
-  }
-
-  const std::basic_string_view<CharT> target = value.substr(0, target_end);
-  const std::basic_string_view<CharT> rest = value.substr(target_end + 1);
-  // Only the first two colons split the option, so "C:\dir\ntfs.log"
-  // survives as one path field.
-  const size_t level_end = rest.find(separator);
-  const std::basic_string_view<CharT> level_text = rest.substr(0, level_end);
-  const bool has_path = level_end != std::basic_string_view<CharT>::npos;
-  const std::basic_string_view<CharT> path =
-      has_path ? rest.substr(level_end + 1) : std::basic_string_view<CharT>{};
 
   Level level = Level::Off;
-  if (!ParseLevel(level_text, level)) {
+  if (!ParseLevel(parts->level, level)) {
     return false;
   }
 
-  // A path field belongs to the file target only, and an empty one names
+  const auto target = std::ranges::find_if(
+      option_targets, [&parts](const OptionTarget& candidate) {
+        return EqualsAscii(parts->target, candidate.name);
+      });
+  if (target == option_targets.end()) {
+    return false;
+  }
+
+  // A path field belongs to a target that takes one, and an empty one names
   // no file at all.
-  if (has_path && (!EqualsAscii(target, file_target) || path.empty())) {
-    return false;
-  }
-
-  if (EqualsAscii(target, console_target)) {
-    config.console_level = level;
-    return true;
-  }
-
-  if (!EqualsAscii(target, file_target)) {
+  if (parts->has_path && (target->path == nullptr || parts->path.empty())) {
     return false;
   }
 
   // Built before anything is committed: the conversion allocates, and
   // config must come back untouched whenever this returns false.
-  std::filesystem::path file_path;
-  if (has_path) {
+  std::filesystem::path path;
+  if (parts->has_path) {
     try {
-      file_path.assign(path);
+      path.assign(parts->path);
     } catch (...) {
       return false;
     }
   }
 
-  config.file_level = level;
-  if (has_path) {
-    config.file_path = std::move(file_path);
+  config.*(target->level) = level;
+  if (parts->has_path) {
+    config.*(target->path) = std::move(path);
   }
   return true;
 }
@@ -389,6 +423,33 @@ thread_local std::uint64_t recovered_count = 0;
 // lives. Null otherwise.
 thread_local CapturedLog* current_capture = nullptr;
 
+// Whether sink wants a message at level. A sink that cannot answer is taken
+// not to want it.
+bool SinkWants(const std::shared_ptr<ISink>& sink, Level level) noexcept {
+  try {
+    return sink->ShouldLog(level);
+  } catch (...) {
+    return false;
+  }
+}
+
+// Whether the installed sinks want a message at level. The sinks are asked
+// only when no fixed threshold answers for all of them.
+bool SinksWant(Level level) noexcept {
+  try {
+    const SinkHolder& holder = EnsureSinks();
+    if (holder.fixed_threshold) {
+      return level <= *holder.fixed_threshold;
+    }
+    return std::ranges::any_of(holder.sinks,
+                               [level](const std::shared_ptr<ISink>& sink) {
+                                 return SinkWants(sink, level);
+                               });
+  } catch (...) {
+    return false;
+  }
+}
+
 }  // namespace
 
 void NoteRecovered() noexcept { recovered_count++; }
@@ -402,12 +463,8 @@ void ForgetRecoveredSince(const CapturedLog::Mark& mark) noexcept {
 void SilenceCurrentThread() noexcept { current_thread_silenced = true; }
 
 bool IsEnabled(Level level) noexcept {
-  if (current_thread_silenced) {
-    return false;
-  }
-
   // Off is a threshold, not a message level: no message is written at it.
-  if (level == Level::Off) {
+  if (current_thread_silenced || level == Level::Off) {
     return false;
   }
 
@@ -416,25 +473,7 @@ bool IsEnabled(Level level) noexcept {
     return (current_capture->Levels() & LevelBit(level)) != 0;
   }
 
-  try {
-    const SinkHolder& holder = EnsureSinks();
-    if (holder.fixed_threshold) {
-      return level <= *holder.fixed_threshold;
-    }
-
-    return std::ranges::any_of(holder.sinks,
-                               [level](const std::shared_ptr<ISink>& sink) {
-                                 try {
-                                   return sink->ShouldLog(level);
-                                 } catch (...) {
-                                   // A sink that cannot answer is taken not to
-                                   // want the message.
-                                   return false;
-                                 }
-                               });
-  } catch (...) {
-    return false;
-  }
+  return SinksWant(level);
 }
 
 namespace {

@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <istream>
 #include <optional>
 #include <string>
 #include <vector>
@@ -91,6 +92,49 @@ bool WriteReadLog(const std::filesystem::path& path, const ReadLog& log,
   return true;
 }
 
+namespace {
+
+// Reads the header of in and checks it. Returns what is wrong with the file,
+// or an empty string when the header is good.
+std::string ReadHeader(std::istream& in, const std::filesystem::path& path,
+                       ReadLogHeader& header) {
+  in.read(reinterpret_cast<char*>(&header),
+          static_cast<std::streamsize>(sizeof(header)));
+  if (!in || header.magic != log_magic) {
+    return path.string() + " is not a read log";
+  }
+  if (header.version < oldest_readable_version ||
+      header.version > log_version || header.event_bytes != sizeof(LogEvent)) {
+    return path.string() + " has an unknown read log version (" +
+           std::to_string(header.version) + ", this build reads " +
+           std::to_string(oldest_readable_version) + " to " +
+           std::to_string(log_version) + ")";
+  }
+  return {};
+}
+
+// Reads count events from in, by chunks as they exist, and appends them to
+// events. The count comes from the file: a forged one MUST NOT reserve memory
+// the file does not back. False when the file ends before count events.
+bool ReadEvents(std::istream& in, std::uint64_t count,
+                std::vector<LogEvent>& events) {
+  for (std::uint64_t done = 0; done < count;) {
+    const std::size_t chunk = static_cast<std::size_t>(
+        (std::min<std::uint64_t>)(events_per_chunk, count - done));
+    const std::size_t first = events.size();
+    events.resize(first + chunk);
+    in.read(reinterpret_cast<char*>(events.data() + first),
+            static_cast<std::streamsize>(chunk * sizeof(LogEvent)));
+    if (!in) {
+      return false;
+    }
+    done += chunk;
+  }
+  return true;
+}
+
+}  // namespace
+
 std::optional<ReadLog> LoadReadLog(const std::filesystem::path& path,
                                    std::string* error) {
   const auto fail = [error](const std::string& message) {
@@ -105,35 +149,16 @@ std::optional<ReadLog> LoadReadLog(const std::filesystem::path& path,
     return fail("cannot open " + path.string());
   }
   ReadLogHeader header;
-  in.read(reinterpret_cast<char*>(&header),
-          static_cast<std::streamsize>(sizeof(header)));
-  if (!in || header.magic != log_magic) {
-    return fail(path.string() + " is not a read log");
-  }
-  if (header.version < oldest_readable_version ||
-      header.version > log_version || header.event_bytes != sizeof(LogEvent)) {
-    return fail(path.string() + " has an unknown read log version (" +
-                std::to_string(header.version) + ", this build reads " +
-                std::to_string(oldest_readable_version) + " to " +
-                std::to_string(log_version) + ")");
+  const std::string problem = ReadHeader(in, path, header);
+  if (!problem.empty()) {
+    return fail(problem);
   }
 
   ReadLog log;
   log.volume_bytes = header.volume_bytes;
   log.start_unix_ns = header.start_unix_ns;
-  // The count comes from the file: a forged one MUST NOT reserve memory the
-  // file does not back, so the events are read by chunks as they exist.
-  for (std::uint64_t done = 0; done < header.event_count;) {
-    const std::size_t count = static_cast<std::size_t>(
-        (std::min<std::uint64_t>)(events_per_chunk, header.event_count - done));
-    const std::size_t first = log.events.size();
-    log.events.resize(first + count);
-    in.read(reinterpret_cast<char*>(log.events.data() + first),
-            static_cast<std::streamsize>(count * sizeof(LogEvent)));
-    if (!in) {
-      return fail(path.string() + " is cut: fewer events than its header says");
-    }
-    done += count;
+  if (!ReadEvents(in, header.event_count, log.events)) {
+    return fail(path.string() + " is cut: fewer events than its header says");
   }
   return log;
 }

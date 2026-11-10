@@ -59,6 +59,14 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY RecordScanner {
   // nothing is kept.
   void Drain(std::vector<Record>& out, bool last);
 
+  // Counts a stretch of damage seen at offset, and starts skipping it. A
+  // stretch already being skipped counts once.
+  void NoteDamage(ULONGLONG offset);
+
+  // At the end of a range, counts the bytes kept after pos as damage when any
+  // of them is not zero and no stretch of damage is already being skipped.
+  void NoteStrayBytes(size_t pos);
+
   // Decodes the record at the start of window. Appends it to out when it has a
   // name. Returns its length in bytes, or 0 when the bytes are not a
   // well-formed record.

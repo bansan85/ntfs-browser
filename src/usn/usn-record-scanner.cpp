@@ -139,10 +139,14 @@ bool IsNamePlacementValid(size_t window_size, size_t fixed_size,
 }
 
 // The name of a V2 or V3 record, or nothing when it is not well-formed: its
-// placement MUST be valid and it MUST be valid UTF-16.
-bool ReadName(std::span<const BYTE> window, size_t fixed_size,
-              size_t name_offset, size_t name_length, std::wstring& name) {
-  if (!IsNamePlacementValid(window.size(), fixed_size, name_offset,
+// placement MUST be valid and it MUST be valid UTF-16. fixed is the fixed part
+// of the record, which holds the placement of the name.
+template <class Fixed>
+bool ReadName(std::span<const BYTE> window, const Fixed& fixed,
+              std::wstring& name) {
+  const size_t name_offset = fixed.file_name_offset;
+  const size_t name_length = fixed.file_name_length;
+  if (!IsNamePlacementValid(window.size(), sizeof(Fixed), name_offset,
                             name_length)) {
     return false;
   }
@@ -164,6 +168,59 @@ FILETIME ToFileTime(ULONGLONG value) noexcept {
   constexpr ULONGLONG low_dword_mask = (ULONGLONG{1} << dword_bits) - 1;
   return FILETIME{.dwLowDateTime = static_cast<DWORD>(value & low_dword_mask),
                   .dwHighDateTime = static_cast<DWORD>(value >> dword_bits)};
+}
+
+// Decodes a V2 record into record. False when the bytes are not a well-formed
+// record, or when resyncing and the USN is not the record's own offset.
+bool DecodeV2(std::span<const BYTE> window, ULONGLONG offset, bool resyncing,
+              Record& record) {
+  const auto narrow = ReadAt<UsnRecordV2>(window, 0);
+  if ((resyncing && std::cmp_not_equal(narrow.usn, offset)) ||
+      !ReadName(window, narrow, record.name)) {
+    return false;
+  }
+  SplitReference(narrow.file_reference, record.file_record,
+                 record.file_sequence);
+  SplitReference(narrow.parent_reference, record.parent_record,
+                 record.parent_sequence);
+  record.usn = narrow.usn;
+  record.time = ToFileTime(narrow.timestamp);
+  record.reason = narrow.reason;
+  record.file_attributes = narrow.file_attributes;
+  return true;
+}
+
+// Decodes a V3 record into record. False when the bytes are not a well-formed
+// record, or when resyncing and the USN is not the record's own offset.
+bool DecodeV3(std::span<const BYTE> window, ULONGLONG offset, bool resyncing,
+              Record& record) {
+  const auto wide = ReadAt<UsnRecordV3>(window, 0);
+  if ((resyncing && std::cmp_not_equal(wide.usn, offset)) ||
+      !ReadName(window, wide, record.name)) {
+    return false;
+  }
+  SplitReference(wide.file_reference.low, record.file_record,
+                 record.file_sequence);
+  record.file_reference_high = wide.file_reference.high;
+  SplitReference(wide.parent_reference.low, record.parent_record,
+                 record.parent_sequence);
+  record.parent_reference_high = wide.parent_reference.high;
+  record.usn = wide.usn;
+  record.time = ToFileTime(wide.timestamp);
+  record.reason = wide.reason;
+  record.file_attributes = wide.file_attributes;
+  return true;
+}
+
+// Whether window holds a well-formed V4 record, which has no name and is
+// skipped. When resyncing, the USN MUST be the record's own offset.
+bool IsV4RecordValid(std::span<const BYTE> window, ULONGLONG offset,
+                     bool resyncing) {
+  const auto range = ReadAt<UsnRecordV4>(window, 0);
+  const size_t extents_bytes =
+      static_cast<size_t>(range.number_of_extents) * v4_extent_bytes;
+  return extents_bytes <= window.size() - sizeof(UsnRecordV4) &&
+         !(resyncing && std::cmp_not_equal(range.usn, offset));
 }
 
 }  // namespace
@@ -192,6 +249,16 @@ ULONGLONG RecordScanner::DamagedRecords() const noexcept { return damaged_; }
 
 ULONGLONG RecordScanner::SkippedRecords() const noexcept { return skipped_; }
 
+// Counts one stretch of damage at offset, unless one is already being skipped.
+void RecordScanner::NoteDamage(ULONGLONG offset) {
+  if (resyncing_) {
+    return;
+  }
+  resyncing_ = true;
+  ++damaged_;
+  Log::Trace("USN journal: no record at offset {}", offset);
+}
+
 // Reads pending_ from its start. A zero word is padding. Otherwise the bytes
 // are a record, or they are damage: the scan then moves on 8 bytes at a time,
 // and takes a record again only when its USN is its own offset in the stream,
@@ -199,13 +266,6 @@ ULONGLONG RecordScanner::SkippedRecords() const noexcept { return skipped_; }
 // per stretch.
 void RecordScanner::Drain(std::vector<Record>& out, bool last) {
   size_t pos = 0;
-  const auto fail = [&](ULONGLONG offset) {
-    if (!resyncing_) {
-      resyncing_ = true;
-      ++damaged_;
-      Log::Trace("USN journal: no record at offset {}", offset);
-    }
-  };
 
   while (pending_.size() - pos >= word_size) {
     const ULONGLONG offset = pending_offset_ + pos;
@@ -215,7 +275,7 @@ void RecordScanner::Drain(std::vector<Record>& out, bool last) {
     // Records start on a multiple of 8 of the stream.
     if (offset % word_size != 0) {
       if (window.front() != 0) {
-        fail(offset);
+        NoteDamage(offset);
       }
       ++pos;
       continue;
@@ -237,7 +297,7 @@ void RecordScanner::Drain(std::vector<Record>& out, bool last) {
         whole ? DecodeRecord(window.first(header.record_length), offset, out)
               : 0;
     if (length == 0) {
-      fail(offset);
+      NoteDamage(offset);
       pos += word_size;
       continue;
     }
@@ -245,12 +305,8 @@ void RecordScanner::Drain(std::vector<Record>& out, bool last) {
     pos += length;
   }
 
-  // A few stray bytes after the last whole word, at the end of a range.
-  if (last && !resyncing_ &&
-      std::ranges::any_of(std::span<const BYTE>(pending_).subspan(pos),
-                          [](BYTE byte) { return byte != 0; })) {
-    ++damaged_;
-    Log::Trace("USN journal: stray bytes at offset {}", pending_offset_ + pos);
+  if (last) {
+    NoteStrayBytes(pos);
   }
 
   pending_.erase(pending_.begin(),
@@ -258,60 +314,40 @@ void RecordScanner::Drain(std::vector<Record>& out, bool last) {
   pending_offset_ += pos;
 }
 
+// Counts the bytes of pending_ after pos as damage, when a few stray ones that
+// are not zero follow the last whole word of a range.
+void RecordScanner::NoteStrayBytes(size_t pos) {
+  if (resyncing_ ||
+      std::ranges::none_of(std::span<const BYTE>(pending_).subspan(pos),
+                           [](BYTE byte) { return byte != 0; })) {
+    return;
+  }
+  ++damaged_;
+  Log::Trace("USN journal: stray bytes at offset {}", pending_offset_ + pos);
+}
+
 // Decodes the one record in window, whose header PlausibleHeader() accepted.
 // While resynchronising, it also requires the record's USN to equal offset.
 size_t RecordScanner::DecodeRecord(std::span<const BYTE> window,
                                    ULONGLONG offset, std::vector<Record>& out) {
   const auto header = ReadAt<UsnRecordCommon>(window, 0);
-  Record record;
-  record.major_version = header.major_version;
 
   if (header.major_version == version_4) {
-    const auto range = ReadAt<UsnRecordV4>(window, 0);
-    const size_t extents_bytes =
-        static_cast<size_t>(range.number_of_extents) * v4_extent_bytes;
-    if (extents_bytes > window.size() - sizeof(UsnRecordV4) ||
-        (resyncing_ && std::cmp_not_equal(range.usn, offset))) {
+    if (!IsV4RecordValid(window, offset, resyncing_)) {
       return 0;
     }
     ++skipped_;
     return header.record_length;
   }
 
-  if (header.major_version == version_2) {
-    const auto narrow = ReadAt<UsnRecordV2>(window, 0);
-    if ((resyncing_ && std::cmp_not_equal(narrow.usn, offset)) ||
-        !ReadName(window, sizeof(UsnRecordV2), narrow.file_name_offset,
-                  narrow.file_name_length, record.name)) {
-      return 0;
-    }
-    SplitReference(narrow.file_reference, record.file_record,
-                   record.file_sequence);
-    SplitReference(narrow.parent_reference, record.parent_record,
-                   record.parent_sequence);
-    record.usn = narrow.usn;
-    record.time = ToFileTime(narrow.timestamp);
-    record.reason = narrow.reason;
-    record.file_attributes = narrow.file_attributes;
-  } else {
-    const auto wide = ReadAt<UsnRecordV3>(window, 0);
-    if ((resyncing_ && std::cmp_not_equal(wide.usn, offset)) ||
-        !ReadName(window, sizeof(UsnRecordV3), wide.file_name_offset,
-                  wide.file_name_length, record.name)) {
-      return 0;
-    }
-    SplitReference(wide.file_reference.low, record.file_record,
-                   record.file_sequence);
-    record.file_reference_high = wide.file_reference.high;
-    SplitReference(wide.parent_reference.low, record.parent_record,
-                   record.parent_sequence);
-    record.parent_reference_high = wide.parent_reference.high;
-    record.usn = wide.usn;
-    record.time = ToFileTime(wide.timestamp);
-    record.reason = wide.reason;
-    record.file_attributes = wide.file_attributes;
+  Record record;
+  record.major_version = header.major_version;
+  const bool decoded = header.major_version == version_2
+                           ? DecodeV2(window, offset, resyncing_, record)
+                           : DecodeV3(window, offset, resyncing_, record);
+  if (!decoded) {
+    return 0;
   }
-
   out.push_back(std::move(record));
   return header.record_length;
 }

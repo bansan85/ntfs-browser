@@ -196,17 +196,24 @@ void NoteDiskWaste(std::uint64_t bytes, bool standing) noexcept {
 
 namespace {
 
-// Counts one read under its kind and its class.
-void CountByKindAndClass(Report& report, ReadKind read_kind, ReadClass cls,
-                         std::uint64_t length, std::uint64_t wait_ns) noexcept {
-  KindStat& kind = report.kinds.at(static_cast<std::size_t>(read_kind));
+// Counts one read event under its kind and its class.
+void CountByKindAndClass(Report& report, const LogEvent& read) noexcept {
+  KindStat& kind = report.kinds.at(static_cast<std::size_t>(read.kind));
   kind.reads++;
-  kind.bytes += length;
-  kind.wait_ns += wait_ns;
-  Add(kind.sizes, length);
-  kind.by_class.at(static_cast<std::size_t>(cls))++;
-  report.class_reads.at(static_cast<std::size_t>(cls))++;
-  report.class_wait_ns.at(static_cast<std::size_t>(cls)) += wait_ns;
+  kind.bytes += read.length;
+  kind.wait_ns += read.wait_ns;
+  Add(kind.sizes, read.length);
+  kind.by_class.at(static_cast<std::size_t>(read.cls))++;
+  report.class_reads.at(static_cast<std::size_t>(read.cls))++;
+  report.class_wait_ns.at(static_cast<std::size_t>(read.cls)) += read.wait_ns;
+}
+
+// Pushes event as a marker of the present time, in the innermost phase.
+void PushInstant(State& state, LogEvent event) {
+  event.start_ns = NowNs();
+  event.end_ns = event.start_ns;
+  event.phase = CurrentPhaseIndex(state);
+  Push(state, event);
 }
 
 // Counts one read in the innermost open phase, if any.
@@ -236,26 +243,28 @@ void RecordRead(std::uint64_t offset, std::uint64_t length,
   const ReadClass cls = note.valid ? note.cls : ReadClass::Unclassified;
   const std::uint8_t phase = CurrentPhaseIndex(state);
 
+  const LogEvent event{.start_ns = start_ns,
+                       .end_ns = end_ns,
+                       .wait_ns = wait_ns,
+                       .offset = offset,
+                       .length = length,
+                       .type = EventType::Read,
+                       .kind = t_kind,
+                       .cls = cls,
+                       .phase = phase,
+                       .queue_depth = note.queue_depth};
+
   report.requested_reads++;
   report.requested_bytes += length;
   report.read_call_ns += end_ns - start_ns;
   report.read_wait_ns += wait_ns;
   state.last_read_end = (std::max)(state.last_read_end, end_ns);
 
-  CountByKindAndClass(report, t_kind, cls, length, wait_ns);
+  CountByKindAndClass(report, event);
 
   CountInPhase(state, phase, length, wait_ns);
 
-  Push(state, {.start_ns = start_ns,
-               .end_ns = end_ns,
-               .wait_ns = wait_ns,
-               .offset = offset,
-               .length = length,
-               .type = EventType::Read,
-               .kind = t_kind,
-               .cls = cls,
-               .phase = phase,
-               .queue_depth = note.queue_depth});
+  Push(state, event);
 }
 
 void RecordPrefetch(std::uint64_t offset, std::uint64_t length) noexcept {
@@ -263,16 +272,12 @@ void RecordPrefetch(std::uint64_t offset, std::uint64_t length) noexcept {
     return;
   }
   State& state = Get();
-  const std::uint64_t now = NowNs();
   state.report.prefetch_calls++;
   state.report.prefetch_bytes += length;
-  Push(state, {.start_ns = now,
-               .end_ns = now,
-               .offset = offset,
-               .length = length,
-               .type = EventType::Prefetch,
-               .kind = t_kind,
-               .phase = CurrentPhaseIndex(state)});
+  PushInstant(state, {.offset = offset,
+                      .length = length,
+                      .type = EventType::Prefetch,
+                      .kind = t_kind});
 }
 
 void RecordCancel() noexcept {
@@ -280,12 +285,8 @@ void RecordCancel() noexcept {
     return;
   }
   State& state = Get();
-  const std::uint64_t now = NowNs();
   state.report.cancel_calls++;
-  Push(state, {.start_ns = now,
-               .end_ns = now,
-               .type = EventType::Cancel,
-               .phase = CurrentPhaseIndex(state)});
+  PushInstant(state, {.type = EventType::Cancel});
 }
 
 void RecordStandingPrefetch(std::uint64_t offset,
@@ -294,16 +295,12 @@ void RecordStandingPrefetch(std::uint64_t offset,
     return;
   }
   State& state = Get();
-  const std::uint64_t now = NowNs();
   state.report.standing_prefetch_calls++;
   state.report.standing_prefetch_bytes += length;
-  Push(state, {.start_ns = now,
-               .end_ns = now,
-               .offset = offset,
-               .length = length,
-               .type = EventType::StandingPrefetch,
-               .kind = t_kind,
-               .phase = CurrentPhaseIndex(state)});
+  PushInstant(state, {.offset = offset,
+                      .length = length,
+                      .type = EventType::StandingPrefetch,
+                      .kind = t_kind});
 }
 
 void RecordStandingCancel(std::uint64_t offset, std::uint64_t length) noexcept {
@@ -311,27 +308,18 @@ void RecordStandingCancel(std::uint64_t offset, std::uint64_t length) noexcept {
     return;
   }
   State& state = Get();
-  const std::uint64_t now = NowNs();
   state.report.standing_cancel_calls++;
-  Push(state, {.start_ns = now,
-               .end_ns = now,
-               .offset = offset,
-               .length = length,
-               .type = EventType::StandingCancel,
-               .phase = CurrentPhaseIndex(state)});
+  PushInstant(
+      state,
+      {.offset = offset, .length = length, .type = EventType::StandingCancel});
 }
 
 void RecordPattern(Tuning::Pattern pattern) noexcept {
   if (!SessionOn()) {
     return;
   }
-  State& state = Get();
-  const std::uint64_t now = NowNs();
-  Push(state, {.start_ns = now,
-               .end_ns = now,
-               .length = static_cast<std::uint64_t>(pattern),
-               .type = EventType::Pattern,
-               .phase = CurrentPhaseIndex(state)});
+  PushInstant(Get(), {.length = static_cast<std::uint64_t>(pattern),
+                      .type = EventType::Pattern});
 }
 
 void NoteVolumeBytes(std::uint64_t bytes) noexcept {
@@ -468,6 +456,38 @@ void Start(const SessionOptions& options) {
 
 bool Enabled() noexcept { return Detail::SessionOn(); }
 
+namespace {
+
+// Adds the phases that ran to report, in the order of the enum.
+void CollectPhases(const State& state, Report& report) {
+  for (std::size_t index = 0; index < phase_count; index++) {
+    PhaseStat stat = state.phases.at(index);
+    if (stat.count != 0) {
+      stat.phase = static_cast<Phase>(index);
+      report.phases.push_back(stat);
+    }
+  }
+}
+
+// Sets the CPU time of the process, and adds the threads to report: the main
+// one first, then the ones that reported themselves.
+void CollectCpuTimes(State& state, Report& report, std::uint64_t wall) {
+  const auto [user, kernel] = ProcessTimes();
+  report.process_user_ns = user - state.process_user_begin;
+  report.process_kernel_ns = kernel - state.process_kernel_begin;
+  const auto [thread_user, thread_kernel] = ThreadTimes();
+  report.threads.push_back(
+      {.role = ThreadRole::Main,
+       .user_ns = thread_user - state.main_user_begin,
+       .kernel_ns = thread_kernel - state.main_kernel_begin,
+       .wall_ns = wall});
+  const std::scoped_lock lock{state.thread_mutex};
+  report.threads.insert(report.threads.end(), state.threads.begin(),
+                        state.threads.end());
+}
+
+}  // namespace
+
 Report Stop() {
   State& state = Get();
   if (!state.started) {
@@ -481,28 +501,8 @@ Report Stop() {
   report.events_logged = state.log.events.size();
   state.log.volume_bytes = report.volume_bytes;
 
-  for (std::size_t index = 0; index < phase_count; index++) {
-    PhaseStat stat = state.phases.at(index);
-    if (stat.count != 0) {
-      stat.phase = static_cast<Phase>(index);
-      report.phases.push_back(stat);
-    }
-  }
-
-  const auto [user, kernel] = ProcessTimes();
-  report.process_user_ns = user - state.process_user_begin;
-  report.process_kernel_ns = kernel - state.process_kernel_begin;
-  const auto [thread_user, thread_kernel] = ThreadTimes();
-  report.threads.push_back(
-      {.role = ThreadRole::Main,
-       .user_ns = thread_user - state.main_user_begin,
-       .kernel_ns = thread_kernel - state.main_kernel_begin,
-       .wall_ns = wall});
-  {
-    const std::scoped_lock lock{state.thread_mutex};
-    report.threads.insert(report.threads.end(), state.threads.begin(),
-                          state.threads.end());
-  }
+  CollectPhases(state, report);
+  CollectCpuTimes(state, report, wall);
 
   for (std::size_t index = 0; index < read_kind_count; index++) {
     report.kinds.at(index).kind = static_cast<ReadKind>(index);
