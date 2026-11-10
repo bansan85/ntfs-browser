@@ -57,9 +57,18 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FieldFilter {
   // Whether entry passes the tests on its size, its times and its attributes.
   [[nodiscard]] bool MatchesNumbers(const Entry& entry) const;
 
-  // Whether entry passes the tests on its state: the standing, the data state
-  // and the clusters.
+  // Whether entry passes the tests on its state: the deleted flag, the
+  // standing, the data state and the clusters.
   [[nodiscard]] bool MatchesState(const Entry& entry) const;
+
+  // Whether entry passes the choice between live and deleted entries.
+  [[nodiscard]] bool MatchesDeletion(const Entry& entry) const;
+
+  // Whether entry passes the lists of standings and of data states.
+  [[nodiscard]] bool MatchesStanding(const Entry& entry) const;
+
+  // Whether the cluster counts of entry pass every cluster test.
+  [[nodiscard]] bool MatchesClusters(const Entry& entry) const;
 
   Filter filter_;
   bool active_{false};

@@ -232,18 +232,17 @@ std::optional<ULONGLONG>
 class TreeListing {
  public:
   TreeListing(const Mft::MftTree& tree, const Options& options, EntrySink& sink,
-              std::stop_token stop, std::uint64_t volume_serial)
+              std::uint64_t volume_serial)
       : tree_(tree),
         options_(options),
         sink_(sink),
-        stop_(std::move(stop)),
         volume_serial_(volume_serial) {}
 
-  // Lists the records of the tree, in record order. With a filter, only the
-  // names it accepts.
-  void Run(FolderFilter* filter) {
+  // Lists the records of the tree, in record order, until stop is requested.
+  // With a filter, only the names it accepts.
+  void Run(FolderFilter* filter, const std::stop_token& stop) {
     for (const Mft::MftTree::Entry& record : tree_.Entries()) {
-      if (stop_.stop_requested()) {
+      if (stop.stop_requested()) {
         return;
       }
       if (!options_.include_system_files &&
@@ -258,14 +257,7 @@ class TreeListing {
   // Gives one entry for each name of record that is no DOS alias.
   void ListRecord(const Mft::MftTree::Entry& record, FolderFilter* filter) {
     const std::uint16_t links = CountLinks(record);
-    const bool deleted = !record.in_use;
-    std::optional<ClusterSummary> summary;
-    if (deleted && options_.deleted_data_state) {
-      if (const Alloc::ClusterAccount* account =
-              tree_.ClusterAccountOf(record.record)) {
-        summary = SummaryOf(account->tally);
-      }
-    }
+    const std::optional<ClusterSummary> summary = DeletedSummary(record);
     for (std::size_t i = 0; i < record.names.size(); ++i) {
       const Mft::MftTree::Name& name = record.names.at(i);
       if (name.dos_only || (filter != nullptr && !filter->Contains(name))) {
@@ -273,12 +265,8 @@ class TreeListing {
       }
       Entry entry = Describe(record, name, links);
       entry.name_index = static_cast<std::uint16_t>(i);
-      if (deleted) {
-        entry.standing = Standing::Deleted;
-        if (options_.deleted_data_state && record.data_state) {
-          entry.data_state = DataStateOf(*record.data_state);
-        }
-        entry.clusters = summary ? &*summary : nullptr;
+      if (!record.in_use) {
+        MarkDeleted(entry, record, summary);
       }
       if (options_.full_path) {
         path_ = PathOf(record, i);
@@ -286,6 +274,32 @@ class TreeListing {
       }
       sink_.Add(entry);
     }
+  }
+
+  // The cluster counts of a deleted record, when the options ask for the data
+  // state of deleted files and the tree holds an account for it.
+  [[nodiscard]] std::optional<ClusterSummary>
+      DeletedSummary(const Mft::MftTree::Entry& record) const {
+    if (record.in_use || !options_.deleted_data_state) {
+      return std::nullopt;
+    }
+    const Alloc::ClusterAccount* account =
+        tree_.ClusterAccountOf(record.record);
+    if (account == nullptr) {
+      return std::nullopt;
+    }
+    return SummaryOf(account->tally);
+  }
+
+  // Sets the fields of an entry of a deleted record. entry.clusters points into
+  // summary, which MUST outlive the entry.
+  void MarkDeleted(Entry& entry, const Mft::MftTree::Entry& record,
+                   const std::optional<ClusterSummary>& summary) const {
+    entry.standing = Standing::Deleted;
+    if (options_.deleted_data_state && record.data_state) {
+      entry.data_state = DataStateOf(*record.data_state);
+    }
+    entry.clusters = summary ? &*summary : nullptr;
   }
 
   // Fills an Entry from a record and one of its names. Its name view points at
@@ -328,7 +342,6 @@ class TreeListing {
   const Mft::MftTree& tree_;
   const Options& options_;
   EntrySink& sink_;
-  std::stop_token stop_;
   std::uint64_t volume_serial_;
 
   // Scratch for the entry being built: the sink copies them.
@@ -377,13 +390,13 @@ bool MftListEngine::Run(EntrySink& sink, std::stop_token stop) {
     return true;
   }
 
-  TreeListing listing(tree, options_, *selected, std::move(stop),
+  TreeListing listing(tree, options_, *selected,
                       opened.volume->GetSerialNumber());
   if (folder) {
     FolderFilter filter(tree, *folder, options_.recursive);
-    listing.Run(&filter);
+    listing.Run(&filter, stop);
   } else {
-    listing.Run(nullptr);
+    listing.Run(nullptr, stop);
   }
   sink.SetPercent(100.0);
   return true;

@@ -67,6 +67,18 @@ T LoadAt(std::span<const std::uint8_t> bytes, std::size_t offset) {
   return value;
 }
 
+// The date of 8 bytes at offset of bytes. The caller checked the bounds.
+Date LoadDate(std::span<const std::uint8_t> bytes, std::size_t offset) {
+  return {.ticks = LoadAt<std::uint64_t>(bytes, offset)};
+}
+
+// The attribute bits of a $FILE_NAME flags word: the Win32 bits, and the
+// directory bit of the record moved to Attribute::directory.
+std::uint32_t FileNameAttributes(std::uint32_t flags) {
+  return (flags & attribute_bits) |
+         ((flags & file_name_directory_bit) != 0 ? Attribute::directory : 0U);
+}
+
 // The name space byte of a $FILE_NAME, as NameSpace. A value past 3 is a
 // damaged record and reads as Posix, the space that has no rule.
 NameSpace NameSpaceOf(std::uint8_t value) {
@@ -91,10 +103,10 @@ std::optional<StandardInformation>
     return std::nullopt;
   }
   StandardInformation info;
-  info.created = {.ticks = LoadAt<std::uint64_t>(content, std_created)};
-  info.modified = {.ticks = LoadAt<std::uint64_t>(content, std_modified)};
-  info.mft_changed = {.ticks = LoadAt<std::uint64_t>(content, std_mft_changed)};
-  info.accessed = {.ticks = LoadAt<std::uint64_t>(content, std_accessed)};
+  info.created = LoadDate(content, std_created);
+  info.modified = LoadDate(content, std_modified);
+  info.mft_changed = LoadDate(content, std_mft_changed);
+  info.accessed = LoadDate(content, std_accessed);
   info.attributes = LoadAt<std::uint32_t>(content, std_flags) & attribute_bits;
   if (content.size() >= std_info_size) {
     info.has_extended = true;
@@ -124,17 +136,14 @@ std::optional<FileName> ParseFileName(std::span<const std::uint8_t> content,
       LoadAt<std::uint64_t>(content, name_parent) & 0x0000FFFFFFFFFFFFULL;
   name.parent_sequence = LoadAt<std::uint16_t>(content, name_parent + 6);
   name.name_space = NameSpaceOf(content[name_space_offset]);
-  name.created = {.ticks = LoadAt<std::uint64_t>(content, name_created)};
-  name.modified = {.ticks = LoadAt<std::uint64_t>(content, name_modified)};
-  name.mft_changed = {.ticks =
-                          LoadAt<std::uint64_t>(content, name_mft_changed)};
-  name.accessed = {.ticks = LoadAt<std::uint64_t>(content, name_accessed)};
+  name.created = LoadDate(content, name_created);
+  name.modified = LoadDate(content, name_modified);
+  name.mft_changed = LoadDate(content, name_mft_changed);
+  name.accessed = LoadDate(content, name_accessed);
   name.allocated_size = LoadAt<std::uint64_t>(content, name_allocated);
   name.size = LoadAt<std::uint64_t>(content, name_size);
-  const std::uint32_t flags = LoadAt<std::uint32_t>(content, name_flags);
   name.attributes =
-      (flags & attribute_bits) |
-      ((flags & file_name_directory_bit) != 0 ? Attribute::directory : 0U);
+      FileNameAttributes(LoadAt<std::uint32_t>(content, name_flags));
   name.name.resize(units);
   std::memcpy(name.name.data(), content.data() + file_name_fixed_size,
               units * 2);

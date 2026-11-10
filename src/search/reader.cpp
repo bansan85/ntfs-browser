@@ -124,6 +124,43 @@ ReadResult<std::uint64_t> ReadBytes(const NoCacheAttr& attr,
   return {.error = ReadError::None, .value = want};
 }
 
+// The description of the $DATA stream attr, for Reader::GetStreams().
+StreamInfo StreamInfoOf(const std::u16string& name, const NoCacheAttr& attr) {
+  const std::uint16_t flags = attr.GetAttrFlags();
+  return {.name = name,
+          .size = attr.GetDataSize(),
+          .allocated_size = attr.GetAllocatedSize(),
+          .resident = !attr.IsNonResident(),
+          .compressed = (flags & Attr::flag_compressed) != 0,
+          .sparse = (flags & flag_sparse) != 0,
+          .encrypted = IsEncrypted(attr)};
+}
+
+// Gives the bytes of attr from first up to last (excluded) to sink, in chunks
+// of copy_chunk_bytes. Gives the count that the sink took with the error that
+// stopped the copy: a failed read, or Aborted when the sink said stop.
+ReadResult<std::uint64_t> CopyRange(const NoCacheAttr& attr,
+                                    const ByteSink& sink, std::uint64_t first,
+                                    std::uint64_t last) {
+  std::vector<std::uint8_t> chunk(copy_chunk_bytes);
+  std::uint64_t given = 0;
+  for (std::uint64_t position = first; position < last;) {
+    const auto count = static_cast<std::size_t>(
+        std::min<std::uint64_t>(chunk.size(), last - position));
+    const ReadResult<std::uint64_t> read =
+        ReadBytes(attr, position, std::span(chunk).first(count));
+    if (!read) {
+      return {.error = read.error, .value = given};
+    }
+    if (!sink(std::span<const std::uint8_t>(chunk).first(count))) {
+      return {.error = ReadError::Aborted, .value = given};
+    }
+    given += count;
+    position += count;
+  }
+  return {.error = ReadError::None, .value = given};
+}
+
 // The name of the handle among list, which is not empty: see
 // Reader::GetFileName(). A long name is better than a DOS alias, and a name
 // filed under the parent of the handle is better than another.
@@ -454,14 +491,7 @@ ReadResult<std::vector<StreamInfo>> Reader::GetStreams(const Handle& handle) {
           if (attr == nullptr) {
             attr = listed.get();
           }
-          const std::uint16_t flags = attr->GetAttrFlags();
-          streams.push_back({.name = name,
-                             .size = attr->GetDataSize(),
-                             .allocated_size = attr->GetAllocatedSize(),
-                             .resident = !attr->IsNonResident(),
-                             .compressed = (flags & Attr::flag_compressed) != 0,
-                             .sparse = (flags & flag_sparse) != 0,
-                             .encrypted = IsEncrypted(*attr)});
+          streams.push_back(StreamInfoOf(name, *attr));
         }
         return {.error = ReadError::None, .value = std::move(streams)};
       });
@@ -498,23 +528,7 @@ ReadResult<std::uint64_t> Reader::CopyTo(const Handle& handle,
         const std::uint64_t first = std::min(offset, size);
         const std::uint64_t last =
             length ? first + std::min(*length, size - first) : size;
-        std::vector<std::uint8_t> chunk(copy_chunk_bytes);
-        std::uint64_t given = 0;
-        for (std::uint64_t position = first; position < last;) {
-          const auto count = static_cast<std::size_t>(
-              std::min<std::uint64_t>(chunk.size(), last - position));
-          const ReadResult<std::uint64_t> read =
-              ReadBytes(*attr, position, std::span(chunk).first(count));
-          if (!read) {
-            return {.error = read.error, .value = given};
-          }
-          if (!sink(std::span<const std::uint8_t>(chunk).first(count))) {
-            return {.error = ReadError::Aborted, .value = given};
-          }
-          given += count;
-          position += count;
-        }
-        return {.error = ReadError::None, .value = given};
+        return CopyRange(*attr, sink, first, last);
       });
 }
 

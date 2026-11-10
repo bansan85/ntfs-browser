@@ -115,17 +115,21 @@ bool ClusterConditionsExist(const Filter& filter) {
   });
 }
 
+// Whether at least one of the ranges that members name is set in filter.
+template <typename... Ranges>
+bool AnyRangeSet(const Filter& filter, Ranges Filter::*... members) {
+  return (... || (filter.*members).IsSet());
+}
+
 // Whether the filter sets at least one test.
 bool AnyTestSet(const Filter& filter) {
-  return filter.size.IsSet() || filter.allocated_size.IsSet() ||
-         filter.created.IsSet() || filter.modified.IsSet() ||
-         filter.mft_changed.IsSet() || filter.accessed.IsSet() ||
+  return AnyRangeSet(filter, &Filter::size, &Filter::allocated_size,
+                     &Filter::created, &Filter::modified, &Filter::mft_changed,
+                     &Filter::accessed, &Filter::record, &Filter::link_count) ||
          filter.attributes_all != 0 || filter.attributes_none != 0 ||
-         filter.is_directory.has_value() ||
+         filter.is_directory.has_value() || filter.parent_record.has_value() ||
          filter.deleted != DeletedFilter::Any || !filter.standing_in.empty() ||
-         filter.record.IsSet() || filter.parent_record.has_value() ||
-         filter.link_count.IsSet() || !filter.data_state_in.empty() ||
-         !filter.clusters.empty();
+         !filter.data_state_in.empty() || !filter.clusters.empty();
 }
 
 // Whether time passes a range on a time. An unset time never does.
@@ -219,39 +223,43 @@ bool FieldFilter::MatchesNumbers(const Entry& entry) const {
 }
 
 bool FieldFilter::MatchesState(const Entry& entry) const {
-  const Filter& filter = filter_;
-  switch (filter.deleted) {
+  return MatchesDeletion(entry) && MatchesStanding(entry) &&
+         MatchesClusters(entry);
+}
+
+bool FieldFilter::MatchesDeletion(const Entry& entry) const {
+  switch (filter_.deleted) {
     case DeletedFilter::Any:
       break;
     case DeletedFilter::OnlyLive:
-      if (entry.standing != Standing::Live) {
-        return false;
-      }
-      break;
+      return entry.standing == Standing::Live;
     case DeletedFilter::OnlyDeleted:
-      if (!entry.IsDeleted()) {
-        return false;
-      }
-      break;
+      return entry.IsDeleted();
   }
+  return true;
+}
+
+bool FieldFilter::MatchesStanding(const Entry& entry) const {
+  const Filter& filter = filter_;
   if (!filter.standing_in.empty() &&
       (standing_bits_ & BitOf(static_cast<std::uint8_t>(entry.standing))) ==
           0) {
     return false;
   }
-  if (!filter.data_state_in.empty() &&
-      (data_state_bits_ & BitOf(static_cast<std::uint8_t>(entry.data_state))) ==
-          0) {
-    return false;
-  }
-  if (filter.clusters.empty()) {
+  return filter.data_state_in.empty() ||
+         (data_state_bits_ &
+          BitOf(static_cast<std::uint8_t>(entry.data_state))) != 0;
+}
+
+bool FieldFilter::MatchesClusters(const Entry& entry) const {
+  if (filter_.clusters.empty()) {
     return true;
   }
   if (entry.clusters == nullptr) {
     return false;
   }
-  return std::ranges::all_of(filter.clusters, [&entry](
-                                                  const ClusterTest& test) {
+  return std::ranges::all_of(filter_.clusters, [&entry](
+                                                   const ClusterTest& test) {
     const std::uint64_t count = entry.clusters->Count(test.condition);
     return count >= test.at_least && (!test.at_most || count <= *test.at_most);
   });

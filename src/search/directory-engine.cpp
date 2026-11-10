@@ -237,29 +237,49 @@ class DirectoryWalk {
   // an entry that leads back to one is a loop or a corruption.
   [[nodiscard]] bool EnterNextFolder(Io::DirectoryReadAhead<S>& ahead) {
     while (!pending_.empty() && !stop_.stop_requested()) {
-      Pending next = std::move(pending_.back());
-      pending_.pop_back();
-      // Back to the parent's path: a waiting folder is never deeper than one
-      // level below the last one listed, and its parent is on the way.
-      lengths_.resize(next.depth);
-      folder_path_.resize(lengths_.back());
-      folder_path_ += path_separator;
-      folder_path_ += next.name;
+      const Pending next = TakeNextPending();
+      PositionPath(next);
       if (listed_.contains(next.reference)) {
         Log::Warn("Skipping {}: directory already listed", Name(folder_path_));
         ahead.Release(next.reference);
         continue;
       }
-      if (folder_.ParseFileRecord(next.reference) && folder_.ParseAttrs()) {
-        listed_.insert(next.reference);
-        lengths_.push_back(folder_path_.size());
-        depth_ = next.depth;
+      if (OpenFolder(next)) {
         return true;
       }
       Log::Warn("Cannot read directory {}", Name(folder_path_));
       ahead.Release(next.reference);
     }
     return false;
+  }
+
+  // Removes the last waiting folder from pending_ and returns it.
+  [[nodiscard]] Pending TakeNextPending() {
+    Pending next = std::move(pending_.back());
+    pending_.pop_back();
+    return next;
+  }
+
+  // Sets folder_path_ to the path of next. Back to the parent's path: a waiting
+  // folder is never deeper than one level below the last one listed, and its
+  // parent is on the way.
+  void PositionPath(const Pending& next) {
+    lengths_.resize(next.depth);
+    folder_path_.resize(lengths_.back());
+    folder_path_ += path_separator;
+    folder_path_ += next.name;
+  }
+
+  // Parses next into folder_. On success the folder counts as listed and
+  // becomes the current depth. Returns false when it does not parse.
+  [[nodiscard]] bool OpenFolder(const Pending& next) {
+    if (!folder_.ParseFileRecord(next.reference) || !folder_.ParseAttrs()) {
+      return false;
+    }
+    listed_.insert(next.reference);
+    lengths_.push_back(folder_path_.size());
+    depth_ = next.depth;
+    return true;
   }
 
   // A path as UTF-8, for the log.
@@ -286,18 +306,22 @@ class DirectoryWalk {
       if (const std::optional<ULONGLONG> current = folder_.GetFileReference()) {
         ahead.Release(*current);
       }
-      // The stack pops the last pushed first: push in reverse to list the
-      // subfolders in index order.
-      for (auto child = children_.rbegin(); child != children_.rend();
-           ++child) {
-        pending_.push_back({.reference = child->reference,
-                            .name = std::move(child->name),
-                            .depth = depth_ + 1});
-      }
+      QueueChildren();
       if (ahead.Enabled()) {
         PlanReadAhead(ahead, upcoming);
       }
     } while (EnterNextFolder(ahead));
+  }
+
+  // Moves the subfolders that the last pass found onto the stack. The stack
+  // pops the last pushed first: they go in reverse to list the subfolders in
+  // index order.
+  void QueueChildren() {
+    for (auto child = children_.rbegin(); child != children_.rend(); ++child) {
+      pending_.push_back({.reference = child->reference,
+                          .name = std::move(child->name),
+                          .depth = depth_ + 1});
+    }
   }
 
   // Tells the read ahead which folders come next: the top of the stack, and
