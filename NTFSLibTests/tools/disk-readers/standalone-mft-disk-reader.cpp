@@ -1,11 +1,9 @@
 #include <algorithm>
 #include <bit>
-#include <climits>
 #include <cstddef>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
-#include <limits>
 #include <optional>
 #include <ranges>
 #include <span>
@@ -18,12 +16,10 @@
 #include <gsl/narrow>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/disk-readers/mft-run-decoder.h>
 #include <ntfs-browser/test/disk-readers/standalone-mft-disk-reader.h>
 
-#include "attr/header-common.h"
-#include "attr/type.h"
 #include "data/file-record-header.h"
-#include "data/header-non-resident.h"
 #include "data/ntfs-bpb.h"
 #include "win-types.h"
 
@@ -31,21 +27,8 @@ namespace NTFS_BROWSER_NAMESPACE::Test::DiskReaders {
 
 namespace {
 
-// The sector size the boot sector declares. The update sequence words of a
-// record sit every 512 bytes, whatever the sector size, and every kept
-// fixture comes from a volume with 512-byte sectors.
-constexpr DWORD sector_size = 512;
-
-// Smallest cluster size accepted: one sector.
-constexpr DWORD min_cluster_size = 512;
-
-// Largest cluster size accepted: 64 KiB, the biggest a Windows volume formats
-// by default.
-constexpr DWORD max_cluster_size = 65536;
-
-// Size of the boot area the volume reads first: it asks for 4096 bytes, then
-// falls back to 512.
-constexpr ULONGLONG full_boot_area_bytes = 4096;
+// The sector size the boot sector declares.
+constexpr DWORD sector_size = mft_sector_size;
 
 // Largest sectors_per_cluster the BPB writes as a plain count. Above it, the
 // byte holds minus the base 2 logarithm of the count.
@@ -53,17 +36,6 @@ constexpr DWORD max_literal_sectors_per_cluster = 127;
 
 // Size of an index block the boot sector declares: 4 KiB, what NTFS formats.
 constexpr DWORD index_block_bytes = 4096;
-
-// Largest end address any run may reach. The library adds a record offset to
-// it and narrows the sum to a LONGLONG, so half of that range is the limit.
-constexpr ULONGLONG max_volume_bytes =
-    static_cast<ULONGLONG>(std::numeric_limits<LONGLONG>::max()) / 2;
-
-// Bits of the high nibble of a run header: the byte count of the offset field.
-constexpr unsigned run_offset_shift = 4;
-
-// Largest byte count of a run length or offset field.
-constexpr unsigned max_run_field_bytes = 8;
 
 // Boot sector values a real volume has, none of which the library reads: the
 // media descriptor of a fixed disk,
@@ -78,30 +50,6 @@ constexpr DWORD not_used3_value = 0x80008000;
 
 // and an arbitrary serial number.
 constexpr ULONGLONG serial_value = 0x4D46545F4D4B5354ULL;
-
-// A little-endian field of count bytes at the start of bytes, or nothing when
-// bytes is shorter. The value is unsigned: sign extension is the caller's.
-std::optional<ULONGLONG> ReadField(std::span<const BYTE> bytes,
-                                   unsigned count) {
-  if (count > bytes.size() || count > max_run_field_bytes) {
-    return std::nullopt;
-  }
-  ULONGLONG value = 0;
-  for (unsigned index = 0; index < count; index++) {
-    value |= static_cast<ULONGLONG>(bytes[index]) << (index * CHAR_BIT);
-  }
-  return value;
-}
-
-// Sign-extends the low count bytes of value.
-LONGLONG SignExtend(ULONGLONG value, unsigned count) {
-  if (count == 0 || count >= max_run_field_bytes) {
-    return static_cast<LONGLONG>(value);
-  }
-  const unsigned bits = count * CHAR_BIT;
-  const ULONGLONG sign_bit = ULONGLONG{1} << (bits - 1);
-  return static_cast<LONGLONG>((value ^ sign_bit) - sign_bit);
-}
 
 // What BPB byte stands for a count of units that is a power of two. A count
 // above limit is written as minus its base 2 logarithm.
@@ -186,7 +134,8 @@ bool StandaloneMftDiskReader::Fail(std::string reason) {
   return false;
 }
 
-bool StandaloneMftDiskReader::Open(std::wstring_view path) {
+// Forgets everything that an earlier Open() learned.
+void StandaloneMftDiskReader::Reset() {
   failure_.clear();
   runs_.clear();
   boot_.clear();
@@ -197,7 +146,10 @@ bool StandaloneMftDiskReader::Open(std::wstring_view path) {
   volume_bytes_ = 0;
   boot_area_bytes_ = 0;
   file_.close();
+}
 
+// Measures and opens the file at path.
+bool StandaloneMftDiskReader::OpenFile(std::wstring_view path) {
   const std::filesystem::path file_path(path);
   std::error_code error;
   file_size_ = std::filesystem::file_size(file_path, error);
@@ -207,6 +159,14 @@ bool StandaloneMftDiskReader::Open(std::wstring_view path) {
   file_.open(file_path, std::ios::binary);
   if (!file_.is_open()) {
     return Fail("cannot open the file");
+  }
+  return true;
+}
+
+bool StandaloneMftDiskReader::Open(std::wstring_view path) {
+  Reset();
+  if (!OpenFile(path)) {
+    return false;
   }
 
   NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader header{};
@@ -220,11 +180,17 @@ bool StandaloneMftDiskReader::Open(std::wstring_view path) {
   }
 
   file_record_size_ = gsl::narrow<DWORD>(record.size());
-  if (!MapDataRuns(record)) {
-    return false;
+  MftRunDecoder decoder(repair_declared_extent_);
+  std::optional<MftRunDecoder::Layout> layout = decoder.Decode(record);
+  if (!layout) {
+    return Fail(decoder.Failure());
   }
-  if (!repaired_record_.empty()) {
-    // MapDataRuns() changed record: put its update sequence back.
+  runs_ = std::move(layout->runs);
+  cluster_size_ = layout->cluster_size;
+  volume_bytes_ = layout->volume_bytes;
+  boot_area_bytes_ = layout->boot_area_bytes;
+  if (layout->repaired) {
+    // Decode() changed record: put its update sequence back.
     RedoUpdateSequence(record, header);
     repaired_record_ = std::move(record);
   }
@@ -273,199 +239,6 @@ bool StandaloneMftDiskReader::ReadRecordZero(
   if (!file_) {
     return Fail("cannot read record 0");
   }
-  return true;
-}
-
-// Reads the unnamed $DATA at VCN 0 of record 0, which maps the whole $MFT, and
-// derives the cluster size from it. Fills runs_, volume_bytes_ and
-// boot_area_bytes_.
-bool StandaloneMftDiskReader::MapDataRuns(std::vector<BYTE>& record) {
-  std::optional<DataAttr> data = FindUnnamedData(record);
-  if (!data) {
-    return false;
-  }
-  const std::optional<RunList> list = ParseRunList(record, *data);
-  if (!list) {
-    return false;
-  }
-  RepairDeclaredExtent(record, *data, list->total_clusters);
-  const std::optional<ULONGLONG> cluster =
-      DeriveClusterSize(data->header, list->total_clusters);
-  if (!cluster) {
-    return false;
-  }
-  cluster_size_ = gsl::narrow<DWORD>(*cluster);
-  return BuildRuns(list->runs, *cluster);
-}
-
-// Finds the non-resident unnamed $DATA that starts at VCN 0, and checks that
-// its run list starts inside the attribute.
-std::optional<StandaloneMftDiskReader::DataAttr>
-    StandaloneMftDiskReader::FindUnnamedData(const std::vector<BYTE>& record) {
-  NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader record_header{};
-  std::memcpy(&record_header, record.data(),
-              NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader::
-                  min_file_record_header_size);
-
-  size_t pos = record_header.offset_of_attr;
-  std::optional<DataAttr> data;
-  while (pos + sizeof(NTFS_BROWSER_NAMESPACE::Attr::HeaderCommon) <=
-         record.size()) {
-    NTFS_BROWSER_NAMESPACE::Attr::HeaderCommon common{};
-    std::memcpy(&common, &record[pos], sizeof(common));
-    if (common.type == NTFS_BROWSER_NAMESPACE::Attr::Type::All) {
-      break;
-    }
-    if (common.total_size < sizeof(common) ||
-        common.total_size > record.size() - pos) {
-      Fail("an attribute of record 0 overruns the record");
-      return std::nullopt;
-    }
-    if (common.type == NTFS_BROWSER_NAMESPACE::Attr::Type::Data &&
-        common.non_resident != 0 && common.name_length == 0) {
-      if (common.total_size <
-          sizeof(NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident)) {
-        Fail("the $DATA header of record 0 is cut");
-        return std::nullopt;
-      }
-      NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident found{};
-      std::memcpy(&found, &record[pos], sizeof(found));
-      if (found.start_vcn == 0) {
-        data = DataAttr{
-            .header = found, .pos = pos, .end = pos + common.total_size};
-        break;
-      }
-    }
-    pos += common.total_size;
-  }
-  if (!data) {
-    Fail("record 0 has no non-resident unnamed $DATA at VCN 0");
-    return std::nullopt;
-  }
-  if (data->header.data_run_offset <
-          sizeof(NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident) ||
-      data->pos + data->header.data_run_offset >= data->end) {
-    Fail("the run list of record 0 starts outside its attribute");
-    return std::nullopt;
-  }
-  return data;
-}
-
-// Decodes the run list of data. The first run MUST be real: the volume finds
-// $MFT there.
-std::optional<StandaloneMftDiskReader::RunList>
-    StandaloneMftDiskReader::ParseRunList(const std::vector<BYTE>& record,
-                                          const DataAttr& data) {
-  RunList list;
-  LONGLONG lcn = 0;
-  const std::span<const BYTE> bytes(record);
-  size_t cursor = data.pos + data.header.data_run_offset;
-  while (cursor < data.end && record[cursor] != 0) {
-    const BYTE run_header = record[cursor++];
-    const unsigned length_bytes = run_header & 0x0FU;
-    const unsigned offset_bytes = run_header >> run_offset_shift;
-    const std::span<const BYTE> rest = bytes.subspan(cursor, data.end - cursor);
-    const std::optional<ULONGLONG> length = ReadField(rest, length_bytes);
-    if (length_bytes == 0 || !length || *length == 0) {
-      Fail("a run of record 0 has an invalid length");
-      return std::nullopt;
-    }
-    cursor += length_bytes;
-    const std::optional<ULONGLONG> delta =
-        ReadField(bytes.subspan(cursor, data.end - cursor), offset_bytes);
-    if (!delta) {
-      Fail("a run of record 0 has an invalid offset");
-      return std::nullopt;
-    }
-    cursor += offset_bytes;
-    if (list.total_clusters > std::numeric_limits<ULONGLONG>::max() - *length) {
-      Fail("the runs of record 0 hold too many clusters");
-      return std::nullopt;
-    }
-    list.total_clusters += *length;
-    if (offset_bytes == 0) {
-      list.runs.push_back({.lcn = std::nullopt, .clusters = *length});
-      continue;
-    }
-    lcn += SignExtend(*delta, offset_bytes);
-    if (lcn < 0) {
-      Fail("a run of record 0 starts at a negative cluster");
-      return std::nullopt;
-    }
-    list.runs.push_back(
-        {.lcn = static_cast<ULONGLONG>(lcn), .clusters = *length});
-  }
-  if (list.runs.empty() || !list.runs.front().lcn) {
-    Fail("the first run of record 0's $DATA is missing or sparse");
-    return std::nullopt;
-  }
-  return list;
-}
-
-// When asked to, makes data declare the last VCN its run list reaches, in
-// record and in data.
-void StandaloneMftDiskReader::RepairDeclaredExtent(std::vector<BYTE>& record,
-                                                   DataAttr& data,
-                                                   ULONGLONG total_clusters) {
-  if (!repair_declared_extent_ || data.header.last_vcn + 1 >= total_clusters) {
-    return;
-  }
-  const ULONGLONG last_vcn = total_clusters - 1;
-  std::memcpy(
-      &record.at(
-          data.pos +
-          offsetof(NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident, last_vcn)),
-      &last_vcn, sizeof(last_vcn));
-  data.header.last_vcn = last_vcn;
-  // Not empty from here on: Open() swaps the update sequence back in.
-  repaired_record_.assign(1, 0);
-}
-
-// The cluster size is what makes the allocated size of data a whole cluster
-// count. Returns it, or nothing when it is not a plausible size.
-std::optional<ULONGLONG> StandaloneMftDiskReader::DeriveClusterSize(
-    const NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident& data,
-    ULONGLONG total_clusters) {
-  if (data.alloc_size == 0 || data.alloc_size % total_clusters != 0) {
-    Fail("the allocated size of $DATA is not a whole cluster count");
-    return std::nullopt;
-  }
-  const ULONGLONG cluster = data.alloc_size / total_clusters;
-  if (cluster < min_cluster_size || cluster > max_cluster_size ||
-      !std::has_single_bit(cluster)) {
-    Fail("the cluster size " + std::to_string(cluster) +
-         " derived from record 0 is invalid");
-    return std::nullopt;
-  }
-  return cluster;
-}
-
-// Places the real runs of raw_runs in the file, and measures the volume they
-// span: fills runs_, volume_bytes_ and boot_area_bytes_.
-bool StandaloneMftDiskReader::BuildRuns(const std::vector<RawRun>& raw_runs,
-                                        ULONGLONG cluster) {
-  ULONGLONG vcn = 0;
-  ULONGLONG lowest_byte = std::numeric_limits<ULONGLONG>::max();
-  for (const RawRun& raw : raw_runs) {
-    if (raw.lcn) {
-      if (*raw.lcn > max_volume_bytes / cluster ||
-          raw.clusters > max_volume_bytes / cluster - *raw.lcn) {
-        return Fail("a run of record 0 lies beyond any plausible volume");
-      }
-      runs_.push_back({.lcn = *raw.lcn,
-                       .file_offset = vcn * cluster,
-                       .clusters = raw.clusters});
-      lowest_byte = std::min(lowest_byte, *raw.lcn * cluster);
-      volume_bytes_ =
-          std::max(volume_bytes_, (*raw.lcn + raw.clusters) * cluster);
-    }
-    vcn += raw.clusters;
-  }
-  if (lowest_byte < sector_size) {
-    return Fail("a run of record 0 overlaps the boot sector");
-  }
-  boot_area_bytes_ =
-      lowest_byte >= full_boot_area_bytes ? full_boot_area_bytes : sector_size;
   return true;
 }
 
@@ -554,10 +327,11 @@ bool StandaloneMftDiskReader::ReadInto(LARGE_INTEGER& addr,
       piece = std::min<size_t>(dest.size(), boot_area_bytes_ - pos);
       std::memcpy(dest.data(), &boot_.at(pos), piece);
     } else {
-      const auto run = std::ranges::find_if(runs_, [&](const Run& candidate) {
-        return pos >= candidate.lcn * cluster_size_ &&
-               pos < (candidate.lcn + candidate.clusters) * cluster_size_;
-      });
+      const auto run =
+          std::ranges::find_if(runs_, [&](const MftRunDecoder::Run& candidate) {
+            return pos >= candidate.lcn * cluster_size_ &&
+                   pos < (candidate.lcn + candidate.clusters) * cluster_size_;
+          });
       if (run == runs_.end()) {
         return false;
       }

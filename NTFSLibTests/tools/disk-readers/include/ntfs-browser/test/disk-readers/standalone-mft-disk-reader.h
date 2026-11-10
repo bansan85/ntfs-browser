@@ -9,8 +9,8 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/disk-readers/mft-run-decoder.h>
 
-#include "data/header-non-resident.h"
 #include "disk-reader.h"
 #include "win-types.h"
 
@@ -71,60 +71,19 @@ class StandaloneMftDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   [[nodiscard]] ULONGLONG FileSize() const noexcept;
 
  private:
-  // One run of $MFT's $DATA, as the volume it came from placed it.
-  struct Run {
-    // First cluster on the volume.
-    ULONGLONG lcn{0};
-    // First byte of the run in the file.
-    ULONGLONG file_offset{0};
-    ULONGLONG clusters{0};
-  };
-
-  // One run of the run list as record 0 stores it, before the cluster size is
-  // known. A sparse run has no lcn.
-  struct RawRun {
-    std::optional<ULONGLONG> lcn;
-    ULONGLONG clusters;
-  };
-
-  // The decoded run list of $MFT's $DATA.
-  struct RunList {
-    std::vector<RawRun> runs;
-    ULONGLONG total_clusters{0};
-  };
-
-  // $MFT's unnamed $DATA header in record 0, and where it sits in the record.
-  struct DataAttr {
-    NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident header;
-    // Offset of the attribute in the record.
-    size_t pos;
-    // Offset of the first byte past the attribute.
-    size_t end;
-  };
-
   // Sets failure_ and returns false.
   bool Fail(std::string reason);
+
+  // Forgets everything that an earlier Open() learned.
+  void Reset();
+
+  // Measures and opens the file at path. Sets failure_ when it cannot.
+  bool OpenFile(std::wstring_view path);
 
   // Reads record 0 and its header from the open file. record keeps its update
   // sequence.
   bool ReadRecordZero(NTFS_BROWSER_NAMESPACE::Data::FileRecordHeader& header,
                       std::vector<BYTE>& record);
-
-  // Decodes record 0's $DATA runs into runs_. False when they are unusable.
-  // record has its update sequence undone, and may be changed to repair the
-  // declared extent.
-  bool MapDataRuns(std::vector<BYTE>& record);
-
-  // The stages of MapDataRuns(). Each one sets failure_ when it gives up.
-  std::optional<DataAttr> FindUnnamedData(const std::vector<BYTE>& record);
-  std::optional<RunList> ParseRunList(const std::vector<BYTE>& record,
-                                      const DataAttr& data);
-  void RepairDeclaredExtent(std::vector<BYTE>& record, DataAttr& data,
-                            ULONGLONG total_clusters);
-  std::optional<ULONGLONG> DeriveClusterSize(
-      const NTFS_BROWSER_NAMESPACE::Data::HeaderNonResident& data,
-      ULONGLONG total_clusters);
-  bool BuildRuns(const std::vector<RawRun>& raw_runs, ULONGLONG cluster);
 
   // Builds boot_ from the geometry found.
   void BuildBootSector();
@@ -144,7 +103,7 @@ class StandaloneMftDiskReader : public NTFS_BROWSER_NAMESPACE::IDiskReader {
   ULONGLONG volume_bytes_{0};
   // Bytes of the volume that hold the boot sector and its zero padding.
   ULONGLONG boot_area_bytes_{0};
-  std::vector<Run> runs_;
+  std::vector<MftRunDecoder::Run> runs_;
   std::vector<BYTE> boot_;
   mutable std::ifstream file_;
 };

@@ -14,6 +14,8 @@ add_library(
   "recording-disk-reader.cpp"
   "include/ntfs-browser/test/disk-readers/standalone-mft-disk-reader.h"
   "standalone-mft-disk-reader.cpp"
+  "include/ntfs-browser/test/disk-readers/mft-run-decoder.h"
+  "mft-run-decoder.cpp"
   "include/ntfs-browser/test/disk-readers/throttled-disk-reader.h"
   "throttled-disk-reader.cpp"
 )
