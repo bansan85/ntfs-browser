@@ -382,6 +382,8 @@ find_package(Threads REQUIRED)
 target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads)
 # Private: spdlog is an implementation detail, absent from the public API.
 target_link_libraries(${PROJECT_NAME} PRIVATE spdlog::spdlog)
+# Private too: utf8proc is only used by src/upcase/upcase.cpp.
+target_link_libraries(${PROJECT_NAME} PRIVATE utf8proc::utf8proc)
 # Private too: frozen's maps back internal static lookups only, never a public
 # header.
 target_link_libraries(${PROJECT_NAME} PRIVATE frozen::frozen)

@@ -7,7 +7,8 @@
   "dependencies": [
     "frozen",
     "ms-gsl",
-    "spdlog"
+    "spdlog",
+    "utf8proc"
   ],
   "default-features": [
     "tests",

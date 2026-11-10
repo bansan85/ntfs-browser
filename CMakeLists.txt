@@ -83,6 +83,28 @@ else()
   add_subdirectory("3rdparty/spdlog")
 endif()
 
+# utf8proc gives the Unicode simple uppercase mapping that src/upcase/upcase.cpp
+# expands into the built-in $UpCase table. Updating the submodule updates that
+# table. No public header includes it.
+option(
+  NTFS_BROWSER_USE_INSTALLED_UTF8PROC
+  "Link an installed utf8proc instead of the 3rdparty submodule"
+  ${NTFS_BROWSER_USE_INSTALLED_DEFAULT}
+)
+if(NTFS_BROWSER_USE_INSTALLED_UTF8PROC)
+  find_package(utf8proc CONFIG REQUIRED)
+else()
+  # Always static, whatever BUILD_SHARED_LIBS says: it ends up inside a shared
+  # NtfsBrowser. The block keeps these overrides out of the rest of the project.
+  block(SCOPE_FOR VARIABLES)
+    set(BUILD_SHARED_LIBS OFF)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+    set(UTF8PROC_INSTALL OFF CACHE BOOL "" FORCE)
+    set(UTF8PROC_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+    add_subdirectory("3rdparty/utf8proc")
+  endblock()
+endif()
+
 # Crypto++ is the default EFS cipher backend. Defaults the same way as the other
 # NTFS_BROWSER_USE_INSTALLED_* options above: ON under vcpkg, OFF otherwise
 # (build the 3rdparty submodule).

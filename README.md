@@ -132,7 +132,7 @@ To leave features out, or to change the build, add options to the configure step
 - `-DNTFS_BROWSER_ENABLE_DECOMPRESSION=OFF` removes compressed-file support.
 - `-DNTFS_BROWSER_ENABLE_EFS_CRYPTOPP=OFF` and `-DNTFS_BROWSER_ENABLE_EFS_BCRYPT=OFF` remove the encryption backends (BCrypt is Windows only).
 - `-DNTFS_BROWSER_ENABLE_REGEX=OFF` removes regular expression search (PCRE2).
-- `-DNTFS_BROWSER_USE_INSTALLED_PCRE2=ON` links an installed PCRE2 instead of the submodule. The same switch exists for GSL, frozen, Catch2, spdlog, nlohmann/json and Crypto++, and all of them default to ON under vcpkg.
+- `-DNTFS_BROWSER_USE_INSTALLED_PCRE2=ON` links an installed PCRE2 instead of the submodule. The same switch exists for GSL, frozen, Catch2, spdlog, nlohmann/json, utf8proc and Crypto++, and all of them default to ON under vcpkg.
 
 ## Benchmark and tuning
 
