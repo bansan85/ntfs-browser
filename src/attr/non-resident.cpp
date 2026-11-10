@@ -60,25 +60,6 @@ constexpr WORD max_comp_unit_size_shift = 16;
 // comp_unit_size from over-allocating.
 constexpr ULONGLONG max_compression_unit_size = 1024ULL * 1024ULL;
 
-// The clusters of one kind found in the runs of a stream, and the LCN of the
-// first run that holds some.
-struct ClusterTally {
-  ULONGLONG clusters{0};
-  std::optional<ULONGLONG> first_lcn;
-
-  // Counts the clusters of a run that starts at lcn. A run with none is left
-  // out.
-  void Add(ULONGLONG run_clusters, ULONGLONG lcn) {
-    if (run_clusters == 0) {
-      return;
-    }
-    clusters += run_clusters;
-    if (!first_lcn) {
-      first_lcn = lcn;
-    }
-  }
-};
-
 }  // namespace
 
 template <Cache::Strategy S>
@@ -86,9 +67,7 @@ AttrNonResident<S>::AttrNonResident(const HeaderCommon& ahc,
                                     const Io::FileRecord<S>& file_record)
     : Attr::AttrBase<S>(ahc, file_record),
       attr_header_nr_(reinterpret_cast<const Data::HeaderNonResident&>(ahc)),
-      runs_(Data::SpannedClusters(attr_header_nr_)),
-      record_deleted_(file_record.IsDeleted()),
-      record_number_(file_record.GetFileReference()) {
+      runs_(Data::SpannedClusters(attr_header_nr_)) {
   // total_size already covers this field (ParseAttrs()); start_vcn must be
   // unit-aligned or units decode against the wrong window.
   if (Data::HasCompressedSizeField(attr_header_nr_)) {
@@ -122,6 +101,17 @@ AttrNonResident<S>::AttrNonResident(const HeaderCommon& ahc,
                Data::CompressedSize(attr_header_nr_));
 #endif
   }
+
+  layout_.emplace(typename NonResidentLayout<S>::Source{
+      .volume = this->volume_,
+      .header = attr_header_nr_,
+      .runs = runs_,
+      .cluster_size = this->GetClusterSize(),
+      .comp_unit_clusters = comp_unit_clusters_,
+      .type = this->GetAttrType(),
+      .attr_flags = this->GetAttrFlags(),
+      .record_deleted = file_record.IsDeleted(),
+      .record_number = file_record.GetFileReference()});
 
   ParseDataRun();
 }
@@ -646,62 +636,6 @@ std::optional<ULONGLONG> AttrNonResident<S>::ReadDataBounded(
   return static_cast<ULONGLONG>(out.size());
 }
 
-// Looks, once, at the clusters of a live data stream in the cluster bitmap and
-// in the bad list. A run on a free cluster, or on a cluster marked bad, is a
-// sign of damage: the volume and its metadata disagree. Each is logged apart,
-// once per stream, and a cluster is in one count only. It only matters when
-// recovering, so strict mode reads nothing more. The volume's own metadata
-// (records below Mft::Idx::User, $Bitmap and $BadClus included) and freed
-// records are left out: a freed file's clusters are free by nature, and
-// checking $Bitmap against itself would loop.
-template <Cache::Strategy S>
-void AttrNonResident<S>::CheckClusterAllocation() const {
-  if (alloc_checked_) {
-    return;
-  }
-  alloc_checked_ = true;
-
-  if (!this->volume_.GetOptions().recover_errors || record_deleted_ ||
-      this->GetAttrType() != Attr::Type::Data || !record_number_) {
-    return;
-  }
-  const ULONGLONG record = *record_number_ & Mft::mft_record_number_mask;
-  if (record < static_cast<ULONGLONG>(Mft::Idx::User)) {
-    return;
-  }
-
-  try {
-    const Alloc::StreamExtents extents = GetExtents();
-    std::vector<Alloc::RangeQuery> queries;
-    queries.reserve(extents.extents.size());
-    for (const Alloc::Extent& extent : extents.extents) {
-      queries.push_back({.lcn = extent.lcn, .clusters = extent.clusters});
-    }
-    this->volume_.GetRangeStates(queries);
-
-    ClusterTally free_found;
-    ClusterTally bad_found;
-    for (const Alloc::RangeQuery& query : queries) {
-      free_found.Add(query.free_clusters, query.lcn);
-      bad_found.Add(query.bad_clusters, query.lcn);
-    }
-    if (free_found.first_lcn) {
-      Log::Info(
-          "Record {}: {} clusters of a data stream are free in $Bitmap, from "
-          "the run at LCN {}",
-          record, free_found.clusters, *free_found.first_lcn);
-    }
-    if (bad_found.first_lcn) {
-      Log::Info(
-          "Record {}: {} clusters of a data stream are marked bad in "
-          "$BadClus, from the run at LCN {}",
-          record, bad_found.clusters, *bad_found.first_lcn);
-    }
-  } catch (const std::exception& e) {
-    Log::Exception(e);
-  }
-}
-
 // Reads are bounded by real_size, and bytes from ini_size on read as zeros:
 // the clusters there hold whatever the disk held before, and are never read
 // (nor decrypted). real_size and ini_size are 0 on continuation instances;
@@ -710,7 +644,7 @@ template <Cache::Strategy S>
 std::optional<ULONGLONG>
     AttrNonResident<S>::ReadData(ULONGLONG offset,
                                  const std::span<BYTE>& buffer) const {
-  CheckClusterAllocation();
+  layout_->CheckClusterAllocation();
   const ULONGLONG real_size = attr_header_nr_.real_size;
   if (buffer.empty()) {
     return 0;
@@ -757,130 +691,30 @@ std::optional<ULONGLONG>
   return ReadDataBounded(offset, buffer, clusters * cluster_size);
 }
 
+// See NonResidentLayout::ExtentsOfRange().
 template <Cache::Strategy S>
 std::vector<Alloc::Extent>
     AttrNonResident<S>::ExtentsOfRange(ULONGLONG offset,
                                        ULONGLONG length) const {
-  const ULONGLONG cluster_size = this->GetClusterSize();
-  if (length == 0 || cluster_size == 0 || comp_unit_clusters_ != 0 ||
-      offset > std::numeric_limits<ULONGLONG>::max() - length) {
-    return {};
-  }
-
-  // The clusters that hold a byte of the range, as ReadDataBounded() reads
-  // them: the partial ones at both ends included.
-  const ULONGLONG vcn = offset / cluster_size;
-  const ULONGLONG end_vcn = (offset + length - 1) / cluster_size + 1;
-  // The byte address of an LCN MUST NOT wrap, as in ReadClusters().
-  const ULONGLONG max_lcn =
-      static_cast<ULONGLONG>(std::numeric_limits<LONGLONG>::max()) /
-      cluster_size;
-  return runs_.ExtentsBetween(vcn, end_vcn, max_lcn);
+  return layout_->ExtentsOfRange(offset, length);
 }
 
-// The runs that map clusters. The list is complete when it reaches the end of
-// the allocated size the first record declares. A shorter list means a run was
-// lost: recover mode stops at a bad run, and an extension record that failed to
-// parse leaves its part of the stream out.
+// See NonResidentLayout::GetExtents().
 template <Cache::Strategy S>
 Alloc::StreamExtents AttrNonResident<S>::GetExtents() const {
-  RunList::ExtentList list = runs_.Extents();
-  Alloc::StreamExtents extents{.extents = std::move(list.extents),
-                               .complete = list.well_formed};
-
-  const ULONGLONG cluster_size = this->GetClusterSize();
-  if (cluster_size != 0) {
-    const ULONGLONG allocated = attr_header_nr_.alloc_size;
-    const ULONGLONG needed =
-        allocated / cluster_size + (allocated % cluster_size != 0 ? 1 : 0);
-    if (list.covered_clusters < needed) {
-      extents.complete = false;
-    }
-  }
-  return extents;
+  return layout_->GetExtents();
 }
 
-// The real stretches in bytes. Each is cut at the data size, since clusters
-// past it are allocated but hold no byte of the stream. The list is complete
-// on the same terms as GetExtents().
+// See NonResidentLayout::GetRealRanges().
 template <Cache::Strategy S>
 Alloc::StreamRanges AttrNonResident<S>::GetRealRanges() const {
-  const RunList::VcnRunList list = runs_.RealRanges();
-  Alloc::StreamRanges result{.complete = list.well_formed};
-
-  const ULONGLONG cluster_size = this->GetClusterSize();
-  if (cluster_size == 0) {
-    result.complete = false;
-    return result;
-  }
-
-  const ULONGLONG allocated = attr_header_nr_.alloc_size;
-  const ULONGLONG needed =
-      allocated / cluster_size + (allocated % cluster_size != 0 ? 1 : 0);
-  if (list.covered_clusters < needed) {
-    result.complete = false;
-  }
-
-  const ULONGLONG data_size = GetDataSize();
-  constexpr ULONGLONG max_offset = std::numeric_limits<ULONGLONG>::max();
-  for (const RunList::VcnRun& run : list.runs) {
-    if (run.start_vcn > max_offset / cluster_size ||
-        run.clusters > max_offset / cluster_size) {
-      result.complete = false;
-      continue;
-    }
-    const ULONGLONG offset = run.start_vcn * cluster_size;
-    if (offset >= data_size) {
-      continue;
-    }
-    const ULONGLONG length =
-        (std::min)(run.clusters * cluster_size, data_size - offset);
-    result.ranges.push_back({.offset = offset, .length = length});
-  }
-  return result;
+  return layout_->GetRealRanges();
 }
 
-// The runs as the list decoded them, shifted to the VCN this instance starts
-// at: a part of a stream that was not merged into its first one keeps its own
-// VCNs. Only the first part of a stream has sizes: a continuation reports
-// everything it maps as written.
+// See NonResidentLayout::GetLayout().
 template <Cache::Strategy S>
 Alloc::StreamLayout AttrNonResident<S>::GetLayout() const {
-  Alloc::StreamLayout layout;
-  const ULONGLONG shift = attr_header_nr_.start_vcn;
-  ULONGLONG covered = shift;
-  for (const Data::RunEntry& entry : runs_.Entries()) {
-    if (entry.clusters == 0) {
-      layout.well_formed = false;
-      continue;
-    }
-    if (entry.lcn &&
-        entry.clusters > std::numeric_limits<ULONGLONG>::max() - *entry.lcn) {
-      layout.well_formed = false;
-    }
-    layout.runs.push_back({.vcn = shift + entry.start_vcn,
-                           .clusters = entry.clusters,
-                           .lcn = entry.lcn});
-    covered = shift + entry.last_vcn + 1;
-  }
-  layout.covered_end = covered;
-
-  const ULONGLONG cluster_size = this->GetClusterSize();
-  const bool first_part = attr_header_nr_.start_vcn == 0;
-  layout.data_size = attr_header_nr_.real_size;
-  layout.initialized_size =
-      (std::min)(attr_header_nr_.ini_size, attr_header_nr_.real_size);
-  layout.initialized_clusters = (std::numeric_limits<ULONGLONG>::max)();
-  if (cluster_size != 0 && first_part) {
-    const auto clusters_of = [cluster_size](ULONGLONG bytes) {
-      return bytes / cluster_size + (bytes % cluster_size != 0 ? 1 : 0);
-    };
-    layout.declared_clusters = clusters_of(attr_header_nr_.alloc_size);
-    layout.initialized_clusters = clusters_of(layout.initialized_size);
-  }
-  layout.unit_clusters = comp_unit_clusters_;
-  layout.encrypted = (this->GetAttrFlags() & Attr::flag_encrypted) != 0;
-  return layout;
+  return layout_->GetLayout();
 }
 
 template <Cache::Strategy S>

@@ -11,6 +11,7 @@
 
 #include "alloc/types.h"
 #include "attr/base.h"
+#include "attr/non-resident-layout.h"
 #include "attr/run-list.h"
 #include "cache/view.h"
 #include "internal-export.h"
@@ -105,19 +106,11 @@ class AttrNonResident : public Attr::AttrBase<S> {
   // streams, which hold the same key.
   std::shared_ptr<const Efs::Context> efs_context_;
 
-  // Whether the record this attribute sits in was freed, and its record
-  // number. The cluster check needs both: a freed record legitimately points
-  // at free clusters, and the volume's own metadata is not checked.
-  bool record_deleted_{false};
-  std::optional<ULONGLONG> record_number_;
-  // Set by the first ReadData(): the check runs once per attribute.
-  mutable bool alloc_checked_{false};
+  // Answers the layout questions over runs_ and the header. Set at the end of
+  // the constructor body, once comp_unit_clusters_ is known.
+  std::optional<NonResidentLayout<S>> layout_;
 
   void ParseDataRun();
-  // With recover_errors on, logs once if a cluster of this live data stream
-  // is free in the cluster bitmap, and once if one is marked bad in $BadClus.
-  // Never changes what a read returns.
-  void CheckClusterAllocation() const;
   [[nodiscard]] std::optional<Cache::ReadResult<S>>
       ReadClusters(ULONGLONG clusters, ULONGLONG start_lcn,
                    ULONGLONG offset) const;
