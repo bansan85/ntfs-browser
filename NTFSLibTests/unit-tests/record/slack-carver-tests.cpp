@@ -696,3 +696,11 @@ TEST_CASE("a slack of words that no name header fits gives no name",
     CHECK(Carve(record).empty());
   }
 }
+
+TEST_CASE("slack shorter than the shortest name has no candidate",
+          "[record][slack]") {
+  const std::array<BYTE, 3> bytes{5, 1, 0x41};
+
+  CHECK(Record::CarveFileNamesFrom(bytes, 0, Record::CarveSource::IndexSlack)
+            .empty());
+}

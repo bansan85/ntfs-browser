@@ -378,3 +378,29 @@ TEST_CASE("A withdrawn range of the first queue is not a standing waste",
 }
 
 #endif  // _WIN32
+
+TEST_CASE("A session drops the events past its limit and counts them",
+          "[bench][read-class]") {
+  const std::vector<BYTE> image(image_bytes, BYTE{9});
+  const Io::FileReader<Cache::Strategy::NoCache> file(
+      std::make_unique<TestDiskReaders::MemoryDiskReader>(image));
+  std::vector<BYTE> buffer(range_bytes);
+
+  TestSupport::BenchSessionGuard session({.max_events = 2});
+  for (size_t read = 0; read < 6; read++) {
+    LARGE_INTEGER addr{.QuadPart = static_cast<LONGLONG>(read * range_stride)};
+    REQUIRE(file.ReadInto(addr, buffer));
+  }
+  const Bench::Report report = session.Finish();
+
+  CHECK(report.events_logged == 2);
+  CHECK(report.events_dropped > 0);
+}
+
+TEST_CASE("Stopping a session that was never started gives an empty report",
+          "[bench][read-class]") {
+  const Bench::Report report = Bench::Stop();
+
+  CHECK(report.requested_reads == 0);
+  CHECK(report.events_logged == 0);
+}

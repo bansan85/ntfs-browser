@@ -2,6 +2,7 @@ target_sources(
   NtfsBrowserTests
   PRIVATE
     "coverage-mft-tree-tests.cpp"
+    "entry-table-tests.cpp"
     "file-reference-tests.cpp"
     "fragmented-mft-invalid-record-tests.cpp"
     "mft-addr-narrowing-tests.cpp"

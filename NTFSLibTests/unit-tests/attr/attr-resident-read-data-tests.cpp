@@ -99,3 +99,25 @@ TEMPLATE_TEST_CASE_SIG(
     Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   CheckReadDataReturnsActualByteCount<S>();
 }
+
+TEMPLATE_TEST_CASE_SIG("A resident attribute has no stream layout",
+                       "[attr-resident]", ((Cache::Strategy S), S),
+                       Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
+  const NtfsVolume<S> volume(
+      std::make_unique<
+          NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader>(
+          NTFS_BROWSER_NAMESPACE::Test::FakeImage::
+              BuildFakeNtfsImageWithSmallResidentData()));
+  REQUIRE(volume.IsVolumeOK());
+  NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
+  REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
+  REQUIRE(record.ParseAttrs());
+  const auto& data_attrs = record.GetAttr(Attr::Type::Data);
+  REQUIRE(data_attrs.size() == 1);
+
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+  const auto layout = data_attrs[0]->GetLayout();
+
+  CHECK(layout.runs.empty());
+  CHECK(layout.declared_clusters == 0);
+}

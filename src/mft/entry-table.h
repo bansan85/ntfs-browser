@@ -7,6 +7,7 @@
 
 #include <ntfs-browser/namespace.h>
 
+#include "internal-export.h"
 #include "mft/idx.h"
 #include "mft/tree.h"
 #include "win-types.h"
@@ -19,7 +20,7 @@ inline constexpr ULONGLONG root_record = static_cast<ULONGLONG>(Mft::Idx::Root);
 // The entries a scan kept, and the way to reach one by its record number. The
 // scan fills the entries, then calls IndexAll(). Until then, no lookup finds
 // anything.
-class EntryTable {
+class NTFS_BROWSER_EXPORT_TESTS_ONLY EntryTable {
  public:
   // The entries, in the order of their records. The scan appends to them.
   [[nodiscard]] std::vector<Mft::MftTree::Entry>& Entries() noexcept;

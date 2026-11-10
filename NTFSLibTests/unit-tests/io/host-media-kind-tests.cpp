@@ -158,6 +158,17 @@ TEST_CASE("Without a test answer, the query of the tests says Unknown",
   CHECK(Io::QueryHostMediaKind(file.Path().wstring()) == MediaKind::Unknown);
 }
 
+TEST_CASE("The real query says Unknown for a path no volume hosts",
+          "[io][media-kind][win32]") {
+  const Io::HostMediaQuery previous = Io::SetHostMediaQueryForTests(nullptr);
+
+  const MediaKind kind = Io::QueryHostMediaKind(L"\\\\?\\NoSuchDevice\\x");
+  const Io::HostMediaQuery real = Io::SetHostMediaQueryForTests(previous);
+
+  CHECK(kind == MediaKind::Unknown);
+  CHECK(real != previous);
+}
+
 TEMPLATE_TEST_CASE_SIG("A volume on an image file reports the kind of its host",
                        "[io][media-kind][win32]", ((Cache::Strategy S), S),
                        Cache::Strategy::NoCache, Cache::Strategy::FullCache) {

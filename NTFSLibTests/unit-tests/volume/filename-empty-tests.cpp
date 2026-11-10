@@ -86,6 +86,17 @@ TEST_CASE("a Filename with no name behind it has all its times at the epoch",
   CHECK(name.Compare(L"a") > 0);
 }
 
+TEST_CASE("a Filename with no name behind it has no UTC times", "[filename]") {
+  const Filename name;
+
+  const auto times = name.GetFileTimesUtc();
+
+  CHECK(times.write == 0);
+  CHECK(times.create == 0);
+  CHECK(times.access == 0);
+  CHECK(times.change == 0);
+}
+
 TEST_CASE("a $FILE_NAME with no characters is not a Win32 name", "[filename]") {
   Data::Filename raw{};
   raw.name_space = Data::FilenameNamespace::Win32;

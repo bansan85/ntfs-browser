@@ -203,3 +203,12 @@ TEST_CASE("the content check reads in order, announced, and nothing else",
   }
   CHECK(announced);
 }
+
+TEST_CASE("a cluster whose size is no multiple of 8 is classified to its end",
+          "[alloc][cluster][check]") {
+  std::array<BYTE, 13> bytes{};
+  CHECK(Alloc::ClassifyCluster(bytes, 512) == Alloc::ClusterContent::Zeros);
+
+  bytes.back() = 1;
+  CHECK(Alloc::ClassifyCluster(bytes, 512) == Alloc::ClusterContent::Data);
+}

@@ -729,3 +729,131 @@ TEST_CASE("a space summary of a cluster size of 0 has no byte count",
   CHECK(summary->free_bytes == 0);
   CHECK(summary->bad_bytes == 0);
 }
+
+TEST_CASE("the window size is the default, or the one a test sets",
+          "[alloc][cluster-bitmap]") {
+  CHECK(Alloc::BitmapWindowBytes() == Alloc::default_window_bytes);
+
+  Alloc::SetBitmapWindowBytesForTests(small_window);
+  CHECK(Alloc::BitmapWindowBytes() == small_window);
+
+  Alloc::SetBitmapWindowBytesForTests(0);
+  CHECK(Alloc::BitmapWindowBytes() == Alloc::default_window_bytes);
+}
+
+TEST_CASE("the state runs of a range", "[alloc][cluster-bitmap]") {
+  std::vector<BYTE> bits(4, 0x00);
+  std::vector<Alloc::ClusterRun> runs;
+
+  SECTION("an empty range has no run") {
+    ClusterBitmap bitmap(ReaderOver(bits).Make(), 4, 32);
+    runs.push_back({.lcn = 1, .clusters = 1});
+
+    bitmap.StateRuns(5, 0, runs);
+
+    CHECK(runs.empty());
+  }
+
+  SECTION("a range past the volume is one out of range run") {
+    ClusterBitmap bitmap(ReaderOver(bits).Make(), 4, 32);
+
+    bitmap.StateRuns(40, 6, runs);
+
+    REQUIRE(runs.size() == 1);
+    CHECK(runs[0].lcn == 40);
+    CHECK(runs[0].clusters == 6);
+    CHECK(runs[0].state == ClusterState::OutOfRange);
+  }
+
+  SECTION("a range that crosses the end of the volume ends out of range") {
+    SetBit(bits, 30);
+    ClusterBitmap bitmap(ReaderOver(bits).Make(), 4, 32);
+
+    bitmap.StateRuns(28, 8, runs);
+
+    REQUIRE(runs.size() == 4);
+    CHECK(runs[0].state == ClusterState::Free);
+    CHECK(runs[0].clusters == 2);
+    CHECK(runs[1].state == ClusterState::Allocated);
+    CHECK(runs[2].state == ClusterState::Free);
+    CHECK(runs[3].lcn == 32);
+    CHECK(runs[3].clusters == 4);
+    CHECK(runs[3].state == ClusterState::OutOfRange);
+  }
+
+  SECTION("a range that starts past the bits of a short bitmap is unknown") {
+    ClusterBitmap bitmap(ReaderOver({0x00, 0x00}).Make(), 2, 32);
+
+    bitmap.StateRuns(20, 4, runs);
+
+    REQUIRE(runs.size() == 1);
+    CHECK(runs[0].lcn == 20);
+    CHECK(runs[0].clusters == 4);
+    CHECK(runs[0].state == ClusterState::Unknown);
+  }
+
+  SECTION("a run of one state is whole across the window boundary") {
+    ClusterBitmap bitmap(ReaderOver(std::vector<BYTE>(48, 0x00)).Make(), 48,
+                         384, small_window);
+
+    bitmap.StateRuns(100, 200, runs);
+
+    REQUIRE(runs.size() == 1);
+    CHECK(runs[0].lcn == 100);
+    CHECK(runs[0].clusters == 200);
+    CHECK(runs[0].state == ClusterState::Free);
+  }
+
+  SECTION("an unknown stretch joins the unknown stretch before it") {
+    RecordingReader reader = ReaderOver(std::vector<BYTE>(48, 0x00));
+    reader.failing = {small_window};
+    ClusterBitmap bitmap(reader.Make(), 48, 384, small_window);
+
+    bitmap.StateRuns(0, 384, runs);
+
+    REQUIRE(runs.size() == 3);
+    CHECK(runs[0].state == ClusterState::Free);
+    CHECK(runs[1].lcn == small_window_clusters);
+    CHECK(runs[1].clusters == small_window_clusters);
+    CHECK(runs[1].state == ClusterState::Unknown);
+    CHECK(runs[2].state == ClusterState::Free);
+  }
+
+  SECTION("the rest of a range is unknown once too many windows failed") {
+    RecordingReader reader = ReaderOver({});
+    ClusterBitmap bitmap(reader.Make(), ULONGLONG{1} << 40, ULONGLONG{1} << 50,
+                         1);
+
+    bitmap.StateRuns(0, ULONGLONG{1} << 49, runs);
+
+    REQUIRE(runs.size() == 1);
+    CHECK(runs[0].clusters == (ULONGLONG{1} << 49));
+    CHECK(runs[0].state == ClusterState::Unknown);
+    CHECK(reader.offsets->size() <= 4096);
+  }
+
+  SECTION("a bad list that does not touch the range changes nothing") {
+    ClusterBitmap bitmap(ReaderOver(bits).Make(), 4, 32);
+    const auto list = BadList({{.lcn = 30, .clusters = 2}});
+    bitmap.SetBadList(list.get());
+
+    bitmap.StateRuns(0, 8, runs);
+
+    REQUIRE(runs.size() == 1);
+    CHECK(runs[0].state == ClusterState::Free);
+  }
+
+  SECTION("a bad extent inside a range splits it") {
+    ClusterBitmap bitmap(ReaderOver(bits).Make(), 4, 32);
+    const auto list = BadList({{.lcn = 10, .clusters = 2}});
+    bitmap.SetBadList(list.get());
+
+    bitmap.StateRuns(8, 8, runs);
+
+    REQUIRE(runs.size() == 3);
+    CHECK(runs[1].lcn == 10);
+    CHECK(runs[1].clusters == 2);
+    CHECK(runs[1].state == ClusterState::Bad);
+    CHECK(bitmap.GetStatus().bad_with_clear_bit);
+  }
+}
