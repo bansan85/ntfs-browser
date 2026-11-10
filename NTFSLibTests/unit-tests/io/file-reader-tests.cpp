@@ -642,3 +642,47 @@ TEST_CASE("A FullCache FileReader announces only the blocks it lacks",
   CHECK(hints.at(1).offset == 2 * block);
   CHECK(hints.at(1).length == 2 * block);
 }
+
+TEST_CASE("A FullCache FileReader announces a very long range whole",
+          "[file-reader]") {
+  using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::CountingDiskReader;
+  using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
+  constexpr ULONGLONG block = cache_block_size;
+  constexpr ULONGLONG long_range = 5000 * block;
+
+  auto counting = std::make_unique<CountingDiskReader>(
+      std::make_unique<MemoryDiskReader>(std::vector<BYTE>(block)));
+  CountingDiskReader& calls = *counting;
+  const NTFS_BROWSER_NAMESPACE::Io::FileReader<
+      NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>
+      reader(std::move(counting));
+  calls.Reset();
+
+  reader.Prefetch(block, long_range);
+
+  const auto& hints = calls.Calls();
+  REQUIRE(hints.size() == 1);
+  CHECK(hints.at(0).offset == block);
+  CHECK(hints.at(0).length == long_range);
+}
+
+TEST_CASE(
+    "A FullCache FileReader does not announce a range at the end of the "
+    "address space",
+    "[file-reader]") {
+  using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::CountingDiskReader;
+  using NTFS_BROWSER_NAMESPACE::Test::DiskReaders::MemoryDiskReader;
+
+  auto counting = std::make_unique<CountingDiskReader>(
+      std::make_unique<MemoryDiskReader>(std::vector<BYTE>(cache_block_size)));
+  CountingDiskReader& calls = *counting;
+  const NTFS_BROWSER_NAMESPACE::Io::FileReader<
+      NTFS_BROWSER_NAMESPACE::Cache::Strategy::FullCache>
+      reader(std::move(counting));
+  calls.Reset();
+
+  reader.Prefetch(std::numeric_limits<LONGLONG>::max() - 10, 100);
+  reader.Prefetch(0, std::numeric_limits<ULONGLONG>::max());
+
+  CHECK(calls.Calls().empty());
+}

@@ -13,15 +13,12 @@
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/reader.h>
-#include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/test/support/scripted-disk-reader.h>
 #include <ntfs-browser/test/support/test-log-sink.h>
 #include <ntfs-browser/types.h>
 
-#include "cache/strategy.h"
 #include "disk-reader.h"
-#include "ntfs-volume.h"
 #include "reader-support.h"
 #include "scan-support.h"
 #include "search/scan-probe.h"
@@ -31,7 +28,6 @@
 namespace TestSearch = NTFS_BROWSER_NAMESPACE::Test::Search;
 namespace TestSupport = NTFS_BROWSER_NAMESPACE::Test::Support;
 namespace TestFake = NTFS_BROWSER_NAMESPACE::Test::FakeImage;
-namespace TestDisk = NTFS_BROWSER_NAMESPACE::Test::DiskReaders;
 namespace Lib = NTFS_BROWSER_NAMESPACE;
 using TestSearch::RowNamed;
 using TestSearch::TempImage;
@@ -92,13 +88,6 @@ DataRange DataBinRange(const std::vector<BYTE>& image) {
   const ULONGLONG first = clusters - 6;
   return {.first = first * TestFake::fake_cluster_size,
           .last = (first + 3) * TestFake::fake_cluster_size};
-}
-
-// The byte offset in image of the file record idx.
-ULONGLONG MftRecordOffset(const std::vector<BYTE>& image, ULONGLONG idx) {
-  const Lib::NtfsVolume<Lib::Cache::Strategy::NoCache> volume(
-      std::make_unique<TestDisk::MemoryDiskReader>(image));
-  return volume.GetMFTAddr() + idx * TestFake::fake_file_record_size;
 }
 
 // The handle of record, any sequence, any name.
@@ -206,7 +195,7 @@ TEST_CASE("A Reader tells a record without a $STANDARD_INFORMATION",
   SECTION("one shorter than the NTFS 1 form") {
     std::vector<BYTE> bytes =
         TestFake::BuildFakeNtfsImageWithLegacyStandardInformation();
-    const ULONGLONG record = MftRecordOffset(
+    const ULONGLONG record = TestSearch::RecordOffsetIn(
         bytes, TestFake::legacy_standard_information_record_idx);
     // The first attribute starts at the offset the header gives, and its value
     // length sits 16 bytes into it.

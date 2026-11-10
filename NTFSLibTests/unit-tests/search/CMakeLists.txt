@@ -3,6 +3,7 @@ target_sources(
   PRIVATE
     "attribute-parse-tests.cpp"
     "entry-buffer-tests.cpp"
+    "match-sink-tests.cpp"
     "name-matcher-tests.cpp"
     "reader-attribute-tests.cpp"
     "reader-content-tests.cpp"
@@ -25,6 +26,7 @@ target_sources(
     "scan-support.h"
     "scan-thread-support.h"
     "scan-thread-tests.cpp"
+    "scan-unreadable-tests.cpp"
     "scan-verdict-tests.cpp"
     "search-types-tests.cpp"
     "target-tests.cpp"

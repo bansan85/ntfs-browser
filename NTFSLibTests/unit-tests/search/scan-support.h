@@ -140,6 +140,10 @@ inline constexpr std::uint64_t reallocated_tail_clusters = 4;
 // The sizes in the index entries equal the ones of the records.
 [[nodiscard]] std::vector<BYTE> FilterImage();
 
+// The byte offset in image of the file record number record.
+[[nodiscard]] std::uint64_t RecordOffsetIn(const std::vector<BYTE>& image,
+                                           std::uint64_t record);
+
 // The record number of the tree node with the given index.
 [[nodiscard]] constexpr std::uint64_t Record(std::size_t node) {
   return NTFS_BROWSER_NAMESPACE::Test::FakeImage::name_tree_first_record + node;

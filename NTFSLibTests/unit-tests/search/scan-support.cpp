@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -13,9 +14,12 @@
 
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/scan.h>
+#include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fake-image/fake-ntfs-image.h>
 #include <ntfs-browser/types.h>
 
+#include "cache/strategy.h"
+#include "ntfs-volume.h"
 #include "utf/utf.h"
 #include "win-types.h"
 
@@ -140,6 +144,13 @@ std::vector<BYTE> TreeImage() {
                    .keep_entries = true,
                    .data_size = 3});
   return Fake::BuildFakeNtfsImageWithNameTree(nodes);
+}
+
+std::uint64_t RecordOffsetIn(const std::vector<BYTE>& image,
+                             std::uint64_t record) {
+  const NtfsVolume<Cache::Strategy::NoCache> volume(
+      std::make_unique<DiskReaders::MemoryDiskReader>(image));
+  return volume.GetMFTAddr() + record * Fake::fake_file_record_size;
 }
 
 std::vector<BYTE> HardLinkImage() {

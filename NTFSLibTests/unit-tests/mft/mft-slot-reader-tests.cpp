@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cstddef>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <ranges>
@@ -261,6 +262,17 @@ TEMPLATE_TEST_CASE_SIG("SlotReader reads only the slots Expect() allows",
       CHECK(ReaderSnapshot(reader, actual, record) ==
             ReferenceSnapshot(expected, record));
     }
+  }
+
+  SECTION("a new plan replaces the one that was announced") {
+    reader.Expect(100, 110);
+    CHECK(ReaderSnapshot(reader, actual, 100) ==
+          ReferenceSnapshot(expected, 100));
+
+    reader.Expect(120, 130);
+
+    CHECK(ReaderSnapshot(reader, actual, 125) ==
+          ReferenceSnapshot(expected, 125));
   }
 
   SECTION("a slot outside the range is read alone") {
@@ -607,6 +619,10 @@ TEST_CASE("NtfsVolume::PrefetchMftSlots announces one range per fragment",
   opened.reader->Reset();
   opened.volume->PrefetchMftSlots(5, 4);
   opened.volume->PrefetchMftSlots(20, 0);
+  CHECK(opened.reader->Calls().empty());
+
+  // A count whose byte length does not fit 64 bits is refused.
+  opened.volume->PrefetchMftSlots(20, std::numeric_limits<ULONGLONG>::max());
   CHECK(opened.reader->Calls().empty());
 }
 
