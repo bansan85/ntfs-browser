@@ -1,15 +1,18 @@
 target_sources(
   NtfsBrowserTests
   PRIVATE
+    "attribute-parse-tests.cpp"
     "entry-buffer-tests.cpp"
     "name-matcher-tests.cpp"
     "reader-attribute-tests.cpp"
     "reader-content-tests.cpp"
+    "reader-failure-tests.cpp"
     "reader-handle-tests.cpp"
     "reader-special-tests.cpp"
     "reader-support.cpp"
     "reader-support.h"
     "scan-directory-tests.cpp"
+    "scan-engine-failure-tests.cpp"
     "scan-fake-engine.h"
     "scan-filter-tests.cpp"
     "scan-mft-list-tests.cpp"
@@ -17,6 +20,7 @@ target_sources(
     "scan-poll-tests.cpp"
     "scan-probe-tests.cpp"
     "scan-run-tests.cpp"
+    "scan-standing-tests.cpp"
     "scan-support.cpp"
     "scan-support.h"
     "scan-thread-support.h"
