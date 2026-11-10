@@ -295,7 +295,11 @@ def report(tools, work, tests_exe, fuzzer_exe):
             log(f"phase {phase}: no profile, skipped")
             continue
         profdata = work / f"{phase}.profdata"
-        run([tools["prof"], "merge", "-sparse", "-o", profdata] + raws)
+        # One profile per test process: hundreds of paths overflow the 32767
+        # character command line of Windows, so llvm-profdata reads a list file.
+        inputs = work / f"{phase}.inputs"
+        inputs.write_text("\n".join(raws) + "\n", encoding="utf-8")
+        run([tools["prof"], "merge", "-sparse", "-o", profdata, "-f", inputs])
         common = [f"-instr-profile={profdata}", tests_exe,
                   f"-object={fuzzer_exe}",
                   f"-ignore-filename-regex={IGNORE_REGEX}"]
