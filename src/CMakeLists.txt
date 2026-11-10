@@ -2,6 +2,7 @@ set(
   ${PROJECT_NAME}_SRC
   "alloc/alloc-loader.cpp"
   "alloc/bad-cluster-list.cpp"
+  "alloc/bitmap-windows.cpp"
   "alloc/claim-inventory.cpp"
   "alloc/cluster-account.cpp"
   "alloc/cluster-bitmap.cpp"
@@ -202,6 +203,7 @@ set(
   "volume-options.h"
   "alloc/alloc-loader.h"
   "alloc/bad-cluster-list.h"
+  "alloc/bitmap-windows.h"
   "alloc/claim-inventory.h"
   "alloc/cluster-bitmap.h"
   "alloc/cluster-map.h"

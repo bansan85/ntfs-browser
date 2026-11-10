@@ -10,6 +10,7 @@ target_sources(
     "bad-cluster-summary-tests.cpp"
     "bitmap-failure-tests.cpp"
     "bitmap-memory-tests.cpp"
+    "bitmap-windows-tests.cpp"
     "cluster-account-condition-tests.cpp"
     "cluster-account-content-tests.cpp"
     "cluster-account-map-tests.cpp"

@@ -1,15 +1,13 @@
 #pragma once
 
 #include <cstddef>
-#include <functional>
-#include <map>
 #include <optional>
 #include <span>
-#include <unordered_set>
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
 
+#include "alloc/bitmap-windows.h"
 #include "alloc/types.h"
 #include "internal-export.h"
 #include "win-types.h"
@@ -35,8 +33,7 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY ClusterBitmap {
  public:
   // Reads out.size() bytes of the bitmap at offset. Returns the byte count
   // read, or nothing on failure.
-  using Reader = std::function<std::optional<ULONGLONG>(ULONGLONG offset,
-                                                        std::span<BYTE> out)>;
+  using Reader = BitmapWindows::Reader;
 
   // How trustworthy the bitmap has proved so far.
   struct Status {
@@ -88,10 +85,7 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY ClusterBitmap {
   [[nodiscard]] size_t BytesHeld() const noexcept;
 
   // Keeps the windows read, up to max_bytes of them, for the queries that come
-  // later, instead of reading a window again. Once the bytes are spent, the
-  // other windows are read for one query each, as without retention: the kept
-  // ones are the first read, which a sweep in LCN order meets again and again.
-  // 0, the default, keeps nothing and frees what was kept.
+  // later. See BitmapWindows::SetRetention().
   void SetRetention(size_t max_bytes);
 
  private:
@@ -106,13 +100,7 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY ClusterBitmap {
     ULONGLONG judged{0};
   };
 
-  // The window held: bytes [index * window_bytes_, ...) of the bitmap.
-  struct Window {
-    ULONGLONG index{0};
-    std::vector<BYTE> bytes;
-    // Leading bytes the reader really returned.
-    size_t valid{0};
-  };
+  using Window = BitmapWindows::Window;
 
   // The part of a range whose bits were read: bits [.., stop) come from
   // window, whose first bit is base. The rest of the range was not judged, and
@@ -120,6 +108,14 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY ClusterBitmap {
   struct JudgedBits {
     const Window* window{nullptr};
     ULONGLONG base{0};
+    ULONGLONG stop{0};
+  };
+
+  // The part of a range that lies in one window: the bits read, and where the
+  // window ends.
+  struct Slice {
+    JudgedBits judged;
+    // End of the part of the range this window covers, judged or not.
     ULONGLONG stop{0};
   };
 
@@ -133,35 +129,25 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY ClusterBitmap {
   // Judges bits [first, last), which lie inside the volume.
   [[nodiscard]] Counts Count(ULONGLONG first, ULONGLONG last);
 
+  // Loads the window that holds bit, and tells how much of [bit, last) it
+  // judges. bit MUST lie inside the bitmap.
+  [[nodiscard]] Slice ReadSlice(ULONGLONG bit, ULONGLONG last);
+
+  // Counts clusters [first, last) as unknown, bad ones apart, without reading
+  // any window.
+  void CountUnknown(Counts& counts, ULONGLONG first, ULONGLONG last);
+
   // Moves the clusters of [first, last) that the bad list names into
   // counts.bad. judged says which of those bits were read.
   void ApplyBad(Counts& counts, ULONGLONG first, ULONGLONG last,
                 const JudgedBits& judged);
 
-  // The window of that index, read now if it is not the one held. Null when
-  // that window failed earlier and is not held.
-  [[nodiscard]] const Window* Load(ULONGLONG index);
-
-  // Reads window index into window_, and keeps it in retained_ when the budget
-  // allows. Returns the window to judge with.
-  [[nodiscard]] const Window* ReadWindow(ULONGLONG index);
-
-  Reader reader_;
-  ULONGLONG data_size_;
+  BitmapWindows windows_;
   // Bits the bitmap holds.
   ULONGLONG data_bits_;
   // Clusters the queries may name: the volume's, else the bitmap's own.
   ULONGLONG limit_;
-  size_t window_bytes_;
   bool shorter_than_volume_;
-  bool have_window_{false};
-  Window window_;
-  // The windows kept for later queries, by index, and their bytes. Never more
-  // than retain_bytes_.
-  std::map<ULONGLONG, Window> retained_;
-  size_t retained_bytes_{0};
-  size_t retain_bytes_{0};
-  std::unordered_set<ULONGLONG> failed_;
   const BadClusterList* bad_{nullptr};
   bool bad_with_clear_bit_{false};
 };
