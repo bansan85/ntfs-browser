@@ -33,7 +33,17 @@ class RecordedStream {
     ClusterAccount,
     // Test::Fuzz::ProbeFullCacheOnce(), the main probes on a FullCache volume,
     // which reads whole blocks.
-    FullCache
+    FullCache,
+    // Test::Fuzz::ProbeApiOnce() with the MftList scan of the public API.
+    MftListApi,
+    // Test::Fuzz::ProbeApiOnce() with the recursive walk of the public API.
+    DirectoryApi,
+    // Test::Fuzz::ProbeApiOnce() with the Reader of the public API.
+    ReaderApi,
+    // Test::Fuzz::ProbeApiOnce() with the MftList scan of one folder.
+    MftListFolderApi,
+    // Test::Fuzz::ProbeApiOnce() with the recursive walk of one folder.
+    DirectoryFolderApi
   };
 
   // The saved input of probe over image, with the volume opened under options.

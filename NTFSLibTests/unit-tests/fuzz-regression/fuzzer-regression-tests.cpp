@@ -108,7 +108,8 @@ void RunRegressionTestcase(std::string_view name) {
   // A library exception escaping FuzzTestcase() is a failure here, as a
   // crash would be in the old subprocess run.
   CHECK_NOTHROW(NTFS_BROWSER_NAMESPACE::Test::Fuzz::FuzzTestcase(
-      *data, true, PatchFor(name)));
+      *data, true, PatchFor(name),
+      NTFS_BROWSER_NAMESPACE::Test::Fuzz::ApiDepth::Full));
   const std::string output = TakeCapturedLog();
 
   const auto* const iterator = expected_error_messages.find(name);
@@ -418,5 +419,36 @@ NTFS_REGRESSION_TESTCASE("case_twin_blocks_13")
 NTFS_REGRESSION_TESTCASE("case_twin_stale_exact")
 NTFS_REGRESSION_TESTCASE("case_twin_unordered")
 NTFS_REGRESSION_TESTCASE("case_twin_hard_links")
+NTFS_REGRESSION_TESTCASE("api_mft_list_mixed_tree")
+NTFS_REGRESSION_TESTCASE("api_directory_mixed_tree")
+NTFS_REGRESSION_TESTCASE("api_reader_mixed_tree")
+NTFS_REGRESSION_TESTCASE("api_mft_list_mft_tree")
+NTFS_REGRESSION_TESTCASE("api_directory_mft_tree")
+NTFS_REGRESSION_TESTCASE("api_reader_mft_tree")
+NTFS_REGRESSION_TESTCASE("api_mft_list_attribute_list")
+NTFS_REGRESSION_TESTCASE("api_directory_attribute_list")
+NTFS_REGRESSION_TESTCASE("api_reader_attribute_list")
+NTFS_REGRESSION_TESTCASE("api_mft_list_freed_tree")
+NTFS_REGRESSION_TESTCASE("api_directory_freed_tree")
+NTFS_REGRESSION_TESTCASE("api_reader_freed_tree")
+NTFS_REGRESSION_TESTCASE("api_mft_list_named_stream")
+NTFS_REGRESSION_TESTCASE("api_directory_named_stream")
+NTFS_REGRESSION_TESTCASE("api_reader_named_stream")
+NTFS_REGRESSION_TESTCASE("api_mft_list_journal")
+NTFS_REGRESSION_TESTCASE("api_directory_journal")
+NTFS_REGRESSION_TESTCASE("api_reader_journal")
+NTFS_REGRESSION_TESTCASE("api_mft_list_compressed")
+NTFS_REGRESSION_TESTCASE("api_directory_compressed")
+NTFS_REGRESSION_TESTCASE("api_reader_compressed")
+NTFS_REGRESSION_TESTCASE("api_mft_list_sparse_unit")
+NTFS_REGRESSION_TESTCASE("api_directory_sparse_unit")
+NTFS_REGRESSION_TESTCASE("api_reader_sparse_unit")
+NTFS_REGRESSION_TESTCASE("api_mft_list_encrypted")
+NTFS_REGRESSION_TESTCASE("api_directory_encrypted")
+NTFS_REGRESSION_TESTCASE("api_reader_encrypted")
+NTFS_REGRESSION_TESTCASE("api_mft_list_folder_mixed_tree")
+NTFS_REGRESSION_TESTCASE("api_directory_folder_mixed_tree")
+NTFS_REGRESSION_TESTCASE("api_mft_list_folder_mft_tree")
+NTFS_REGRESSION_TESTCASE("api_directory_folder_mft_tree")
 
 #undef NTFS_REGRESSION_TESTCASE

@@ -19,6 +19,7 @@
 #include "hand-made-efs.h"
 #include "legacy-fixtures.h"
 #include "legacy-record.h"
+#include "public-api-scenarios.h"
 #include "record-edit.h"
 #include "win-types.h"
 
@@ -356,6 +357,9 @@ void EfsFixtureScenarios::Register(ScenarioRegistry& registry) {
                                          .probe = decrypt.probe,
                                          .needs = Feature::Efs}});
   }
+  PublicApiScenarios::AddImage(
+      registry, "encrypted", [] { return EncryptedWith(Algorithm::Aes256); },
+      false, Feature::Efs);
 }
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen

@@ -10,6 +10,7 @@
 #include "index-slack-scenarios.h"
 #include "mft-huge-scan-scenarios.h"
 #include "mft-scan-scenarios.h"
+#include "public-api-scenarios.h"
 #include "record-slack-scenarios.h"
 #include "run-list-scenarios.h"
 #include "slack-names-scenarios.h"
@@ -29,6 +30,7 @@ void ScanInputFamilies::Register(ScenarioRegistry& registry) {
   RecordSlackScenarios::Register(registry);
   SlackNamesScenarios::Register(registry);
   MftHugeScanScenarios::Register(registry);
+  PublicApiScenarios::Register(registry);
 }
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen

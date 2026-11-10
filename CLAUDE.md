@@ -83,6 +83,8 @@ Conventional Commits, no scope (`fix:`, `feat:`, `refactor:`, `test:`, `docs:`, 
 
 `FuzzTestcase()` (`NTFSLibTests/fuzz/fuzz-core.cpp`) is shared by `NtfsFuzzer`, `NtfsFuzzerAfl` and the regression test. Never pass `--inject-read-failures` to AFL.
 
+`ProbePublicApi()` (`NTFSLibTests/fuzz/public-api-probes.cpp`) lists the input with `Scan` and reads it with `Reader`. It reaches the bytes through `SetReaderFactoryForTests()` and `SetReaderKeyProviderForTests()`. `FuzzTestcase()` runs it at `ApiDepth::Short` by default, and the regression test at `ApiDepth::Full`. `ProbeApiOnce()` runs one operation of it on one volume. The `api_*` scenarios save the reads of one such operation (`Probe::MftListApi`, `DirectoryApi`, `ReaderApi`, `MftListFolderApi`, `DirectoryFolderApi`), so the same operation replays in step. An edit of an operation (its options, the folder `known_folder`, the records the Reader reads by number) MUST keep it equal in `ProbeApiOnce()` and in `ProbePublicApi()`.
+
 `NtfsFuzzGen` (`NTFSLibTests/fuzz/generator/`) builds every fuzz input and every corpus trace from code. A scenario makes an image, runs the probes on it and keeps the bytes that the library reads, in its current read order. The read order is free: nothing is recorded by hand.
 
 - `NtfsFuzzGen --out DIR` writes all scenarios under `DIR` (traces in `DIR/corpus-traces/`). CMake runs it at build time, with a stamp on the generator, the library and the resource archives. `--seeds DIR` writes the flat inputs only. `--list` prints the names. `--only NAME...` restricts a run. `--verify DIR` compares each scenario with the file of the same name in `DIR`.

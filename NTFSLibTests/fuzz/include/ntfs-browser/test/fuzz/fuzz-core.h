@@ -8,6 +8,7 @@
 #include <vector>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/test/fuzz/public-api-probes.h>
 
 #include "disk-reader.h"
 #include "volume-options.h"
@@ -36,9 +37,11 @@ struct BootSectorPatch {
 // here; a crash is not.
 // Log messages go to the library logger, so the caller picks the sink.
 // inject_failures adds one run per strategy and mode for each injected
-// read failure.
+// read failure. api_depth says how much of Scan and Reader the testcase uses:
+// Full takes several times longer than Short, so a fuzzing run keeps to Short.
 void FuzzTestcase(std::span<BYTE> data, bool inject_failures,
-                  const BootSectorPatch& patch = {});
+                  const BootSectorPatch& patch = {},
+                  ApiDepth api_depth = ApiDepth::Short);
 
 // Runs every probe of FuzzTestcase() once, on a NoCache volume over reader.
 // The reads are those of the first run FuzzTestcase() makes of an input, so a

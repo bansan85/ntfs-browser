@@ -8,6 +8,7 @@
 #include <ntfs-browser/tool/fuzzgen/scenario-registry.h>
 
 #include "legacy-fixtures.h"
+#include "public-api-scenarios.h"
 #include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen {
@@ -23,6 +24,13 @@ void CompressedFileScenarios::Register(ScenarioRegistry& registry) {
                      .probe = RecordedStream::Probe::FullCache,
                      .needs = Feature::Decompression},
                 });
+  PublicApiScenarios::AddImage(registry, "compressed",
+                               FakeImage::BuildFakeNtfsImageWithCompressedFile,
+                               false, Feature::Decompression);
+  PublicApiScenarios::AddImage(
+      registry, "sparse_unit",
+      FakeImage::BuildFakeNtfsImageWithSparseCompressionUnit, false,
+      Feature::Decompression);
 }
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Tool::FuzzGen

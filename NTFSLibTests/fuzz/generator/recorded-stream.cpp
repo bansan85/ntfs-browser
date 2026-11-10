@@ -7,6 +7,7 @@
 #include <ntfs-browser/namespace.h>
 #include <ntfs-browser/test/disk-readers/memory-disk-reader.h>
 #include <ntfs-browser/test/fuzz/fuzz-core.h>
+#include <ntfs-browser/test/fuzz/public-api-probes.h>
 #include <ntfs-browser/tool/fuzzgen/recorded-stream.h>
 
 #include "recording-reader.h"
@@ -44,6 +45,26 @@ std::vector<BYTE> RecordedStream::Record(
         break;
       case Probe::FullCache:
         Test::Fuzz::ProbeFullCacheOnce(std::move(reader), options);
+        break;
+      case Probe::MftListApi:
+        Test::Fuzz::ProbeApiOnce(std::move(reader), options,
+                                 Test::Fuzz::ApiProbe::MftListScan);
+        break;
+      case Probe::DirectoryApi:
+        Test::Fuzz::ProbeApiOnce(std::move(reader), options,
+                                 Test::Fuzz::ApiProbe::DirectoryScan);
+        break;
+      case Probe::ReaderApi:
+        Test::Fuzz::ProbeApiOnce(std::move(reader), options,
+                                 Test::Fuzz::ApiProbe::Reader);
+        break;
+      case Probe::MftListFolderApi:
+        Test::Fuzz::ProbeApiOnce(std::move(reader), options,
+                                 Test::Fuzz::ApiProbe::MftListFolder);
+        break;
+      case Probe::DirectoryFolderApi:
+        Test::Fuzz::ProbeApiOnce(std::move(reader), options,
+                                 Test::Fuzz::ApiProbe::DirectoryFolder);
         break;
     }
   }

@@ -30,6 +30,9 @@ add_library(
   "looping-disk-reader.cpp"
   "include/ntfs-browser/test/fuzz/named-stream-probe.h"
   "include/ntfs-browser/test/fuzz/gap-collation-probe.h"
+  "passthrough-key-provider.h"
+  "include/ntfs-browser/test/fuzz/public-api-probes.h"
+  "public-api-probes.cpp"
   "scan-probes.h"
   "scan-probes.cpp"
 )

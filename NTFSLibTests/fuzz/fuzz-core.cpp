@@ -19,6 +19,7 @@
 #include <ntfs-browser/test/fuzz/gap-collation-probe.h>
 #include <ntfs-browser/test/fuzz/looping-disk-reader.h>
 #include <ntfs-browser/test/fuzz/named-stream-probe.h>
+#include <ntfs-browser/test/fuzz/public-api-probes.h>
 
 #include "alloc/types.h"
 #include "attr/mask.h"
@@ -33,6 +34,7 @@
 #include "mft/idx.h"
 #include "mft/tree.h"
 #include "ntfs-volume.h"
+#include "passthrough-key-provider.h"
 #include "record/carved-name.h"
 #include "scan-probes.h"
 #include "tuning/tuning.h"
@@ -225,26 +227,6 @@ void FuzzRootRecord(const NtfsVolume<S>& volume) {
   // names, exercising a real B+-tree sub-node descent.
   (void)file_record.FindSubEntry(gap_collation_search_name);
 }
-
-// Stands in for a certificate store: the "wrapped" FEK the input stores is
-// returned as if it were already decrypted. The input then picks the cipher
-// and the key itself. A thumbprint that starts with refused_thumbprint models
-// a key the provider does not hold.
-class PassthroughKeyProvider final
-    : public NTFS_BROWSER_NAMESPACE::Efs::IEfsKeyProvider {
- public:
-  [[nodiscard]] std::optional<std::vector<BYTE>>
-      UnwrapFek(std::span<const BYTE> thumbprint,
-                std::span<const BYTE> wrapped_fek) const override {
-    if (!thumbprint.empty() && thumbprint.front() == refused_thumbprint) {
-      return std::nullopt;
-    }
-    return std::vector<BYTE>(wrapped_fek.begin(), wrapped_fek.end());
-  }
-
-  // First byte of a thumbprint this provider refuses to unwrap.
-  static constexpr BYTE refused_thumbprint = 0xFF;
-};
 
 // How many bytes of each attribute the probe reads per call. Small enough to
 // keep a huge declared data size from making the run long.
@@ -696,6 +678,19 @@ void RunBothStrategies(std::span<const BYTE> data, const VolumeOptions& options,
                                                                  failing_read);
 }
 
+// How many of the injected failures also run the public API probes: the first
+// reads are the ones of the open, where Scan and Reader meet their errors.
+constexpr size_t injected_public_api_runs = 3;
+
+// The depth of the public API probes under options when the caller asks for
+// asked. The mode with a one-block cache has nothing more to say to Scan than a
+// short run does.
+ApiDepth PublicApiDepth(const VolumeOptions& options, ApiDepth asked) {
+  return options.max_cache_bytes == VolumeOptions{}.max_cache_bytes
+             ? asked
+             : ApiDepth::Short;
+}
+
 // Stream offset of a range that is not on the 8-byte grid records sit on.
 constexpr ULONGLONG unaligned_range_offset = 3;
 
@@ -773,7 +768,7 @@ void ProbeClusterAccountOnce(
 }
 
 void FuzzTestcase(std::span<BYTE> data, bool inject_failures,
-                  const BootSectorPatch& patch) {
+                  const BootSectorPatch& patch, ApiDepth api_depth) {
   PatchBpbSignature(data, patch);
 
   FuzzJournalScanner(data);
@@ -784,6 +779,10 @@ void FuzzTestcase(std::span<BYTE> data, bool inject_failures,
   // exercised.
   for (const VolumeOptions& options : volume_option_modes) {
     RunBothStrategies(data, options);
+    ProbePublicApi(data, options, {}, PublicApiDepth(options, api_depth));
+  }
+  if (api_depth == ApiDepth::Full) {
+    ProbeFileTarget(data, volume_option_modes[1]);
   }
 
   if (!inject_failures) {
@@ -794,6 +793,9 @@ void FuzzTestcase(std::span<BYTE> data, bool inject_failures,
        ++failing_read) {
     for (const VolumeOptions& options : volume_option_modes) {
       RunBothStrategies(data, options, failing_read);
+      if (failing_read < injected_public_api_runs) {
+        ProbePublicApi(data, options, failing_read, ApiDepth::Short);
+      }
     }
   }
 }

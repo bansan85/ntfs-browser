@@ -65,6 +65,8 @@ add_library(
   "mft-scan-scenarios.cpp"
   "run-list-scenarios.h"
   "run-list-scenarios.cpp"
+  "public-api-scenarios.h"
+  "public-api-scenarios.cpp"
   "attribute-list-scan-scenarios.h"
   "attribute-list-scan-scenarios.cpp"
   "index-slack-scenarios.h"
