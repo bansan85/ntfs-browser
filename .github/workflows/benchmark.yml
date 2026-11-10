@@ -33,7 +33,7 @@ jobs:
             Where-Object { $_.FullName -match 'Release' } |
             Select-Object -First 1).FullName
           python NTFSLibTests/tools/benchmark/ntfs_benchmark.py --self-test --sim-exe $bench
-      - name: Audit of c:
+      - name: "Audit of c:"
         # T_real, T_io and T_cpu for NtfsScanBench (mftlist engine) in its four modes, and one
         # directory scenario. The listings go to d:, never to the scanned disk.
         run: |
