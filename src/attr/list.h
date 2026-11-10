@@ -8,34 +8,10 @@
 
 #include <ntfs-browser/namespace.h>
 
+#include "attr/forward.h"
 #include "win-types.h"
 
 namespace NTFS_BROWSER_NAMESPACE {
-
-namespace Cache {
-
-enum class Strategy : std::uint8_t;
-
-}  // namespace Cache
-
-}  // namespace NTFS_BROWSER_NAMESPACE
-
-namespace NTFS_BROWSER_NAMESPACE {
-namespace Io {
-
-template <Cache::Strategy S>
-class FileRecord;
-
-}  // namespace Io
-}  // namespace NTFS_BROWSER_NAMESPACE
-
-namespace NTFS_BROWSER_NAMESPACE {
-
-namespace Attr {
-
-struct HeaderCommon;
-
-}  // namespace Attr
 
 namespace Data {
 
@@ -77,6 +53,15 @@ class AttrList : public Resident {
     bool overwritable;
     // The walk ended at a truncated entry or off the declared size.
     bool truncated{false};
+    // Where the next entry starts, in bytes from the start of the list.
+    ULONGLONG offset{0};
+  };
+
+  // What the walk does after one entry.
+  enum class EntryStep : std::uint8_t {
+    Next,        // Read the next entry.
+    Stop,        // The entry is too short to step over: end the walk.
+    Overwritten  // The list is another file's garbage: end the walk.
   };
 
   [[nodiscard]] ListCache MakeListCache() const;
@@ -85,6 +70,18 @@ class AttrList : public Resident {
                                                        ListCache& cache) const;
   bool ReadEntryHeader(ULONGLONG offset, Data::AttributeList& entry,
                        ListWalk& walk);
+
+  // Whether garbage in the list is no defect, as ListWalk::overwritable says.
+  [[nodiscard]] static bool
+      CanBeOverwritten(const Io::FileRecord<S>& file_record);
+  [[nodiscard]] bool
+      ImportEntries(Io::FileRecord<S>& file_record,
+                    std::unordered_set<ULONGLONG>& attr_list_chain,
+                    ListWalk& walk);
+  [[nodiscard]] static EntryStep ImportEntry(
+      const Data::AttributeList& entry, Io::FileRecord<S>& file_record,
+      std::unordered_set<ULONGLONG>& attr_list_chain, ListWalk& walk);
+  void CheckWalkEnd(Io::FileRecord<S>& file_record, ListWalk& walk);
 };  // AttrList
 
 }  // namespace Attr

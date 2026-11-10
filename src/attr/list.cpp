@@ -68,73 +68,111 @@ AttrList<Resident, S>::AttrList(const HeaderCommon& ahc,
   assert(file_record.GetFileReference().has_value());
   const ULONGLONG self_ref = file_record.GetFileReference().value_or(0);
 
-  const bool recover = file_record.GetVolume().GetOptions().recover_errors;
-  ULONGLONG offset = 0;
-  Data::AttributeList al_record{};
-  // NTFS frees the clusters of a freed record's non-resident list, so another
-  // file may have written over them: garbage there is no defect. A resident
-  // list lies inside the record, which nothing else writes.
-  bool overwritable = false;
-  if constexpr (std::is_same_v<Resident, AttrNonResident<S>>) {
-    overwritable = file_record.IsDeleted();
-  }
-
   // Marks this record's own chain key first, so a cycle back to it is caught.
   attr_list_chain.insert(MakeChainKey(self_ref, Type::AttributeList));
 
   // Under NoCache, each entry read would read its clusters from the disk again.
   ListWalk walk{.cache = MakeListCache(),
-                .recover = recover,
-                .overwritable = overwritable};
-  while (ReadEntryHeader(offset, al_record, walk)) {
-    if (!Attr::IsValidAttrType(al_record.attr_type)) {
-      if (overwritable) {
+                .recover = file_record.GetVolume().GetOptions().recover_errors,
+                .overwritable = CanBeOverwritten(file_record)};
+  if (ImportEntries(file_record, attr_list_chain, walk)) {
+    return;
+  }
+  CheckWalkEnd(file_record, walk);
+}
+
+// NTFS frees the clusters of a freed record's non-resident list, so another
+// file may have written over them: garbage there is no defect. A resident
+// list lies inside the record, which nothing else writes.
+template <typename Resident, Cache::Strategy S>
+bool AttrList<Resident, S>::CanBeOverwritten(
+    const Io::FileRecord<S>& file_record) {
+  if constexpr (std::is_same_v<Resident, AttrNonResident<S>>) {
+    return file_record.IsDeleted();
+  } else {
+    return false;
+  }
+}
+
+// Reads each entry and imports it into the record. Returns true when the list
+// proved overwritten: it is then noted on the record, and nothing is left to
+// check. Else false, with walk telling how the walk ended.
+template <typename Resident, Cache::Strategy S>
+bool AttrList<Resident, S>::ImportEntries(
+    Io::FileRecord<S>& file_record,
+    std::unordered_set<ULONGLONG>& attr_list_chain, ListWalk& walk) {
+  Data::AttributeList entry{};
+  while (ReadEntryHeader(walk.offset, entry, walk)) {
+    switch (ImportEntry(entry, file_record, attr_list_chain, walk)) {
+      case EntryStep::Next:
+        break;
+      case EntryStep::Stop:
+        return false;
+      case EntryStep::Overwritten:
         file_record.NoteOverwrittenAttrList();
-        return;
-      }
-      throw std::runtime_error(
-          "Attribute List parse error (al_record.attr_type).\n");
+        return true;
     }
+  }
+  return false;
+}
 
-    Log::Debug("Attribute List: 0x{:04x}",
-               static_cast<DWORD>(al_record.attr_type));
-
-    file_record.ImportAttrListEntry(
-        {.record_number = al_record.base_ref.segment_number,
-         .sequence_number = al_record.base_ref.sequence_number,
-         .attr_type = al_record.attr_type},
-        attr_list_chain, recover);
-
-    if (overwritable &&
-        al_record.record_size < Data::attribute_list_entry_header_size) {
-      file_record.NoteOverwrittenAttrList();
-      return;
+// Checks one entry, hands it to the record, and moves the walk past it.
+template <typename Resident, Cache::Strategy S>
+typename AttrList<Resident, S>::EntryStep AttrList<Resident, S>::ImportEntry(
+    const Data::AttributeList& entry, Io::FileRecord<S>& file_record,
+    std::unordered_set<ULONGLONG>& attr_list_chain, ListWalk& walk) {
+  if (!Attr::IsValidAttrType(entry.attr_type)) {
+    if (walk.overwritable) {
+      return EntryStep::Overwritten;
     }
-    if (!CheckRecordSize(al_record, recover)) {
-      walk.truncated = true;
-      break;
-    }
-    offset += al_record.record_size;
+    throw std::runtime_error(
+        "Attribute List parse error (al_record.attr_type).\n");
   }
 
+  Log::Debug("Attribute List: 0x{:04x}", static_cast<DWORD>(entry.attr_type));
+
+  file_record.ImportAttrListEntry(
+      {.record_number = entry.base_ref.segment_number,
+       .sequence_number = entry.base_ref.sequence_number,
+       .attr_type = entry.attr_type},
+      attr_list_chain, walk.recover);
+
+  if (walk.overwritable &&
+      entry.record_size < Data::attribute_list_entry_header_size) {
+    return EntryStep::Overwritten;
+  }
+  if (!CheckRecordSize(entry, walk.recover)) {
+    walk.truncated = true;
+    return EntryStep::Stop;
+  }
+  walk.offset += entry.record_size;
+  return EntryStep::Next;
+}
+
+// Judges how the walk ended. A list that stops short of its declared size, or
+// at a truncated entry, is rejected, unless recovery salvages it or it proved
+// overwritable.
+template <typename Resident, Cache::Strategy S>
+void AttrList<Resident, S>::CheckWalkEnd(Io::FileRecord<S>& file_record,
+                                         ListWalk& walk) {
   // A resident list's normal end (ReadData returning nullopt) can still land
   // past its own declared size, when the last entry's record_size overshoots
-  // it - not caught by either check above.
-  if (!walk.truncated && offset != this->GetDataSize()) {
+  // it - not caught by either check in ImportEntry().
+  if (!walk.truncated && walk.offset != this->GetDataSize()) {
     walk.truncated = true;
-    if (!overwritable) {
-      Log::Recoverable(recover,
+    if (!walk.overwritable) {
+      Log::Recoverable(walk.recover,
                        "Attribute List ended at offset {} instead of its "
                        "declared size {}.",
-                       offset, this->GetDataSize());
+                       walk.offset, this->GetDataSize());
     }
   }
 
-  if (walk.truncated && overwritable) {
+  if (walk.truncated && walk.overwritable) {
     file_record.NoteOverwrittenAttrList();
     return;
   }
-  if (walk.truncated && !recover) {
+  if (walk.truncated && !walk.recover) {
     throw std::runtime_error("Attribute List is truncated.\n");
   }
 }
