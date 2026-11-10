@@ -34,8 +34,8 @@ bool IndexEntryWalker::RejectOnDefect(std::string_view defect) {
   return true;
 }
 
-std::optional<Data::IndexEntry> IndexEntryWalker::BoundedHeader(
-    std::span<const BYTE> cur) {
+std::optional<Data::IndexEntry>
+    IndexEntryWalker::BoundedHeader(std::span<const BYTE> cur) {
   if (cur.size() < offsetof(Data::IndexEntry, stream)) {
     rejected_ = RejectOnDefect(messages_.header_exceeds);
     return std::nullopt;
