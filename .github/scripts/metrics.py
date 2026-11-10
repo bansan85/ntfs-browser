@@ -8,8 +8,9 @@ usage:
 Writes to DIR (default build/metrics):
   functions.csv  one row per function, every per-function metric, among them callees
                  (distinct names followed by '(' in the body, a text scan of lizard's
-                 tokens). fan_in and fan_out are lizard raw counts, info only: they
-                 depend on the file order and on how many files define a name.
+                 tokens), nesting_depth (control blocks only, see control_nesting) and
+                 maintainability_index. fan_in and fan_out are lizard raw counts, info
+                 only: they depend on the file order and on how many files define a name.
   files.csv      one row per file: function count and worst values
   duplicates.csv one row per duplicated code snippet, grouped by block
   summary.json   totals, averages, limit counts, duplication, coverage
@@ -40,6 +41,7 @@ import bisect
 import csv
 import html
 import json
+import math
 import os
 import posixpath
 import re
@@ -77,39 +79,69 @@ SOURCE_SUFFIXES = (".h", ".hpp", ".cpp", ".cc", ".c")
 
 # Extensions of the base analysis. None of them rewrites the CCN.
 BASE_EXTENSIONS = [
-    "cognitive", "halstead", "nd", "ns", "io", "exitcount", "gotocount",
+    "cognitive", "halstead", "ns", "io", "exitcount", "gotocount",
     "statementcount", "dependencycount", "duplicated_param_list",
     "boolcount", "duplicate", "complextags",
 ]
 
 # Two tiers per indicator, each (alert, limit). A value strictly above the alert asks
-# for a look; strictly above the limit asks for a refactoring. Values calibrated on the
-# library's own distribution, p90 to p99, 2026-10. They never fail the run.
+# for a look; strictly above the limit asks for a refactoring. A column in LOWER_IS_WORSE
+# is the other way round: a value strictly below the bound. The values come from
+# published thresholds, never from the distribution of this code base. They never fail
+# the run.
 # Per-function limits. The CCN variants share the CCN pair.
 FUNCTION_LIMITS = {
+    # McCabe: 10. NIST 500-235: up to 15 for an experienced team.
     "ccn": (10, 15),
     "ccn_mccabe": (10, 15),
     "ccn_modified": (10, 15),
     "ccn_no_logic": (10, 15),
     "ccn_cpre": (10, 15),
     "ccn_ignoreassert": (10, 15),
+    # Sonar reports a function above 15.
     "cognitive": (15, 20),
+    # Google style asks for a second look above about 40 lines. Sonar reports 75.
     "nloc": (40, 60),
+    # Sonar S134 and the Linux kernel style: 3 levels of nested control blocks.
     "nesting_depth": (3, 4),
+    # Clean Code: 3 is the goal. Sonar reports 7.
     "params": (4, 5),
-    # Distinct names called. Library, 2026-11: p50 2, p90 8, p95 10, p99 15, max 21. The
-    # alert is p95 (4.8% of functions), the limit flags the top 1.2%. Flat functions such as
-    # Log::Debug (2), Reader::Check (4) and the NtfsVolume constructors (4 to 5) stay far below.
+    # Distinct names called. No standard exists. Miller's 7 plus or minus 2 items of working
+    # memory gives the alert, and the limit leaves a margin of 4.
     "callees": (10, 14),
-    "exits": (6, 8),
+    # Sonar reports 3 returns. Early returns are a C++ idiom, so the pair is looser.
+    "exits": (4, 6),
+    # Halstead volume, as used by Verifysoft and Testwell: up to 1000 is fine for a function.
+    "halstead_volume": (1000, 2000),
+    # Maintainability index, 0 to 100, as in Visual Studio: 20 and above is green, 10 to 19
+    # yellow, below 10 red. The alert is below 20 and the limit below 10.
+    "maintainability_index": (20, 10),
 }
+LOWER_IS_WORSE = frozenset({"maintainability_index"})
 # Per-class limits. LCOM4 above 1 means the methods split into groups that share
-# no member and no call.
-CLASS_LIMITS = {"wmc": (50, 100), "cbo": (10, 20), "lcom4": (1, 2)}
-# Per-file limit on lines of code.
+# no member and no call (Hitz and Montazeri: 1 is a cohesive class, 2 or more is a class
+# to split). WMC 50: Lanza and Marinescu call a class above 47 a God Class candidate.
+# CBO has no firm value in the literature, which gives 5 to 14, mostly for Java.
+CLASS_LIMITS = {"wmc": (50, 75), "cbo": (10, 15), "lcom4": (1, 2)}
+# LCOM4 is not defined for a class with fewer members than this: an interface or a
+# stateless helper splits into one group per method. Its LCOM4 is written as 0.
+MIN_MEMBERS_FOR_LCOM4 = 2
+# Per-file limit on lines of code. Sonar reports 1000, Clean Code prefers 200 to 500.
 FILE_LIMITS = {"file_nloc": (400, 800)}
 # Per-file limit on the files it includes directly.
 INCLUDE_LIMITS = {"includes_out": (15, 25)}
+# Share of duplicated tokens, in percent. Sonar's quality gate asks for 3% on new code.
+# The share covers tests too, so the limit is looser than the gate.
+DUPLICATION_LIMIT = (3, 5)
+# Functions that are a table of data or a block of text. Their lines and calls only list
+# items, so these two limits skip them. Names as short_name() writes them.
+DATA_TABLE_FUNCTIONS = frozenset({
+    "Tool::FuzzGen::Inputs()",
+    "Example::NtfsDir::UsageText()",
+    "Example::NtfsScanBench::Usage()",
+    "Tuning::Table()",
+})
+DATA_TABLE_EXEMPT_COLUMNS = frozenset({"nloc", "callees"})
 # Table labels for the class, file and include columns, which MEANINGS does not hold.
 LIMIT_LABELS = {
     "wmc": "weighted methods per class, WMC",
@@ -175,7 +207,6 @@ FUNCTION_METRICS = [
     ("params", "parameter_count", "parameters"),
     ("length", "length", "lines from first to last line"),
     ("cognitive", "cognitive_complexity", "cognitive complexity"),
-    ("nesting_depth", "max_nesting_depth", "maximum nesting depth"),
     ("nested_structures", "max_nested_structures", "maximum nested control structures"),
     ("halstead_volume", "halstead_volume", "Halstead volume"),
     ("halstead_difficulty", "halstead_difficulty", "Halstead difficulty"),
@@ -196,9 +227,8 @@ FUNCTION_METRICS = [
 # Variant metrics. Each variant runs its own analysis, because a variant that
 # rewrites the CCN would change the base value. Entries: (extensions, metrics).
 VARIANTS = [
-    (["nd", "mccabe"], [
+    (["mccabe"], [
         ("ccn_mccabe", "cyclomatic_complexity", "cyclomatic complexity, McCabe definition"),
-        ("nd_mccabe", "max_nesting_depth", "nesting depth, McCabe definition"),
     ]),
     (["modified"], [
         ("ccn_modified", "cyclomatic_complexity", "cyclomatic complexity, switch counted once"),
@@ -220,7 +250,7 @@ CCN_COLUMNS = ["ccn", "ccn_mccabe", "ccn_modified", "ccn_no_logic",
                "ccn_cpre", "ccn_ignoreassert"]
 
 # Metrics that get a top-N table in summary.md.
-TOP_METRICS = ["ccn", "ccn_mccabe", "cognitive", "nesting_depth", "nd_mccabe",
+TOP_METRICS = ["ccn", "ccn_mccabe", "cognitive", "nesting_depth",
                "nested_structures", "length", "params", "nloc", "halstead_effort",
                "callees", "exits", "duplicate_blocks"]
 
@@ -230,6 +260,8 @@ NUMERIC_METRICS = [(c, m) for c, _, m in FUNCTION_METRICS] + [
     (c, m) for _, metrics in VARIANTS for c, _, m in metrics
 ] + [
     ("callees", "distinct callee names"),
+    ("nesting_depth", "maximum nesting depth of control blocks"),
+    ("maintainability_index", "maintainability index, 0 to 100, higher is better"),
     ("duplicate_blocks", "duplicated blocks the function is part of"),
     ("coverage_pct", "line coverage, percent"),
     ("branch_gap_lines", "lines with a branch never taken"),
@@ -319,12 +351,60 @@ def callee_count(tokens):
     return len(names)
 
 
+# Keywords whose block adds one level of nesting. The block of an else if is the one of its if.
+CONTROL_KEYWORDS = frozenset({"if", "else", "for", "while", "do", "switch", "try", "catch"})
+
+
+def control_nesting(tokens):
+    """Returns the deepest nesting of control blocks in a function.
+
+    Lizard's own depth counts every && and || as one more level, so a flat chain of
+    conditions looks deeply nested. This count follows the braces: a block adds one level
+    when a control keyword opens it. The block of the function, of a lambda, of a class
+    or of a plain scope adds none. A lambda in a call keeps its own parentheses apart. An
+    if, for or while without braces adds no level.
+    """
+    tokens = [token for token in tokens if not token.isspace()]
+    # One entry per open brace: (is a control block, parenthesis depth outside it).
+    stack = []
+    depth = deepest = parens = 0
+    pending = False
+    for token in tokens:
+        if token in CONTROL_KEYWORDS:
+            pending = True
+        elif token == "(":
+            parens += 1
+        elif token == ")":
+            parens = max(parens - 1, 0)
+        elif token == ";" and parens == 0:
+            pending = False
+        elif token == "{":
+            control = pending and parens == 0
+            stack.append((control, parens))
+            parens, pending = 0, False
+            depth += control
+            deepest = max(deepest, depth)
+        elif token == "}" and stack:
+            control, parens = stack.pop()
+            depth -= control
+    return deepest
+
+
+def maintainability_index(volume, ccn, nloc):
+    """Returns the maintainability index of a function, from 0 to 100 (Visual Studio's form)."""
+    raw = 171 - 5.2 * math.log(max(volume, 1)) - 0.23 * ccn - 16.2 * math.log(max(nloc, 1))
+    return max(0.0, raw * 100 / 171)
+
+
 def function_row(fun):
+    tokens = getattr(fun, "tokens", [])
     row = {"file": rel(fun.filename), "function": fun.long_name,
            "start_line": fun.start_line, "end_line": fun.end_line,
-           "callees": callee_count(getattr(fun, "tokens", []))}
+           "callees": callee_count(tokens), "nesting_depth": control_nesting(tokens)}
     for column, attribute, _ in FUNCTION_METRICS:
         row[column] = number(getattr(fun, attribute))
+    row["maintainability_index"] = number(maintainability_index(
+        fun.halstead_volume, fun.cyclomatic_complexity, fun.nloc))
     row["complex_tags"] = " ".join(f"{keyword}:{line}"
                                    for keyword, line in getattr(fun, "complex_tags", []))
     return row
@@ -339,7 +419,8 @@ def file_row(info):
         "sum_ccn": sum(f.cyclomatic_complexity for f in functions),
         "max_ccn": max((f.cyclomatic_complexity for f in functions), default=0),
         "max_cognitive": max((f.cognitive_complexity for f in functions), default=0),
-        "max_nesting_depth": max((f.max_nesting_depth for f in functions), default=0),
+        "max_nesting_depth": max((control_nesting(getattr(f, "tokens", []))
+                                  for f in functions), default=0),
         "max_length": max((f.length for f in functions), default=0),
         "max_params": max((f.parameter_count for f in functions), default=0),
     }
@@ -871,7 +952,8 @@ def class_rows(groups, methods, code_lines):
             "file": primary["file"], "class": key,
             "start_line": primary["start"], "end_line": primary["end"],
             "methods": len(owned), "wmc": sum(m["ccn"] for m in owned),
-            "lcom4": components, "methods_without_members": lonely,
+            "lcom4": components if len(group["members"]) >= MIN_MEMBERS_FOR_LCOM4 else 0,
+            "methods_without_members": lonely,
             "members": len(group["members"]), "cbo": len(coupled),
             "impl_merged": group["impl_merged"],
         })
@@ -948,11 +1030,30 @@ def limit_label(column):
     return MEANINGS.get(column) or LIMIT_LABELS[column]
 
 
+def is_exempt(row, column):
+    """True for a data table or a block of text, which two limits skip."""
+    return (column in DATA_TABLE_EXEMPT_COLUMNS
+            and short_name(row.get("function", "")) in DATA_TABLE_FUNCTIONS)
+
+
+def is_beyond(column, value, bound):
+    """True when a value is past a bound: above it, or below it for a LOWER_IS_WORSE column."""
+    return value < bound if column in LOWER_IS_WORSE else value > bound
+
+
+def measured(rows, column):
+    """Returns the values of a column that a limit applies to."""
+    return [row[column] for row in rows
+            if row.get(column) is not None and not is_exempt(row, column)]
+
+
 def count_limits(limits, rows):
-    """Returns, per column, its alert and limit, and how many rows are above each."""
+    """Returns, per column, its alert and limit, and how many rows are beyond each."""
+    def beyond(column, bound):
+        return sum(is_beyond(column, v, bound) for v in measured(rows, column))
+
     return {column: {"alert": alert, "limit": limit,
-                     "above_alert": sum(v > alert for v in present(rows, column)),
-                     "above_limit": sum(v > limit for v in present(rows, column))}
+                     "above_alert": beyond(column, alert), "above_limit": beyond(column, limit)}
             for column, (alert, limit) in limits.items()}
 
 
@@ -981,9 +1082,11 @@ def coverage_limits(rows):
 
 
 def limit_breaches(row, limits):
-    """Returns the values of a row above their limit, as 'column value > limit' texts."""
-    return [f"{column} {row[column]} > {limit}" for column, (_, limit) in limits.items()
-            if row.get(column) is not None and row[column] > limit]
+    """Returns the values of a row beyond their limit, as 'column value > limit' texts."""
+    return [f"{column} {row[column]} {'<' if column in LOWER_IS_WORSE else '>'} {limit}"
+            for column, (_, limit) in limits.items()
+            if row.get(column) is not None and not is_exempt(row, column)
+            and is_beyond(column, row[column], limit)]
 
 
 def is_library(file):
@@ -1070,6 +1173,19 @@ def collapse_blank_lines(lines):
     return out
 
 
+def duplication_status(rate):
+    """Returns the marker of the duplicated share: over the limit, over the alert only, or fine."""
+    alert, limit = DUPLICATION_LIMIT
+    if rate > limit:
+        return "❌"
+    return "⚠️" if rate > alert else "✅"
+
+
+def bound_text(column, bound):
+    """Returns a bound for the Limits table: '<20' for a LOWER_IS_WORSE column, else the number."""
+    return f"<{bound}" if column in LOWER_IS_WORSE else str(bound)
+
+
 def limit_status(count):
     """Returns the marker of a limit row: over the limit, over the alert only, or fine."""
     if count["above_limit"]:
@@ -1154,7 +1270,9 @@ def headline(summary, found, cycles, heavy_files):
     dup = summary["duplication"]
     bools = summary["boolean_operators"]
     lines += ["",
-              f"Duplicated blocks: {dup['blocks']} ({dup['duplicate_rate_percent']}% of tokens). "
+              f"{duplication_status(dup['duplicate_rate_percent'])} Duplicated blocks: "
+              f"{dup['blocks']} ({dup['duplicate_rate_percent']}% of tokens, alert "
+              f"{DUPLICATION_LIMIT[0]}%, limit {DUPLICATION_LIMIT[1]}%). "
               f"Boolean operators: {bools['rate_percent']}% of tokens."]
     for variant, count in summary["unmatched_variant_functions"].items():
         if count:
@@ -1169,8 +1287,9 @@ def limits_section(summary, cycles):
               "|---|---|---|---|---|---|"]
 
     def table_row(column, count):
-        return (f"| {limit_status(count)} | {escape_cell(limit_label(column))} | {count['alert']} "
-                f"| {count['limit']} | {count['above_alert']} | {count['above_limit']} |")
+        return (f"| {limit_status(count)} | {escape_cell(limit_label(column))} "
+                f"| {bound_text(column, count['alert'])} | {bound_text(column, count['limit'])} "
+                f"| {count['above_alert']} | {count['above_limit']} |")
 
     base, variants = [], []
     for group in ("functions", "classes", "files", "includes"):
@@ -1183,7 +1302,10 @@ def limits_section(summary, cycles):
         *details(f"Variants of the cyclomatic complexity ({len(variants)})",
                  [*header, *variants]),
         "",
-        "✅ no value above the alert. ⚠️ a value above the alert. ❌ a value above the limit.",
+        "✅ no value beyond the alert. ⚠️ a value beyond the alert. ❌ a value beyond the limit. "
+        "Beyond means above, or below for a bound written <N.",
+        "The functions listed in DATA_TABLE_FUNCTIONS (tables of data and blocks of text) "
+        "skip the lines and callees limits.",
         f"Include cycles: {len(cycles)}. The limit is {CYCLE_LIMIT}, so any cycle is beyond it.",
         f"Heavy functions (CCN > {HEAVY_CCN} or NLOC > {HEAVY_NLOC}) need line coverage of "
         f"at least {MIN_COVERAGE_PCT}% and at most {MAX_BRANCH_GAP_LINES} branch gap lines.",
