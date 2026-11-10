@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <memory>
 #include <optional>
 #include <span>
@@ -13,22 +12,10 @@
 
 #include "disk-reader.h"
 #include "internal-export.h"
+#include "io/win32-prefetcher.h"
 #include "tuning/tuning.h"
 
 namespace NTFS_BROWSER_NAMESPACE::Io {
-
-// The read-ahead caps of each read pattern.
-using ReaderCaps = std::array<Tuning::ReaderTuning, Tuning::pattern_count>;
-
-// Answers whether the read behind overlapped is over.
-using ReadDoneProbe = bool (*)(const OVERLAPPED& overlapped);
-
-// Installs probe as the answer of every reader to whether a read ahead is over
-// (null: ask the system, which is the default) and returns the one it replaces.
-// A file in the system cache answers at once, so a test holds reads in flight
-// with it. A probe MUST NOT revert: a read it called over stays over.
-NTFS_BROWSER_EXPORT_TESTS_ONLY ReadDoneProbe
-    SetReadDoneProbeForTests(ReadDoneProbe probe) noexcept;
 
 // Production IDiskReader: a real disk/device, or an ordinary file treated
 // the same way (CreateFileW handles both identically). The library uses it
@@ -85,14 +72,17 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY Win32DiskReader : public IDiskReader {
   using HandlePtr =
       std::unique_ptr<std::remove_pointer_t<HANDLE>, decltype(&::CloseHandle)>;
 
-  class Prefetcher;
+  // Reads from the disk through the main handle, for a read that no range read
+  // ahead holds, and notes it when a session measures. False when it fails.
+  [[nodiscard]] bool ReadSynchronously(const LARGE_INTEGER& addr,
+                                       std::span<BYTE> dest) const;
 
   HandlePtr handle_;
   Tuning::MediaKind media_kind_{Tuning::MediaKind::Unknown};
   bool ask_host_volume_{true};
   ReaderCaps caps_;
   // Null until Open() succeeds. Declared after handle_: it goes first.
-  std::unique_ptr<Prefetcher> prefetcher_;
+  std::unique_ptr<Win32Prefetcher> prefetcher_;
 };
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Io

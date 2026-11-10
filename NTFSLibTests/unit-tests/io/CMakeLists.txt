@@ -17,6 +17,7 @@ target_sources(
     "file-reader-run-tests.cpp"
     "file-reader-tests.cpp"
     "file-record-extension-source-tests.cpp"
+    "guarded-disk-reader-tests.cpp"
     "held-probe-groups-tests.cpp"
     "long-host-path-tests.cpp"
     "ntfsdir-arguments-tests.cpp"

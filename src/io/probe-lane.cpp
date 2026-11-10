@@ -63,7 +63,8 @@ ProbeLane<S>::ProbeLane(const NtfsVolume<S>& volume, ReadAheadShared& shared)
       walk_(volume.GetOptions().tuning.walk),
       lane_runs_(volume.GetMediaKind() == Tuning::MediaKind::Rotational
                      ? walk_.read_ahead_runs_rotational
-                     : walk_.read_ahead_runs) {
+                     : walk_.read_ahead_runs),
+      zone_(plans_, order_, lane_runs_) {
   if constexpr (S == Cache::Strategy::FullCache) {
     overlap_slots_ = volume.GetFileRecordSize() == 0
                          ? 0
@@ -81,7 +82,7 @@ bool ProbeLane<S>::On() const noexcept {
 template <Cache::Strategy S>
 void ProbeLane<S>::Attach(FileRecord<S>& listing) {
   listing_ = &listing;
-  ForgetZone();
+  zone_.Forget();
 }
 
 template <Cache::Strategy S>
@@ -200,7 +201,7 @@ void ProbeLane<S>::WithdrawAll() noexcept {
     stats_->runs_withdrawn++;
   }
   announced_.clear();
-  ForgetZone();
+  zone_.Forget();
   plans_.clear();
   planned_runs_ = 0;
 }
@@ -287,117 +288,26 @@ void ProbeLane<S>::RunRead(ULONGLONG first_slot, ULONGLONG count) {
 template <Cache::Strategy S>
 void ProbeLane<S>::SetOrder(std::vector<ULONGLONG> order) noexcept {
   order_ = std::move(order);
-  ForgetZone();
+  zone_.Forget();
 }
 
 template <Cache::Strategy S>
 void ProbeLane<S>::AddPlan(ULONGLONG directory, RunPlan plan) {
   plans_.emplace(directory, std::move(plan));
-  ForgetZone();
+  zone_.Forget();
 }
 
 template <Cache::Strategy S>
 void ProbeLane<S>::DropPlan(
     std::unordered_map<ULONGLONG, RunPlan>::iterator plan) noexcept {
   plans_.erase(plan);
-  ForgetZone();
-}
-
-template <Cache::Strategy S>
-void ProbeLane<S>::ForgetZone() noexcept {
-  zone_clean_ = false;
-  zone_.clear();
-  chain_.clear();
-}
-
-template <Cache::Strategy S>
-void ProbeLane<S>::RebuildZone(std::optional<ULONGLONG> current) {
-  ForgetZone();
-  zone_stamp_++;
-  chain_plan_ = 0;
-  chain_run_ = 0;
-  const auto chain = [this](ULONGLONG directory) {
-    const auto found = plans_.find(directory);
-    if (found != plans_.end()) {
-      chain_.push_back(&found->second);
-    }
-  };
-  if (current) {
-    chain(*current);
-  }
-  for (const ULONGLONG directory : order_) {
-    if (directory != current) {
-      chain(directory);
-    }
-  }
-  zone_current_ = current;
-  zone_clean_ = true;
-  TopUpZone();
-}
-
-template <Cache::Strategy S>
-void ProbeLane<S>::TopUpZone() {
-  while (zone_.size() < 2 * lane_runs_ && chain_plan_ < chain_.size()) {
-    RunPlan& plan = *chain_[chain_plan_];
-    // The runs before the cursor are done, and so are those it jumped over.
-    chain_run_ = (std::max)(chain_run_, plan.cursor);
-    if (chain_run_ >= plan.runs.size()) {
-      chain_plan_++;
-      chain_run_ = 0;
-      continue;
-    }
-    PlannedRun& run = plan.runs.at(chain_run_++);
-    if (run.state != PlannedRun::State::Done) {
-      run.stamp = zone_stamp_;
-      zone_.push_back({.plan = &plan, .run = &run});
-    }
-  }
-}
-
-template <Cache::Strategy S>
-void ProbeLane<S>::VerifyZone(std::optional<ULONGLONG> current,
-                              bool rebuilt) const {
-  // The zone as a fresh walk of the plans gives it.
-  std::vector<const PlannedRun*> fresh;
-  const auto take = [this, &fresh](ULONGLONG directory) {
-    const auto found = plans_.find(directory);
-    if (found == plans_.end()) {
-      return;
-    }
-    const RunPlan& plan = found->second;
-    for (std::size_t index = plan.cursor;
-         index < plan.runs.size() && fresh.size() < 2 * lane_runs_; index++) {
-      if (plan.runs.at(index).state != PlannedRun::State::Done) {
-        fresh.push_back(&plan.runs.at(index));
-      }
-    }
-  };
-  if (current) {
-    take(*current);
-  }
-  for (const ULONGLONG directory : order_) {
-    if (directory != current) {
-      take(directory);
-    }
-  }
-  bool same = std::ranges::equal(
-      fresh, zone_, [](const PlannedRun* left, const Target& right) {
-        return left == right.run;
-      });
-  // Without a rebuild, no run of the lane may have left the zone.
-  for (const PlannedRun* const run : announced_) {
-    same = same && (rebuilt || run->stamp == zone_stamp_);
-  }
-  if (!same) {
-    lane_zone_mismatches++;
-    throw std::logic_error("the lane zone differs from a fresh one");
-  }
+  zone_.Forget();
 }
 
 template <Cache::Strategy S>
 void ProbeLane<S>::WithdrawLeftOut() {
   for (PlannedRun* const run : announced_) {
-    if (run->stamp != zone_stamp_) {
+    if (run->stamp != zone_.Stamp()) {
       SendHint(*run, false);
       run->state = PlannedRun::State::Waiting;
       stats_->runs_withdrawn++;
@@ -413,9 +323,10 @@ void ProbeLane<S>::AnnounceZone() {
   // run on the lane: a withdrawal takes every range that overlaps it, so the
   // ranges on the lane are kept apart. Such a run waits until the other one is
   // read.
-  const std::size_t target = (std::min)(zone_.size(), lane_runs_);
+  const std::span<const ZoneTarget> zone = zone_.Targets();
+  const std::size_t target = (std::min)(zone.size(), lane_runs_);
   for (std::size_t index = 0; index < target; index++) {
-    const Target entry = zone_.at(index);
+    const ZoneTarget entry = zone[index];
     PlannedRun& run = *entry.run;
     if (run.state != PlannedRun::State::Waiting) {
       continue;
@@ -447,17 +358,11 @@ void ProbeLane<S>::Refill() {
   if (listing_ != nullptr) {
     current = listing_->GetFileReference();
   }
-  const bool rebuilt = !zone_clean_ || current != zone_current_;
-  if (rebuilt) {
-    RebuildZone(current);
-  } else {
-    std::erase_if(zone_, [](const Target& entry) {
-      return entry.run->state == PlannedRun::State::Done;
-    });
-    TopUpZone();
-  }
-  if (verify_lane_zone.load(std::memory_order_relaxed)) {
-    VerifyZone(current, rebuilt);
+  const bool rebuilt = zone_.Refresh(current);
+  if (verify_lane_zone.load(std::memory_order_relaxed) &&
+      !zone_.Matches(current, rebuilt, announced_)) {
+    lane_zone_mismatches++;
+    throw std::logic_error("the lane zone differs from a fresh one");
   }
 
   // The runs that left the zone are withdrawn, and may come back. Nothing

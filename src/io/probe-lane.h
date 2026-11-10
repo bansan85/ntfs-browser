@@ -11,6 +11,7 @@
 
 #include "cache/strategy.h"
 #include "io/directory-read-ahead.h"
+#include "io/lane-zone.h"
 #include "io/read-ahead-held.h"
 #include "io/run-planner.h"
 #include "tuning/tuning.h"
@@ -73,7 +74,7 @@ class ProbeLane {
   // among the next lane_runs_: a stack that grows and shrinks pushes runs out
   // of the first and back in, and a withdrawal costs the read already made and
   // the read again. The others are withdrawn.
-  // Those 2 * lane_runs_ runs are kept in zone_ between two calls, and only
+  // Those 2 * lane_runs_ runs are kept in the zone between two calls, and only
   // worked out again when the plans, the order or the listing changed.
   void Refill();
 
@@ -85,12 +86,6 @@ class ProbeLane {
   void Release(ULONGLONG directory);
 
  private:
-  // A run of the zone, with the plan that owns it.
-  struct Target {
-    RunPlan* plan;
-    PlannedRun* run;
-  };
-
   // Whether the reader could take the two runs for overlapping ranges, which
   // a withdrawal of one would then take with it.
   [[nodiscard]] bool Overlaps(const PlannedRun& left,
@@ -135,19 +130,12 @@ class ProbeLane {
   // Drops from announced_ the runs that are not announced any more.
   void ForgetUnannounced() noexcept;
 
-  // The mutations of plans_ and order_: each one forgets the zone.
+  // The mutations of plans_ and order_: each one forgets the zone, which holds
+  // pointers into plans_.
   void SetOrder(std::vector<ULONGLONG> order) noexcept;
   void AddPlan(ULONGLONG directory, RunPlan plan);
   void DropPlan(std::unordered_map<ULONGLONG, RunPlan>::iterator plan) noexcept;
 
-  // Forgets zone_ and chain_, which hold pointers into plans_.
-  void ForgetZone() noexcept;
-  // Works the zone out from the start, for the directory current.
-  void RebuildZone(std::optional<ULONGLONG> current);
-  // Takes the runs after the zone in the chain, up to 2 * lane_runs_.
-  void TopUpZone();
-  // Throws when zone_ is not what a fresh walk of the plans gives.
-  void VerifyZone(std::optional<ULONGLONG> current, bool rebuilt) const;
   // Withdraws the announced runs that the last rebuild left out of the zone.
   void WithdrawLeftOut();
   // Announces the first lane_runs_ runs of the zone that wait.
@@ -176,29 +164,14 @@ class ProbeLane {
   // The runs on the lane now, in the order they were announced. They point
   // into plans_, which a plan leaves only through WithdrawPlan().
   std::vector<PlannedRun*> announced_;
-  // The first 2 * lane_runs_ runs not done, in the order Refill() works them:
-  // the first lane_runs_ are the ones the lane should hold, the others the
-  // ones it may keep. A run that is done leaves it at the next Refill().
-  std::vector<Target> zone_;
-  // The plans the zone is taken from, in order: the plan of the directory
-  // being listed, then those of order_ (a directory twice if order_ lists it
-  // twice). The runs of a plan before its cursor are done.
-  std::vector<RunPlan*> chain_;
-  // Where the zone stopped in the chain: the plan, and the next run in it.
-  std::size_t chain_plan_{0};
-  std::size_t chain_run_{0};
-  // Whether zone_ and chain_ are those of the plans, order_ and the directory
-  // zone_current_. Until one of them changes, the zone only loses runs that
-  // are done, and every run on the lane is in it.
-  bool zone_clean_{false};
-  std::optional<ULONGLONG> zone_current_;
-  // The count of zones built, to tell a run in the zone from one that left.
-  std::uint64_t zone_stamp_{0};
   // The directories of the listing's stack that the lane looks at, the next
   // one first: the top of the stack at the last Reorder(), then the
   // directories that were at the top before and are still planned, in their
   // old order.
   std::vector<ULONGLONG> order_;
+  // The first 2 * lane_runs_ runs not done, in the order Refill() works them.
+  // Declared after plans_ and order_, which it reads.
+  LaneZone zone_;
 };
 
 }  // namespace Io

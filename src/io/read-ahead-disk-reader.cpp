@@ -23,6 +23,7 @@
 
 #include "bench/bench.h"
 #include "disk-reader.h"
+#include "io/guarded-disk-reader.h"
 #include "log/ntfs-common.h"
 #include "tuning/tuning.h"
 #include "win-types.h"
@@ -97,71 +98,17 @@ class ReadAheadDiskReader::Impl {
       has_last_ = false;
       prefetch_floor_ = 0;
     }
-
-    const std::scoped_lock inner_lock{inner_mutex_};
-    return inner_ != nullptr && inner_->Open(path);
+    return inner_.Open(path);
   }
 
   bool ReadInto(LONGLONG start, std::span<BYTE> dest);
 
-  // Size of the wrapped reader. It reads nothing.
-  std::optional<ULONGLONG> Size() {
-    const std::scoped_lock inner_lock{inner_mutex_};
-    return inner_ != nullptr ? inner_->Size() : std::nullopt;
-  }
-
-  // Kind of device of the wrapped reader. It reads nothing.
-  Tuning::MediaKind GetMediaKind() {
-    const std::scoped_lock inner_lock{inner_mutex_};
-    return inner_ != nullptr ? inner_->GetMediaKind()
-                             : Tuning::MediaKind::Unknown;
-  }
-
-  // Passes a hint on to the wrapped reader, which the worker may be reading.
-  void Prefetch(ULONGLONG offset, ULONGLONG length) {
-    const std::scoped_lock inner_lock{inner_mutex_};
-    if (inner_ != nullptr) {
-      inner_->Prefetch(offset, length);
-    }
-  }
-
-  // Passes a cancellation on to the wrapped reader.
-  void CancelPrefetch() {
-    const std::scoped_lock inner_lock{inner_mutex_};
-    if (inner_ != nullptr) {
-      inner_->CancelPrefetch();
-    }
-  }
-
-  // Pass the standing lane's hints on to the wrapped reader.
-  void PrefetchStanding(ULONGLONG offset, ULONGLONG length) {
-    const std::scoped_lock inner_lock{inner_mutex_};
-    if (inner_ != nullptr) {
-      inner_->PrefetchStanding(offset, length);
-    }
-  }
-
-  void CancelStanding(ULONGLONG offset, ULONGLONG length) {
-    const std::scoped_lock inner_lock{inner_mutex_};
-    if (inner_ != nullptr) {
-      inner_->CancelStanding(offset, length);
-    }
-  }
-
-  // Passes the read pattern on to the wrapped reader.
-  void SetReadPattern(Tuning::Pattern pattern) {
-    const std::scoped_lock inner_lock{inner_mutex_};
-    if (inner_ != nullptr) {
-      inner_->SetReadPattern(pattern);
-    }
-  }
+  // The wrapped reader, for what the decorator only passes on: the size, the
+  // kind of device, the hints and the read pattern.
+  GuardedDiskReader& Inner() { return inner_; }
 
  private:
   using Chunk = ReadAheadChunk;
-
-  // Reads from the wrapped reader on the calling thread, once the worker is
-  // done with it.
-  bool DirectRead(LONGLONG addr, std::span<BYTE> dest);
 
   // Copies the leading bytes of the request that the window holds, waiting for
   // a chunk still in flight. Stops at the first byte it cannot serve, or at a
@@ -190,23 +137,19 @@ class ReadAheadDiskReader::Impl {
 
   void WorkerMain();
 
-  // Reads one chunk through the wrapped reader.
-  bool ReadChunk(Chunk& chunk);
-
   // The first chunk the worker has yet to read, or null.
   [[nodiscard]] std::shared_ptr<Chunk> NextQueued() const;
 
-  // Held by whoever calls the wrapped reader: the worker for a chunk, the
-  // caller for a direct read. The wrapped reader may keep a file position.
-  std::mutex inner_mutex_;
-  std::unique_ptr<IDiskReader> inner_;
+  // The wrapped reader, that the worker reads a chunk through and the caller
+  // reads directly.
+  GuardedDiskReader inner_;
 
   const std::uint64_t chunk_bytes_;
   // Chunks kept read ahead of the caller.
   const size_t window_chunks_;
 
   // Guards everything below, and the state of every chunk. Never held while
-  // calling the wrapped reader, and never taken while inner_mutex_ is held.
+  // calling the wrapped reader, and never taken while it is held.
   std::mutex mutex_;
   std::condition_variable work_;
   std::condition_variable done_;
@@ -229,17 +172,6 @@ class ReadAheadDiskReader::Impl {
   // Declared last: it starts only once everything above is built.
   std::thread worker_;
 };
-
-bool ReadAheadDiskReader::Impl::DirectRead(LONGLONG addr,
-                                           std::span<BYTE> dest) {
-  const std::scoped_lock lock{inner_mutex_};
-  if (inner_ == nullptr) {
-    return false;
-  }
-
-  LARGE_INTEGER at{.QuadPart = addr};
-  return inner_->ReadInto(at, dest);
-}
 
 void ReadAheadDiskReader::Impl::DropWindow() {
   for (const std::shared_ptr<Chunk>& chunk : window_) {
@@ -315,23 +247,6 @@ std::shared_ptr<ReadAheadChunk> ReadAheadDiskReader::Impl::NextQueued() const {
   return nullptr;
 }
 
-bool ReadAheadDiskReader::Impl::ReadChunk(Chunk& chunk) {
-  const std::scoped_lock lock{inner_mutex_};
-  // Dropped while the worker waited for the wrapped reader.
-  if (chunk.cancelled || inner_ == nullptr) {
-    return false;
-  }
-
-  try {
-    LARGE_INTEGER at{.QuadPart = chunk.addr};
-    return inner_->ReadInto(at, std::span<BYTE>{chunk.data.get(), chunk.size});
-  } catch (...) {
-    // An exception must not end the process from a thread of its own. The
-    // caller's direct read meets it again, and reports it there.
-    return false;
-  }
-}
-
 void ReadAheadDiskReader::Impl::WorkerMain() {
   Log::Detail::SilenceCurrentThread();
   const Bench::ThreadScope cpu(Bench::ThreadRole::ReadAhead);
@@ -349,7 +264,8 @@ void ReadAheadDiskReader::Impl::WorkerMain() {
 
     job->state = Chunk::State::Reading;
     lock.unlock();
-    const bool ok = ReadChunk(*job);
+    const bool ok = inner_.ReadUnlessCancelled(
+        job->cancelled, job->addr, std::span<BYTE>{job->data.get(), job->size});
     lock.lock();
     job->state = ok ? Chunk::State::Ready : Chunk::State::Failed;
     done_.notify_all();
@@ -396,7 +312,7 @@ bool ReadAheadDiskReader::Impl::ReadInto(LONGLONG start, std::span<BYTE> dest) {
   if (dest.empty() || start < 0 ||
       std::cmp_greater(dest.size(),
                        std::numeric_limits<LONGLONG>::max() - start)) {
-    return DirectRead(start, dest);
+    return inner_.Read(start, dest);
   }
 
   std::unique_lock lock{mutex_};
@@ -409,8 +325,8 @@ bool ReadAheadDiskReader::Impl::ReadInto(LONGLONG start, std::span<BYTE> dest) {
       DropWindow();
     }
     lock.unlock();
-    const bool ok =
-        DirectRead(start + gsl::narrow<LONGLONG>(copied), dest.subspan(copied));
+    const bool ok = inner_.Read(start + gsl::narrow<LONGLONG>(copied),
+                                dest.subspan(copied));
     lock.lock();
     if (!ok) {
       DropWindow();
@@ -445,31 +361,33 @@ bool ReadAheadDiskReader::ReadInto(LARGE_INTEGER& addr,
 }
 
 std::optional<ULONGLONG> ReadAheadDiskReader::Size() const {
-  return impl_->Size();
+  return impl_->Inner().Size();
 }
 
 Tuning::MediaKind ReadAheadDiskReader::GetMediaKind() const {
-  return impl_->GetMediaKind();
+  return impl_->Inner().GetMediaKind();
 }
 
 void ReadAheadDiskReader::Prefetch(ULONGLONG offset, ULONGLONG length) const {
-  impl_->Prefetch(offset, length);
+  impl_->Inner().Prefetch(offset, length);
 }
 
-void ReadAheadDiskReader::CancelPrefetch() const { impl_->CancelPrefetch(); }
+void ReadAheadDiskReader::CancelPrefetch() const {
+  impl_->Inner().CancelPrefetch();
+}
 
 void ReadAheadDiskReader::PrefetchStanding(ULONGLONG offset,
                                            ULONGLONG length) const {
-  impl_->PrefetchStanding(offset, length);
+  impl_->Inner().PrefetchStanding(offset, length);
 }
 
 void ReadAheadDiskReader::CancelStanding(ULONGLONG offset,
                                          ULONGLONG length) const {
-  impl_->CancelStanding(offset, length);
+  impl_->Inner().CancelStanding(offset, length);
 }
 
 void ReadAheadDiskReader::SetReadPattern(Tuning::Pattern pattern) const {
-  impl_->SetReadPattern(pattern);
+  impl_->Inner().SetReadPattern(pattern);
 }
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Io
