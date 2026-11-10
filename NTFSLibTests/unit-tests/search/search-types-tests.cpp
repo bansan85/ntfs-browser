@@ -48,3 +48,22 @@ TEST_CASE("A cluster summary counts by condition", "[search][types]") {
   CHECK(summary.Count(Lib::ClusterCondition::Intact) == 7);
   CHECK(summary.Count(Lib::ClusterCondition::Bad) == 0);
 }
+
+TEST_CASE("A name converts to UTF-8", "[search][types]") {
+  CHECK(Lib::ToUtf8(u"Docs") == "Docs");
+  CHECK(Lib::ToUtf8(u"é") == "\xC3\xA9");
+  CHECK(Lib::ToUtf8(u"\U0001F600") == "\xF0\x9F\x98\x80");
+  CHECK(Lib::ToUtf8(u"\xD800") == "\xED\xA0\x80");
+}
+
+TEST_CASE("An entry shows its flags as letters", "[search][types]") {
+  Lib::Entry entry;
+  CHECK(Lib::EntryFlags(entry) == "-------");
+  entry.is_directory = true;
+  entry.attributes = Lib::Attribute::read_only | Lib::Attribute::encrypted;
+  CHECK(Lib::EntryFlags(entry) == "DR----E");
+  entry.is_directory = false;
+  entry.attributes = Lib::Attribute::hidden | Lib::Attribute::system |
+                     Lib::Attribute::archive | Lib::Attribute::compressed;
+  CHECK(Lib::EntryFlags(entry) == "--HSAC-");
+}

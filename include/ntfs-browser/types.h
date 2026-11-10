@@ -14,6 +14,7 @@
 #include <string_view>
 #include <vector>
 
+#include <ntfs-browser/export.h>
 #include <ntfs-browser/namespace.h>
 
 namespace NTFS_BROWSER_NAMESPACE {
@@ -653,5 +654,18 @@ struct Options {
   // every entry is delivered. See Filter.
   Filter filter;
 };
+
+// Writes the raw UTF-16 units of a name or a path as UTF-8, for printing. A
+// valid surrogate pair becomes one 4-byte sequence. An unpaired surrogate
+// becomes its own 3-byte form (WTF-8), because NTFS keeps it as it is and two
+// names that differ only by one must stay distinct. That form is not
+// well-formed UTF-8.
+NTFS_BROWSER_EXPORT std::string ToUtf8(std::u16string_view units);
+
+// The flags of an entry, as one letter for each: D for a folder, then R
+// (read-only), H (hidden), S (system), A (archive), C (compressed) and E
+// (encrypted). A letter that the entry lacks is a dash. The letters are always
+// in that order, so the flags of two entries line up in a column.
+NTFS_BROWSER_EXPORT std::string EntryFlags(const Entry& entry);
 
 }  // namespace NTFS_BROWSER_NAMESPACE

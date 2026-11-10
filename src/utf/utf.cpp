@@ -4,6 +4,7 @@
 #include <type_traits>
 
 #include <ntfs-browser/namespace.h>
+#include <ntfs-browser/types.h>
 
 namespace NTFS_BROWSER_NAMESPACE::Utf {
 namespace {
@@ -187,3 +188,11 @@ std::u16string WideToUtf16(std::wstring_view wide) {
 }
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Utf
+
+namespace NTFS_BROWSER_NAMESPACE {
+
+std::string ToUtf8(std::u16string_view units) {
+  return Utf::WideToUtf8(Utf::Utf16ToWide(units));
+}
+
+}  // namespace NTFS_BROWSER_NAMESPACE

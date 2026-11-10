@@ -1,6 +1,8 @@
 #include "search/matcher.h"
 
+#include <cstdint>
 #include <memory>
+#include <string>
 #include <string_view>
 
 #include <ntfs-browser/namespace.h>
@@ -31,6 +33,22 @@ bool RegexAvailable() noexcept {
 #else
   return false;
 #endif
+}
+
+std::string EntryFlags(const Entry& entry) {
+  // Each flag is one letter, in the order the declaration gives.
+  const auto letter = [&entry](std::uint32_t bit, char set) {
+    return (entry.attributes & bit) != 0 ? set : '-';
+  };
+  std::string flags;
+  flags += entry.is_directory ? 'D' : '-';
+  flags += letter(Attribute::read_only, 'R');
+  flags += letter(Attribute::hidden, 'H');
+  flags += letter(Attribute::system, 'S');
+  flags += letter(Attribute::archive, 'A');
+  flags += letter(Attribute::compressed, 'C');
+  flags += letter(Attribute::encrypted, 'E');
+  return flags;
 }
 
 std::unique_ptr<Matcher> MakeMatcher(const Pattern& pattern,
