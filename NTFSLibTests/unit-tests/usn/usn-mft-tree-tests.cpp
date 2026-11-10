@@ -657,3 +657,25 @@ TEST_CASE("paths are given without an output for the lost ancestor",
   CheckPathsWithoutAnAncestorOutput<Cache::Strategy::NoCache>();
   CheckPathsWithoutAnAncestorOutput<Cache::Strategy::FullCache>();
 }
+
+namespace {
+
+template <Cache::Strategy S>
+void CheckNoJStreamLoadsNoJournal() {
+  FakeUsnOptions options = MixedJournal();
+  options.omit_j_stream = true;
+
+  const Mft::MftTree tree = ScanWith<S>(
+      options, VolumeOptions{.include_deleted = true, .recover_errors = true});
+
+  CHECK(tree.Stats().usn_records == 0);
+  CHECK(tree.JournalOnly().empty());
+}
+
+}  // namespace
+
+TEST_CASE("a scan of a journal record with no $J stream loads no journal",
+          "[usn][tree]") {
+  CheckNoJStreamLoadsNoJournal<Cache::Strategy::NoCache>();
+  CheckNoJStreamLoadsNoJournal<Cache::Strategy::FullCache>();
+}

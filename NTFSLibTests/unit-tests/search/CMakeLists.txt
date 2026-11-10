@@ -16,6 +16,7 @@ target_sources(
     "scan-engine-failure-tests.cpp"
     "scan-fake-engine.h"
     "scan-filter-tests.cpp"
+    "scan-lost-path-tests.cpp"
     "scan-mft-list-tests.cpp"
     "scan-pattern-tests.cpp"
     "scan-poll-tests.cpp"

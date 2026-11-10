@@ -539,6 +539,36 @@ TEST_CASE("A filter that can match nothing fails the scan",
     expected_log = "filter on accessed";
   }
 
+  SECTION("an allocated size range with the minimum above the maximum") {
+    options.filter.allocated_size = {.min = 10, .max = 9};
+    expected_log = "filter on allocated_size";
+  }
+
+  SECTION("a creation time range with the minimum above the maximum") {
+    options.filter.created = {.min = Day(2), .max = Day(1)};
+    expected_log = "filter on created";
+  }
+
+  SECTION("a modification time range with the minimum above the maximum") {
+    options.filter.modified = {.min = Day(2), .max = Day(1)};
+    expected_log = "filter on modified";
+  }
+
+  SECTION("a change time range with the minimum above the maximum") {
+    options.filter.mft_changed = {.min = Day(2), .max = Day(1)};
+    expected_log = "filter on mft_changed";
+  }
+
+  SECTION("a record range with the minimum above the maximum") {
+    options.filter.record = {.min = 10, .max = 9};
+    expected_log = "filter on record";
+  }
+
+  SECTION("a link count range with the minimum above the maximum") {
+    options.filter.link_count = {.min = 3, .max = 2};
+    expected_log = "filter on link_count";
+  }
+
   SECTION("an attribute bit that does not exist") {
     options.filter.attributes_none = 0x10000;
     expected_log = "a bit that does not exist";

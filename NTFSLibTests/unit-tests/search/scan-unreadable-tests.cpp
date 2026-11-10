@@ -41,9 +41,11 @@ TEST_CASE("A scan of a folder whose record does not parse fails",
   const auto engine =
       GENERATE(Lib::EngineKind::MftList, Lib::EngineKind::DirectoryNoCache,
                Lib::EngineKind::DirectoryFullCache);
+  const bool recover = GENERATE(false, true);
   Lib::Options options;
   options.target = image.Target(u"Docs");
   options.engine = engine;
+  options.recover_errors = recover;
 
   const auto outcome = RunScan(options);
 

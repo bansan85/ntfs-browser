@@ -184,6 +184,11 @@ TEST_CASE("A question mark takes a surrogate pair as one character",
     CHECK_FALSE(Wild(u"?", u"\xD834\xD834"));
     CHECK(Wild(u"??", u"\xDD1E\xD834"));
   }
+
+  SECTION("a high surrogate before a unit past the low surrogates is alone") {
+    CHECK(Wild(u"??", u"\xD834\xE000"));
+    CHECK_FALSE(Wild(u"?", u"\xD834\xE000"));
+  }
 }
 
 TEST_CASE("The full path target looks at the path only", "[search][matcher]") {

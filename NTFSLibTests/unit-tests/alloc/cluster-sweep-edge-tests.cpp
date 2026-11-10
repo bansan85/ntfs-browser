@@ -35,9 +35,12 @@ using TestFakeImage::FakeDataRun;
 
 namespace {
 
+// The record of the freed file the tests judge. It is a slot the MftTree base
+// leaves to the tests, like the two live files below.
 constexpr ULONGLONG subject = 22;
 constexpr ULONGLONG live_owner = 17;
 constexpr ULONGLONG second_live_owner = 18;
+// Bytes of one cluster of the fixtures.
 constexpr ULONGLONG cluster = TestFakeImage::fake_cluster_size;
 
 }  // namespace

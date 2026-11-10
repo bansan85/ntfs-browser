@@ -313,6 +313,14 @@ TEST_CASE("a name is valid only when its surrogates have partners",
     CHECK(result.damaged >= 1);
   }
 
+  SECTION("a high surrogate at the end of the name") {
+    std::vector<BYTE> bytes = good;
+    TestUsn::PutAt<WORD>(bytes, v2_name_offset + 14, 0xD83D);
+    const TestUsn::ScanResult result = TestUsn::ScanBytes(bytes);
+    CHECK(result.records.empty());
+    CHECK(result.damaged >= 1);
+  }
+
   SECTION("an ordinary unit past the surrogates is valid") {
     std::vector<BYTE> bytes = good;
     TestUsn::PutAt<WORD>(bytes, v2_name_offset, 0xE000);

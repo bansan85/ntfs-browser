@@ -14,6 +14,7 @@
 #include <ntfs-browser/types.h>
 
 #include "alloc/types.h"
+#include "reader-support.h"
 #include "scan-support.h"
 #include "win-types.h"
 
@@ -29,8 +30,8 @@ namespace {
 // Slots of the indexed fixture: 16 system records and 48 more.
 constexpr ULONGLONG indexed_records = 64;
 
-// The freed stale file of the fixture below: four clusters at LCN 40, one of
-// them bad.
+// The clusters of the freed file of the fixture below: four at LCN 40, and the
+// second of them is bad.
 const std::vector<TestFake::FakeDataRun> stale_runs{
     TestFake::FakeDataRun{.lcn = 40, .clusters = 4}};
 const std::vector<Lib::Alloc::Extent> one_bad{{.lcn = 41, .clusters = 1}};
@@ -107,4 +108,27 @@ TEST_CASE("A scan tells a deleted file that lies on a bad cluster",
       RowOfRecord(outcome.rows, TestFake::mft_tree_deleted_file_idx);
   REQUIRE_FALSE(stale.name.empty());
   CHECK(stale.data_state == Lib::DataState::Bad);
+}
+
+TEST_CASE("A folder scan tells a deleted file whose clusters are in use again",
+          "[search][scan]") {
+  std::vector<BYTE> image = TestSearch::ReallocatedImage();
+  const std::uint64_t first_lcn = image.size() / TestFake::fake_cluster_size -
+                                  TestSearch::reallocated_tail_clusters;
+  image = TestAlloc::WithBitmap(
+      std::move(image),
+      std::vector<TestFake::FakeDataRun>{{.lcn = first_lcn, .clusters = 2}});
+  const TempImage temp(image);
+  const auto engine = GENERATE(Lib::EngineKind::DirectoryNoCache,
+                               Lib::EngineKind::DirectoryFullCache);
+  Lib::Options options;
+  options.target = temp.Target();
+  options.engine = engine;
+  options.include_deleted = true;
+
+  const auto outcome = RunScan(options);
+
+  const auto old = TestSearch::RowNamed(outcome.rows, u"old.bin");
+  REQUIRE(old.name == u"old.bin");
+  CHECK(old.data_state == Lib::DataState::Reallocated);
 }

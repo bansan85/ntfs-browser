@@ -1,3 +1,4 @@
+#include <filesystem>
 #include <memory>
 #include <stdexcept>
 #include <stop_token>
@@ -16,6 +17,7 @@
 #include "search/engine.h"
 #include "search/scan-probe.h"
 #include "search/target.h"
+#include "win-types.h"
 
 namespace TestSearch = NTFS_BROWSER_NAMESPACE::Test::Search;
 namespace Lib = NTFS_BROWSER_NAMESPACE;
@@ -117,3 +119,49 @@ TEST_CASE("A timed scan whose engine throws still reports its timings",
   CHECK(TestSearch::PollToEnd(scan) == Lib::State::Failed);
   CHECK(timings.worker_wall_ns > 0);
 }
+
+#ifdef _WIN32
+
+namespace {
+
+// Holds a file open with no sharing until it goes out of scope.
+class ExclusiveHandle final {
+ public:
+  explicit ExclusiveHandle(const std::filesystem::path& path)
+      : handle_(CreateFileW(path.c_str(), GENERIC_READ, 0, nullptr,
+                            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr)) {}
+
+  ExclusiveHandle(const ExclusiveHandle&) = delete;
+  ExclusiveHandle& operator=(const ExclusiveHandle&) = delete;
+  ExclusiveHandle(ExclusiveHandle&&) = delete;
+  ExclusiveHandle& operator=(ExclusiveHandle&&) = delete;
+
+  ~ExclusiveHandle() {
+    if (handle_ != INVALID_HANDLE_VALUE) {
+      CloseHandle(handle_);
+    }
+  }
+
+  [[nodiscard]] bool IsOpen() const { return handle_ != INVALID_HANDLE_VALUE; }
+
+ private:
+  HANDLE handle_;
+};
+
+}  // namespace
+
+TEST_CASE("A scan of an image that another process holds fails",
+          "[search][scan]") {
+  const TempImage image(TestSearch::TreeImage());
+  const ExclusiveHandle lock(image.Path());
+  REQUIRE(lock.IsOpen());
+  Lib::Options options;
+  options.target = image.Target();
+  options.engine = Lib::EngineKind::DirectoryFullCache;
+
+  const auto outcome = TestSearch::RunScan(options);
+
+  CHECK(outcome.state == Lib::State::Failed);
+}
+
+#endif  // _WIN32

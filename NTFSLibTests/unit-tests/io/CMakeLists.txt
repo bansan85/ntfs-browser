@@ -19,6 +19,7 @@ target_sources(
     "file-record-extension-source-tests.cpp"
     "guarded-disk-reader-tests.cpp"
     "held-probe-groups-tests.cpp"
+    "held-store-tests.cpp"
     "long-host-path-tests.cpp"
     "ntfsdir-arguments-tests.cpp"
     "ntfsdir-in-process.h"
@@ -93,4 +94,9 @@ if(WIN32)
       "win32-disk-reader-tests.cpp"
       "win32-standing-lane-tests.cpp"
   )
+endif()
+
+if(NOT WIN32)
+  # PosixDiskReader only exists off Windows.
+  target_sources(NtfsBrowserTests PRIVATE "posix-disk-reader-tests.cpp")
 endif()
