@@ -53,14 +53,14 @@ void NoteKept(const Io::FileRecord<S>& file_record, const BaseSlot& base,
 // thread. A record that needs the volume is only marked, for the thread that
 // owns the scan to parse: the key stream of an encrypted file may be
 // non-resident, and the extension records of an $ATTRIBUTE_LIST are read from
-// the disk. file_record MUST NOT resolve an $ATTRIBUTE_LIST.
+// the disk. context.file_record MUST NOT resolve an $ATTRIBUTE_LIST.
 template <Cache::Strategy S>
-void ParseWindowSlot(Io::FileRecord<S>& file_record,
-                     const NtfsVolume<S>& volume, const SlotBytes& slot,
+void ParseWindowSlot(const SlotContext<S>& context, const SlotBytes& slot,
                      SlotFeatures features, SlotOutcome& outcome) {
+  Io::FileRecord<S>& file_record = context.file_record;
   const bool parsed = file_record.ParseFileRecord(slot.record, slot.bytes);
-  outcome.kind = ClassifySlot(file_record, volume, parsed, outcome.counts,
-                              outcome.header_damaged);
+  outcome.kind =
+      ClassifySlot(context, parsed, outcome.counts, outcome.header_damaged);
   if (outcome.kind == SlotKind::Unreadable) {
     return;
   }
@@ -82,8 +82,7 @@ void ParseWindowSlot(Io::FileRecord<S>& file_record,
 
   const BaseSlot base{.record = slot.record,
                       .header_damaged = outcome.header_damaged};
-  outcome.kept =
-      ReadBaseEntry(file_record, volume, base, outcome.counts, outcome.entry);
+  outcome.kept = ReadBaseEntry(context, base, outcome.counts, outcome.entry);
   if (outcome.kept) {
     NoteKept(file_record, base, features, outcome);
   }
@@ -191,7 +190,7 @@ void WindowParser<S>::ParseChunk(size_t chunk, size_t slot) {
     outcome = SlotOutcome{};
     outcome.log_begin = log.End();
     ParseWindowSlot(
-        file_record, *volume_,
+        SlotContext<S>{file_record, *volume_},
         {.record = record,
          .bytes = window_.bytes.subspan(index * record_size_, record_size_)},
         features_, outcome);
@@ -209,11 +208,11 @@ WaitingParser<S>::Context::Context(const NtfsVolume<S>& volume)
 
 template <Cache::Strategy S>
 WaitingParser<S>::WaitingParser(const NtfsVolume<S>& volume, size_t threads,
-                                const HeldRecords& held, const SlotBases& bases,
+                                const WaitingSources& sources,
                                 SlotFeatures features)
     : volume_(&volume),
-      held_(&held),
-      waiting_(&held.WaitingRecords()),
+      held_(&sources.held),
+      waiting_(&sources.held.WaitingRecords()),
       chunk_records_(
           (std::max<size_t>)(1, volume.GetOptions()
                                     .tuning.mft.waiting_chunk_records)),
@@ -228,9 +227,11 @@ WaitingParser<S>::WaitingParser(const NtfsVolume<S>& volume, size_t threads,
          .claim_mask =
              features.account ? Attr::Mask::All : static_cast<Attr::Mask>(0),
          .extension_source =
-             [&held](ULONGLONG record) { return held.FindExtension(record); },
-         .base_source =
-             [&bases](ULONGLONG record) { return bases.BaseOf(record); },
+             [&held = sources.held](ULONGLONG record) {
+               return held.FindExtension(record);
+             },
+         .base_source = [&bases = sources.bases](
+                            ULONGLONG record) { return bases.BaseOf(record); },
          .read_refusal = &context.refused});
   }
 }
@@ -331,8 +332,8 @@ void WaitingParser<S>::ParseWaiting(Io::FileRecord<S>& file_record,
       file_record.ParseFileRecord(waiting.record, held_->Bytes(*waiting.slot));
   const BaseSlot base{.record = waiting.record,
                       .header_damaged = waiting.header_damaged};
-  outcome.kept = parsed && ReadBaseEntry(file_record, *volume_, base,
-                                         outcome.counts, outcome.entry);
+  outcome.kept = parsed && ReadBaseEntry(SlotContext<S>{file_record, *volume_},
+                                         base, outcome.counts, outcome.entry);
   if (outcome.kept) {
     NoteKept(file_record, base, features_, outcome);
   }

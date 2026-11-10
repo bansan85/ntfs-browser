@@ -165,9 +165,9 @@ bool TryParseAttrs(Io::FileRecord<S>& file_record) {
 }
 
 template <Cache::Strategy S>
-SlotKind ClassifySlot(Io::FileRecord<S>& file_record,
-                      const NtfsVolume<S>& volume, bool parsed,
+SlotKind ClassifySlot(const SlotContext<S>& context, bool parsed,
                       RecordCounts& counts, bool& header_damaged) {
+  const Io::FileRecord<S>& file_record = context.file_record;
   if (!parsed) {
     counts.unreadable++;
     if (file_record.HasFailedFixup()) {
@@ -185,7 +185,7 @@ SlotKind ClassifySlot(Io::FileRecord<S>& file_record,
   }
   if (file_record.IsDeleted()) {
     counts.deleted++;
-    if (!volume.GetOptions().include_deleted) {
+    if (!context.volume.GetOptions().include_deleted) {
       return SlotKind::Dropped;
     }
   } else {
@@ -195,9 +195,10 @@ SlotKind ClassifySlot(Io::FileRecord<S>& file_record,
 }
 
 template <Cache::Strategy S>
-bool ReadBaseEntry(Io::FileRecord<S>& file_record, const NtfsVolume<S>& volume,
-                   const BaseSlot& slot, RecordCounts& counts,
-                   Mft::MftTree::Entry& entry) {
+bool ReadBaseEntry(const SlotContext<S>& context, const BaseSlot& slot,
+                   RecordCounts& counts, Mft::MftTree::Entry& entry) {
+  Io::FileRecord<S>& file_record = context.file_record;
+  const NtfsVolume<S>& volume = context.volume;
   const bool parsed = ReadEntry(file_record, slot.record, entry);
   counts.reused_extensions += file_record.GetReusedExtensionCount();
   if (file_record.HasOverwrittenAttrList()) {
@@ -257,19 +258,15 @@ template bool TryParseAttrs<Cache::Strategy::FullCache>(
     Io::FileRecord<Cache::Strategy::FullCache>&);
 
 template SlotKind ClassifySlot<Cache::Strategy::NoCache>(
-    Io::FileRecord<Cache::Strategy::NoCache>&,
-    const NtfsVolume<Cache::Strategy::NoCache>&, bool, RecordCounts&, bool&);
+    const SlotContext<Cache::Strategy::NoCache>&, bool, RecordCounts&, bool&);
 template SlotKind ClassifySlot<Cache::Strategy::FullCache>(
-    Io::FileRecord<Cache::Strategy::FullCache>&,
-    const NtfsVolume<Cache::Strategy::FullCache>&, bool, RecordCounts&, bool&);
+    const SlotContext<Cache::Strategy::FullCache>&, bool, RecordCounts&, bool&);
 
 template bool ReadBaseEntry<Cache::Strategy::NoCache>(
-    Io::FileRecord<Cache::Strategy::NoCache>&,
-    const NtfsVolume<Cache::Strategy::NoCache>&, const BaseSlot&, RecordCounts&,
-    Mft::MftTree::Entry&);
+    const SlotContext<Cache::Strategy::NoCache>&, const BaseSlot&,
+    RecordCounts&, Mft::MftTree::Entry&);
 template bool ReadBaseEntry<Cache::Strategy::FullCache>(
-    Io::FileRecord<Cache::Strategy::FullCache>&,
-    const NtfsVolume<Cache::Strategy::FullCache>&, const BaseSlot&,
+    const SlotContext<Cache::Strategy::FullCache>&, const BaseSlot&,
     RecordCounts&, Mft::MftTree::Entry&);
 
 template DataNote ComputeDataNote<Cache::Strategy::NoCache>(

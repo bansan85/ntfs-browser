@@ -39,16 +39,27 @@ bool FilesUnderParent(const Mft::MftTree::Entry& entry, size_t index) {
       });
 }
 
-}  // namespace
-
-ULONGLONG EntryLinks::Link(EntryTable& table) {
+// Sets parent_valid of every name of the table, by the rules of MftTree.
+void ValidateParents(EntryTable& table) {
   for (Mft::MftTree::Entry& entry : table.Entries()) {
     for (Mft::MftTree::Name& name : entry.names) {
       name.parent_valid = table.IsValidParent(entry, name);
     }
   }
-  FileChildren(table);
+}
 
+}  // namespace
+
+ULONGLONG EntryLinks::Link(EntryTable& table) {
+  ValidateParents(table);
+  FileChildren(table);
+  MarkReachable(table);
+  return static_cast<ULONGLONG>(
+      std::count(reachable_.begin(), reachable_.end(), false));
+}
+
+// Marks every entry the root reaches through the children lists.
+void EntryLinks::MarkReachable(const EntryTable& table) {
   reachable_.assign(table.Entries().size(), false);
   if (const std::optional<size_t> root = table.IndexOf(root_record)) {
     // IndexOf() gives an index of the entries; reachable_ is as long.
@@ -72,9 +83,6 @@ ULONGLONG EntryLinks::Link(EntryTable& table) {
       }
     }
   }
-
-  return static_cast<ULONGLONG>(
-      std::count(reachable_.begin(), reachable_.end(), false));
 }
 
 // Counts the children of each entry, then lays them out in children_records_,

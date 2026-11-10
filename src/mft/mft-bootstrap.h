@@ -72,11 +72,15 @@ class MftBootstrap {
   };
 
   void ResolveMftDataExtents();
+  void ResolveReachableExtensions(std::vector<PendingMftExtension> pending,
+                                  ULONGLONG self_ref);
   [[nodiscard]] static std::vector<PendingMftExtension>
       CollectPendingMftExtensions(const Attr::AttrBase<S>& raw_list,
                                   ULONGLONG self_ref);
   void ResolvePendingMftExtension(const PendingMftExtension& item,
                                   ULONGLONG self_ref);
+  void AddDataExtents(const Io::FileRecord<S>& ext,
+                      const PendingMftExtension& item);
   void WarnIfClaimsMoreThanMapped(const Attr::AttrBase<S>& base_extent) const;
 
   // A pointer, not a reference, as with the volume's own Impl::self.

@@ -32,6 +32,9 @@ class EntryLinks {
   // Files every entry under the parents its valid names give.
   void FileChildren(const EntryTable& table);
 
+  // Marks what the root reaches through the lists FileChildren() made.
+  void MarkReachable(const EntryTable& table);
+
   // The records filed under each entry, through a valid parent reference:
   // those of entries[i] are children_records_[children_first_[i]] up to
   // children_first_[i + 1]. A root whose record is lost has its own list.

@@ -130,22 +130,29 @@ struct SlotOutcome {
 template <Cache::Strategy S>
 bool TryParseAttrs(Io::FileRecord<S>& file_record);
 
-// Classifies the record slot file_record holds, and counts it in counts.
-// parsed is the verdict of the header parse. A record with a failed update
-// sequence check is damaged in both modes: strict drops it as unreadable,
-// recovering keeps what verifies. It is counted once, whatever else is wrong
-// with it: header_damaged tells ReadBaseEntry() it is counted already.
+// The record a slot is parsed in, and the volume it belongs to. Both outlive
+// the call that takes it.
 template <Cache::Strategy S>
-SlotKind ClassifySlot(Io::FileRecord<S>& file_record,
-                      const NtfsVolume<S>& volume, bool parsed,
+struct SlotContext {
+  Io::FileRecord<S>& file_record;
+  const NtfsVolume<S>& volume;
+};
+
+// Classifies the record slot context.file_record holds, and counts it in
+// counts. parsed is the verdict of the header parse. A record with a failed
+// update sequence check is damaged in both modes: strict drops it as
+// unreadable, recovering keeps what verifies. It is counted once, whatever else
+// is wrong with it: header_damaged tells ReadBaseEntry() it is counted already.
+template <Cache::Strategy S>
+SlotKind ClassifySlot(const SlotContext<S>& context, bool parsed,
                       RecordCounts& counts, bool& header_damaged);
 
-// Reads the base record file_record holds into entry, fresh. Returns false for
-// a record not kept, a damaged one when strict: entry is then meaningless.
+// Reads the base record context.file_record holds into entry, fresh. Returns
+// false for a record not kept, a damaged one when strict: entry is then
+// meaningless.
 template <Cache::Strategy S>
-bool ReadBaseEntry(Io::FileRecord<S>& file_record, const NtfsVolume<S>& volume,
-                   const BaseSlot& slot, RecordCounts& counts,
-                   Mft::MftTree::Entry& entry);
+bool ReadBaseEntry(const SlotContext<S>& context, const BaseSlot& slot,
+                   RecordCounts& counts, Mft::MftTree::Entry& entry);
 
 // Works out the DataNote of the unnamed $DATA stream of file_record.
 template <Cache::Strategy S>

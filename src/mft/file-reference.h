@@ -44,16 +44,24 @@ constexpr bool
          (record_base_ref & mft_record_number_mask) == listing_record_number;
 }
 
+// What an extension record says of itself: its sequence number, whether it is
+// in use, and the file reference of the base record it names.
+struct ExtensionRecordFacts {
+  WORD sequence{0};
+  bool in_use{false};
+  ULONGLONG base_ref{0};
+};
+
 // True if a record named by an $ATTRIBUTE_LIST entry of a freed listing file is
 // an extension of it. NTFS freed the extension with the file and bumped its
 // sequence, so a freed extension may carry the entry's sequence plus one. An
 // extension another file reused still names another base, and fails.
 constexpr bool
-    IsGenuineFreedExtensionRecord(WORD entry_sequence, WORD record_sequence,
-                                  bool record_in_use, ULONGLONG record_base_ref,
+    IsGenuineFreedExtensionRecord(WORD entry_sequence,
+                                  const ExtensionRecordFacts& record,
                                   ULONGLONG listing_record_number) noexcept {
-  return (record_base_ref & mft_record_number_mask) == listing_record_number &&
-         IsSameRecordGeneration(entry_sequence, record_sequence, record_in_use);
+  return (record.base_ref & mft_record_number_mask) == listing_record_number &&
+         IsSameRecordGeneration(entry_sequence, record.sequence, record.in_use);
 }
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Mft

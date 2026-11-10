@@ -140,10 +140,15 @@ void MftBootstrap<S>::ResolveMftDataExtents() {
   // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
   const ULONGLONG self_ref = *list_ref;
 
-  std::vector<PendingMftExtension> pending =
-      CollectPendingMftExtensions(raw_list, self_ref);
+  ResolveReachableExtensions(CollectPendingMftExtensions(raw_list, self_ref),
+                             self_ref);
+}
 
-  // Attempts each ref once reachable, dropping it either way to bound reads.
+// Attempts each pending extension once the map reaches its record, dropping it
+// either way to bound reads. Warns about the ones the map never reaches.
+template <Cache::Strategy S>
+void MftBootstrap<S>::ResolveReachableExtensions(
+    std::vector<PendingMftExtension> pending, ULONGLONG self_ref) {
   while (!pending.empty()) {
     std::vector<PendingMftExtension> still_pending;
     bool attempted_any = false;
@@ -259,6 +264,14 @@ void MftBootstrap<S>::ResolvePendingMftExtension(
     return;
   }
 
+  AddDataExtents(ext, item);
+}
+
+// Hands each non-resident DATA attribute of ext to map_.TryAdd(), with the
+// start VCN item lists for it.
+template <Cache::Strategy S>
+void MftBootstrap<S>::AddDataExtents(const Io::FileRecord<S>& ext,
+                                     const PendingMftExtension& item) {
   for (const std::unique_ptr<Attr::AttrBase<S>>& attr :
        ext.GetAttr(Attr::Type::Data)) {
     if (attr->IsNonResident()) {

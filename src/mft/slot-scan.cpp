@@ -87,6 +87,18 @@ bool ProgressAllowsRecord(const Mft::MftTree::ScanOptions& options,
          options.progress(record, total);
 }
 
+// The bytes of raw records a scan of volume holds for its second pass at most:
+// the cap a test asked for, else the tuning, kept inside what size_t can count.
+template <Cache::Strategy S>
+size_t HeldBudgetBytes(const NtfsVolume<S>& volume) {
+  const std::uint64_t budget =
+      max_held_record_bytes_override
+          ? *max_held_record_bytes_override
+          : volume.GetOptions().tuning.mft.max_held_record_bytes;
+  return static_cast<size_t>(
+      (std::min<std::uint64_t>)(budget, (std::numeric_limits<size_t>::max)()));
+}
+
 // Removes the entries at indices, sorted, and keeps the others in order.
 void DropEntries(std::vector<Mft::MftTree::Entry>& entries,
                  const std::vector<size_t>& indices) {
@@ -157,32 +169,15 @@ class SlotScan {
         entries_(&entries),
         stats_(&stats),
         total_(volume.GetRecordsCount()),
-        held_(
-            volume.GetFileRecordSize(),
-            volume.GetOptions().tuning.mft.held_block_bytes,
-            static_cast<size_t>(
-                (std::min<
-                    std::uint64_t>)(max_held_record_bytes_override
-                                        ? *max_held_record_bytes_override
-                                        : volume.GetOptions()
-                                              .tuning.mft.max_held_record_bytes,
-                                    (std::numeric_limits<size_t>::max)()))),
+        held_(volume.GetFileRecordSize(),
+              volume.GetOptions().tuning.mft.held_block_bytes,
+              HeldBudgetBytes(volume)),
         bases_(total_),
         unheld_(volume),
         file_record_(volume),
         resolver_(volume, entries, stats, input.features.account),
         slots_(volume, volume.GetOptions().tuning.mft.window_bytes) {
-    file_record_.SetParseOptions(
-        {.attr_mask = Attr::Mask::FileName | Attr::Mask::Data,
-         .claim_mask =
-             features_.account ? Attr::Mask::All : static_cast<Attr::Mask>(0),
-         .extension_source =
-             [this](ULONGLONG record) {
-               const std::span<const BYTE> bytes = held_.FindExtension(record);
-               return bytes.empty() ? unheld_.Find(record) : bytes;
-             },
-         .base_source =
-             [this](ULONGLONG record) { return bases_.BaseOf(record); }});
+    ConfigureFileRecord();
     if (input.bitmap) {
       slots_.Plan(PlanSlotRanges(*input.bitmap, total_,
                                  volume.GetOptions().tuning.mft.max_gap_slots));
@@ -271,6 +266,23 @@ class SlotScan {
   }
 
  private:
+  // Has file_record_ find the extension records in the held ones first, then in
+  // the ones the second pass read, and the base of a slot in the first pass's
+  // notes.
+  void ConfigureFileRecord() {
+    file_record_.SetParseOptions(
+        {.attr_mask = Attr::Mask::FileName | Attr::Mask::Data,
+         .claim_mask =
+             features_.account ? Attr::Mask::All : static_cast<Attr::Mask>(0),
+         .extension_source =
+             [this](ULONGLONG record) {
+               const std::span<const BYTE> bytes = held_.FindExtension(record);
+               return bytes.empty() ? unheld_.Find(record) : bytes;
+             },
+         .base_source =
+             [this](ULONGLONG record) { return bases_.BaseOf(record); }});
+  }
+
   // Ends the second pass: the entries at dropped are not kept.
   void EndSecondPass(const std::vector<size_t>& dropped) {
     // The threads rest while the entries are resolved and dropped.
@@ -350,8 +362,7 @@ class SlotScan {
     RecordCounts counts;
     const BaseSlot slot{.record = waiting.record,
                         .header_damaged = waiting.header_damaged};
-    const bool kept =
-        parsed && ReadBaseEntry(file_record_, *volume_, slot, counts, entry);
+    const bool kept = parsed && ReadBaseEntry(Context(), slot, counts, entry);
     Merge(counts);
     unheld_.Clear();
     if (kept) {
@@ -364,8 +375,8 @@ class SlotScan {
   // batch when the scan reaches it.
   SlotOutcome& WaitingOutcome(size_t index) {
     if (!waiting_parser_) {
-      waiting_parser_.emplace(*volume_, parse_threads_, held_, bases_,
-                              features_);
+      waiting_parser_.emplace(*volume_, parse_threads_,
+                              WaitingSources{held_, bases_}, features_);
     }
     if (!waiting_parser_->Covers(index)) {
       const size_t batch =
@@ -466,9 +477,11 @@ class SlotScan {
   // that waits for the second pass. False when its bytes are not a record.
   bool TakeListed(ULONGLONG record, SlotOutcome& outcome) {
     // The window holds the slot in full, so the record waits.
-    if (!held_.HoldWaiting(record, slots_.HeldSlot(record), entries_->size(),
-                           outcome.header_damaged,
-                           std::move(outcome.list_extents))) {
+    if (!held_.HoldWaiting({.record = record,
+                            .entry_index = entries_->size(),
+                            .header_damaged = outcome.header_damaged,
+                            .list_extents = std::move(outcome.list_extents)},
+                           slots_.HeldSlot(record))) {
       return false;
     }
     Merge(record, outcome);
@@ -609,13 +622,37 @@ class SlotScan {
     Merge(counts);
   }
 
+  // Holds the base record record, which file_record_ holds, for the second pass
+  // when it has an $ATTRIBUTE_LIST. Its entry keeps its place, so the entries
+  // stay in record order. True when it waits. A record that has a list and
+  // cannot wait is parsed at once, and takes the extension records held for it.
+  bool HoldListed(ULONGLONG record, bool header_damaged) {
+    if (!file_record_.HasAttrHeader(Attr::Type::AttributeList)) {
+      return false;
+    }
+    if (held_.HoldWaiting({.record = record,
+                           .entry_index = entries_->size(),
+                           .header_damaged = header_damaged,
+                           .list_extents = file_record_.AttributeListExtents(
+                               max_announced_list_bytes)},
+                          slots_.HeldSlot(record))) {
+      entries_->emplace_back();
+      return true;
+    }
+    held_.Confirm(record);
+    return false;
+  }
+
+  // The record file_record_ is parsed in, with its volume.
+  SlotContext<S> Context() { return {file_record_, *volume_}; }
+
   // The body of ParseHere(): counts receives what the slot adds to the
   // statistics.
   void ParseHereInto(ULONGLONG record, RecordCounts& counts) {
     bool header_damaged = false;
     const bool parsed = slots_.ParseFileRecord(file_record_, record);
     const SlotKind kind =
-        ClassifySlot(file_record_, *volume_, parsed, counts, header_damaged);
+        ClassifySlot(Context(), parsed, counts, header_damaged);
     if (kind == SlotKind::Unreadable) {
       return;
     }
@@ -629,24 +666,15 @@ class SlotScan {
     if (kind == SlotKind::Dropped) {
       return;
     }
-    // Its entry keeps its place, so the entries stay in record order.
-    const bool has_list = file_record_.HasAttrHeader(Attr::Type::AttributeList);
-    if (has_list &&
-        held_.HoldWaiting(
-            record, slots_.HeldSlot(record), entries_->size(), header_damaged,
-            file_record_.AttributeListExtents(max_announced_list_bytes))) {
-      entries_->emplace_back();
+    if (HoldListed(record, header_damaged)) {
       return;
-    }
-    if (has_list) {
-      held_.Confirm(record);
     }
 
     // Filled in place: an Entry is big, and most slots are kept.
     Mft::MftTree::Entry& entry = entries_->emplace_back();
     parsed_here_ = true;
     const BaseSlot slot{.record = record, .header_damaged = header_damaged};
-    if (!ReadBaseEntry(file_record_, *volume_, slot, counts, entry)) {
+    if (!ReadBaseEntry(Context(), slot, counts, entry)) {
       entries_->pop_back();
       return;
     }
@@ -768,10 +796,8 @@ size_t SlotsParsedByThreadsForTests(bool reset) noexcept {
 template <Cache::Strategy S>
 std::vector<Alloc::Extent> ScanSlots(const NtfsVolume<S>& volume,
                                      const SlotScanInput& input,
-                                     std::vector<Mft::MftTree::Entry>& entries,
-                                     Mft::MftTree::ScanStats& stats,
-                                     Alloc::ClaimInventory& inventory) {
-  SlotScan<S> scan(volume, input, entries, stats);
+                                     const SlotScanOutput& output) {
+  SlotScan<S> scan(volume, input, output.entries, output.stats);
   {
     const Bench::PhaseScope phase(Bench::Phase::Pass1);
     volume.SetReadPattern(Tuning::Pattern::LargeSequential);
@@ -782,17 +808,15 @@ std::vector<Alloc::Extent> ScanSlots(const NtfsVolume<S>& volume,
     volume.SetReadPattern(Tuning::Pattern::ScatteredGrouped);
     scan.SecondPass();
   }
-  inventory = scan.TakeInventory();
+  output.inventory = scan.TakeInventory();
   return scan.TakeJournalExtents();
 }
 
 template std::vector<Alloc::Extent> ScanSlots<Cache::Strategy::NoCache>(
     const NtfsVolume<Cache::Strategy::NoCache>&, const SlotScanInput&,
-    std::vector<Mft::MftTree::Entry>&, Mft::MftTree::ScanStats&,
-    Alloc::ClaimInventory&);
+    const SlotScanOutput&);
 template std::vector<Alloc::Extent> ScanSlots<Cache::Strategy::FullCache>(
     const NtfsVolume<Cache::Strategy::FullCache>&, const SlotScanInput&,
-    std::vector<Mft::MftTree::Entry>&, Mft::MftTree::ScanStats&,
-    Alloc::ClaimInventory&);
+    const SlotScanOutput&);
 
 }  // namespace NTFS_BROWSER_NAMESPACE::Mft

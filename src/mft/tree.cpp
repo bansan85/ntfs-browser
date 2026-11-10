@@ -111,6 +111,15 @@ class Mft::MftTree::Impl {
   // scan announced the journal to the reader.
   template <Cache::Strategy S>
   void ApplyJournalIfComplete(const NtfsVolume<S>& volume, bool announced);
+  // Reads $MFT's $BITMAP, unless include_deleted wants every slot, and reserves
+  // room in the table for the entries it expects. Returns the bitmap, or
+  // nothing when none was read.
+  template <Cache::Strategy S>
+  std::optional<std::vector<BYTE>> ReserveEntries(const NtfsVolume<S>& volume,
+                                                  ULONGLONG total);
+  // Links the entries into a tree, and counts those the root does not reach.
+  // False when a run told to stop after a phase ended the scan.
+  bool LinkEntries();
   // Logs the counters of the scan. The data state counters only mean something
   // when the scan annotated the entries.
   void LogScanSummary(bool annotated) const;
@@ -152,16 +161,7 @@ void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
   const ULONGLONG total = volume.GetRecordsCount();
   stats.slots = total;
 
-  // A freed record is dropped anyway without include_deleted, so its read is
-  // saved. With it, every slot is read, bitmap or not.
-  const std::optional<std::vector<BYTE>> bitmap =
-      volume.GetOptions().include_deleted ? std::nullopt
-                                          : ReadMftBitmap(volume, total);
-  // An Entry is big: each time the vector grows, it moves them all. Without a
-  // bitmap, the slots are all there is to go by.
-  table.Entries().reserve(gsl::narrow<size_t>(
-      (std::min)(bitmap ? CountUsedSlots(*bitmap, total) : total,
-                 max_reserved_entries)));
+  const std::optional<std::vector<BYTE>> bitmap = ReserveEntries(volume, total);
 
   const SlotFeatures features = FeaturesOf(volume, options);
   const std::optional<std::vector<Alloc::Extent>> journal_extents =
@@ -179,15 +179,39 @@ void Mft::MftTree::Impl::Scan(const NtfsVolume<S>& volume,
   const bool journal_announced =
       stats.complete && AnnounceJournal(volume, *journal_extents);
   LogScanSummary(features.annotate);
+  if (!LinkEntries()) {
+    return;
+  }
+  ApplyJournalIfComplete(volume, journal_announced);
+}
+
+template <Cache::Strategy S>
+std::optional<std::vector<BYTE>>
+    Mft::MftTree::Impl::ReserveEntries(const NtfsVolume<S>& volume,
+                                       ULONGLONG total) {
+  // A freed record is dropped anyway without include_deleted, so its read is
+  // saved. With it, every slot is read, bitmap or not.
+  std::optional<std::vector<BYTE>> bitmap = volume.GetOptions().include_deleted
+                                                ? std::nullopt
+                                                : ReadMftBitmap(volume, total);
+  // An Entry is big: each time the vector grows, it moves them all. Without a
+  // bitmap, the slots are all there is to go by.
+  table.Entries().reserve(gsl::narrow<size_t>(
+      (std::min)(bitmap ? CountUsedSlots(*bitmap, total) : total,
+                 max_reserved_entries)));
+  return bitmap;
+}
+
+bool Mft::MftTree::Impl::LinkEntries() {
   {
     const Bench::PhaseScope phase(Bench::Phase::Link);
     stats.unreachable = links.Link(table);
   }
   if (Bench::StopRequested()) {
     stats.complete = false;
-    return;
+    return false;
   }
-  ApplyJournalIfComplete(volume, journal_announced);
+  return true;
 }
 
 template <Cache::Strategy S>
@@ -198,8 +222,9 @@ std::optional<std::vector<Alloc::Extent>>
   // reads stay for the second.
   const KeptBitmapWindows<S> kept_windows(volume, input.features);
   Alloc::ClaimInventory inventory;
-  std::vector<Alloc::Extent> journal_extents =
-      ScanSlots(volume, input, table.Entries(), stats, inventory);
+  std::vector<Alloc::Extent> journal_extents = ScanSlots(
+      volume, input,
+      {.entries = table.Entries(), .stats = stats, .inventory = inventory});
   // A run told to stop after a phase leaves a tree that is not complete.
   if (Bench::StopRequested()) {
     stats.complete = false;

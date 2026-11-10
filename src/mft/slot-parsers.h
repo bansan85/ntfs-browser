@@ -83,6 +83,13 @@ class WindowParser {
   Util::ChunkPool pool_;
 };
 
+// What the second pass reads of the first: the records it held, and the base
+// record each slot named.
+struct WaitingSources {
+  const HeldRecords& held;
+  const SlotBases& bases;
+};
+
 // Parses the base records that wait for the second pass, on several threads,
 // and gives the outcome of each in waiting order. A batch of waiting records is
 // cut into chunks, as WindowParser does with the slots of a window: a thread
@@ -100,10 +107,9 @@ template <Cache::Strategy S>
 class WaitingParser {
  public:
   // threads is the number of threads that parse, the calling one included.
-  // held, bases and waiting MUST NOT change while a batch is parsed.
+  // What sources holds MUST NOT change while a batch is parsed.
   WaitingParser(const NtfsVolume<S>& volume, size_t threads,
-                const HeldRecords& held, const SlotBases& bases,
-                SlotFeatures features);
+                const WaitingSources& sources, SlotFeatures features);
 
   // Starts parsing the count waiting records from first on, after the batch
   // before it was ended.

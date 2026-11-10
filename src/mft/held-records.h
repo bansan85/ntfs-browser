@@ -101,9 +101,9 @@ class HeldRecords {
   // A base record that waits for the second pass, with the entry kept in its
   // place, and what its first header read counted.
   struct Waiting {
-    ULONGLONG record;
-    size_t entry_index;
-    bool header_damaged;
+    ULONGLONG record{0};
+    size_t entry_index{0};
+    bool header_damaged{false};
     // Where its bytes are held. Nothing when the budget was spent: the second
     // pass reads the record again.
     std::optional<size_t> slot;
@@ -146,27 +146,20 @@ class HeldRecords {
     pending_[base_record].push_back(added);
   }
 
-  // Holds base record for the second pass, with the extension records met
-  // before it that it will ask for. False when bytes is not a record, which
-  // the first pass then parses at once. When the budget is spent, the record
-  // waits without its bytes.
-  bool HoldWaiting(ULONGLONG record, std::span<const BYTE> bytes,
-                   size_t entry_index, bool header_damaged,
-                   std::vector<Alloc::Extent> list_extents) {
+  // Holds added.record for the second pass, with the extension records met
+  // before it that it will ask for. bytes is that record's. added.slot and
+  // added.unheld_extensions MUST be empty: this call fills them. False when
+  // bytes is not a record, which the first pass then parses at once. When the
+  // budget is spent, the record waits without its bytes.
+  bool HoldWaiting(Waiting added, std::span<const BYTE> bytes) {
     if (bytes.size() != record_size_) {
       return false;
     }
-    Waiting added{.record = record,
-                  .entry_index = entry_index,
-                  .header_damaged = header_damaged,
-                  .slot = {},
-                  .list_extents = std::move(list_extents),
-                  .unheld_extensions = {}};
     size_t slot = 0;
     if (Store(bytes, slot)) {
       added.slot = slot;
     }
-    for (const Provisional& extension : TakePending(record)) {
+    for (const Provisional& extension : TakePending(added.record)) {
       Keep(extension, {}, added);
     }
     waiting_.push_back(std::move(added));

@@ -150,8 +150,10 @@ bool Io::FileRecord<S>::Impl::ExtensionImporter::IsGenuine(
       impl_.file_reference.value_or(0) & Mft::mft_record_number_mask;
   return impl_.self->IsDeleted()
              ? Mft::IsGenuineFreedExtensionRecord(
-                   sequence_number, extension.GetSequenceNumber(),
-                   !extension.IsDeleted(), extension.GetBaseRecordReference(),
+                   sequence_number,
+                   {.sequence = extension.GetSequenceNumber(),
+                    .in_use = !extension.IsDeleted(),
+                    .base_ref = extension.GetBaseRecordReference()},
                    listing_record)
              : Mft::IsGenuineExtensionRecord(
                    sequence_number, extension.GetSequenceNumber(),
