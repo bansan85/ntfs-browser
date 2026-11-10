@@ -39,7 +39,7 @@ template <Cache::Strategy S>
 ParsedRecord<S> OpenListRecord(std::vector<BYTE> image, ULONGLONG idx,
                                Attr::Mask mask, VolumeOptions options = {}) {
   ParsedRecord<S> opened = OpenRecord<S>(std::move(image), idx, options);
-  opened.record->SetAttrMask(mask);
+  opened.record->SetParseOptions({.attr_mask = mask});
   return opened;
 }
 

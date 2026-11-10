@@ -163,7 +163,7 @@ struct Opened {
 // Opens the image and parses the root record. The provider is always set,
 // null included, so that no test ever reaches the real certificate store.
 // "mask" is nullopt for the default Mask::ALL; passing one exercises the
-// same SetAttrMask() a caller narrowing to Mask::DATA would use. "options"
+// same attr_mask a caller narrowing to Mask::DATA would use. "options"
 // defaults to strict; a test of a salvageable condition passes recover_errors.
 // "backend" is nullopt for the volume's default.
 template <Cache::Strategy S>
@@ -187,7 +187,7 @@ Opened<S> OpenVolume(std::vector<BYTE> image,
   opened.record = std::make_unique<NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>>(
       *opened.volume);
   if (mask) {
-    opened.record->SetAttrMask(*mask);
+    opened.record->SetParseOptions({.attr_mask = *mask});
   }
   REQUIRE(
       opened.record->ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));

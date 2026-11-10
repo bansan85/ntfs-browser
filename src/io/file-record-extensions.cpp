@@ -36,10 +36,11 @@ Io::FileRecord<S>::Impl::ExtensionImporter::ExtensionImporter(
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::Impl::ExtensionImporter::NamesOtherBase(
     ULONGLONG record_number, ULONGLONG listing_record) const {
-  if (!impl_.base_source) {
+  if (!impl_.options.base_source) {
     return false;
   }
-  const std::optional<ULONGLONG> base = impl_.base_source(record_number);
+  const std::optional<ULONGLONG> base =
+      impl_.options.base_source(record_number);
   return base && *base != listing_record;
 }
 
@@ -82,7 +83,8 @@ bool Io::FileRecord<S>::Impl::ExtensionImporter::Wants(
   // Skip contained attributes
   // Skip unwanted attributes
   if (record_number == self_ref ||
-      (!static_cast<bool>(entry_mask & impl_.attr_mask) && !claim_only)) {
+      (!static_cast<bool>(entry_mask & impl_.options.attr_mask) &&
+       !claim_only)) {
     return false;
   }
 
@@ -97,8 +99,9 @@ bool Io::FileRecord<S>::Impl::ExtensionImporter::Wants(
 
   // An empty span makes ParseFileRecord() read the record from the disk,
   // unless the caller already saw that the slot names another base.
-  held = impl_.extension_source ? impl_.extension_source(record_number)
-                                : std::span<const BYTE>{};
+  held = impl_.options.extension_source
+             ? impl_.options.extension_source(record_number)
+             : std::span<const BYTE>{};
   if (held.empty() &&
       NamesOtherBase(record_number, self_ref & Mft::mft_record_number_mask)) {
     if (!claim_only) {
@@ -120,13 +123,14 @@ Io::FileRecord<S>* Io::FileRecord<S>::Impl::ExtensionImporter::Open(
   impl_.extension_records.emplace_back(*impl_.volume);
   Io::FileRecord<S>& frnew = impl_.extension_records.back();
 
-  frnew.impl_->attr_mask = claim_only ? static_cast<Attr::Mask>(0) : entry_mask;
-  frnew.impl_->claim_mask =
+  frnew.impl_->options.attr_mask =
+      claim_only ? static_cast<Attr::Mask>(0) : entry_mask;
+  frnew.impl_->options.claim_mask =
       claim_only ? entry_mask : static_cast<Attr::Mask>(0);
-  frnew.impl_->attr_raw_call_back = impl_.attr_raw_call_back;
-  frnew.impl_->extension_source = impl_.extension_source;
-  frnew.impl_->base_source = impl_.base_source;
-  frnew.impl_->read_refusal = impl_.read_refusal;
+  frnew.impl_->options.attr_raw_callbacks = impl_.options.attr_raw_callbacks;
+  frnew.impl_->options.extension_source = impl_.options.extension_source;
+  frnew.impl_->options.base_source = impl_.options.base_source;
+  frnew.impl_->options.read_refusal = impl_.options.read_refusal;
   if (!frnew.ParseFileRecord(record_number, held)) {
     if (claim_only) {
       impl_.extension_records.pop_back();
@@ -161,8 +165,9 @@ void Io::FileRecord<S>::Impl::ExtensionImporter::Import(ULONGLONG record_number,
   const Attr::Mask entry_mask = Attr::AttrMask(attr_type);
   // A type that is only claimed is listed, not parsed: nothing about it may
   // fail the parse of this record.
-  const bool claim_only = !static_cast<bool>(entry_mask & impl_.attr_mask) &&
-                          static_cast<bool>(entry_mask & impl_.claim_mask);
+  const bool claim_only =
+      !static_cast<bool>(entry_mask & impl_.options.attr_mask) &&
+      static_cast<bool>(entry_mask & impl_.options.claim_mask);
   std::span<const BYTE> held;
   const Request request{record_number, attr_type, claim_only};
   if (!Wants(request, held)) {

@@ -701,7 +701,7 @@ TEST_CASE("The volume label of orphan.mft is read from its $Volume record",
   CHECK(volume->GetVersion().first >= 3);
 
   FileRecord<Cache::Strategy::NoCache> record(*volume);
-  record.SetAttrMask(Attr::Mask::VolumeName);
+  record.SetParseOptions({.attr_mask = Attr::Mask::VolumeName});
   REQUIRE(record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Volume)));
   REQUIRE(record.ParseAttrs());
   const auto& names = record.GetAttr(Attr::Type::VolumeName);
@@ -741,7 +741,7 @@ TEST_CASE("Real 4096-byte records keep their resident data",
   for (const Resident& expected : files) {
     CAPTURE(expected.record);
     FileRecord<Cache::Strategy::NoCache> record(*volume);
-    record.SetAttrMask(Attr::Mask::Data);
+    record.SetParseOptions({.attr_mask = Attr::Mask::Data});
     REQUIRE(record.ParseFileRecord(expected.record));
     REQUIRE(record.ParseAttrs());
     const auto& streams = record.GetAttr(Attr::Type::Data);
@@ -785,7 +785,7 @@ TEST_CASE("The run lists of mapping_pairs_1.mft decode to their extents",
   for (const Mapping& mapping : mappings) {
     CAPTURE(mapping.record);
     FileRecord<Cache::Strategy::NoCache> record(*volume);
-    record.SetAttrMask(Attr::Mask::Data);
+    record.SetParseOptions({.attr_mask = Attr::Mask::Data});
     REQUIRE(record.ParseFileRecord(mapping.record));
 #ifdef NTFS_BROWSER_ENABLE_DECOMPRESSION
     REQUIRE(record.ParseAttrs());
@@ -824,7 +824,7 @@ TEST_CASE("The fragmented $MFT of ntfs_frag_mft.bin reads in five runs",
   CHECK(volume.GetRecordsCount() == 3072);
 
   FileRecord<Cache::Strategy::NoCache> record(volume);
-  record.SetAttrMask(Attr::Mask::Data);
+  record.SetParseOptions({.attr_mask = Attr::Mask::Data});
   REQUIRE(record.ParseFileRecord(0));
   REQUIRE(record.ParseAttrs());
   const auto& streams = record.GetAttr(Attr::Type::Data);

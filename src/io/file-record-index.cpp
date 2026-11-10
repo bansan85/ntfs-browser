@@ -195,7 +195,8 @@ void Io::DirectoryIndex<S>::TraverseWithStanding(
     const StandingCallback& se_call_back, void* context) const {
   assert(se_call_back);
 
-  EntryProber<S> prober(record_.GetVolume(), &record_.GetProbeStore());
+  EntryProber<S> prober(record_.GetVolume(),
+                        &record_.GetParseOptions().probe_store);
   WalkTarget<S> target;
   target.standing = &se_call_back;
   target.context = context;

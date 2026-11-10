@@ -97,8 +97,9 @@ class DirectoryWalk {
         stop_(std::move(stop)),
         folder_(volume),
         probe_(volume) {
-    folder_.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
-    probe_.SetAttrMask(Attr::Mask::Data);
+    folder_.SetParseOptions(
+        {.attr_mask = Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation});
+    probe_.SetParseOptions({.attr_mask = Attr::Mask::Data});
   }
 
   // Enters the folder that inside names and lists it, and everything below it

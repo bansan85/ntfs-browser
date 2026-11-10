@@ -174,8 +174,9 @@ void FuzzOnce(unsigned seed) {
     }
 
     NTFS_BROWSER_NAMESPACE::Io::FileRecord fr(volume);
-    fr.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
-                   NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+    fr.SetParseOptions(
+        {.attr_mask = NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                      NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation});
     if (!fr.ParseFileRecord(
             static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root))) {
       // file_record_ is guaranteed empty here, exercising IsDeleted()/

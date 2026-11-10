@@ -42,7 +42,7 @@ template <Cache::Strategy S>
 AttrIndexAlloc<S>::AttrIndexAlloc(const HeaderCommon& ahc,
                                   const Io::FileRecord<S>& file_record)
     : AttrNonResident<S>(ahc, file_record),
-      block_source_(file_record.GetIndexBlockSource()),
+      block_source_(file_record.GetParseOptions().index_block_source),
       source_directory_(file_record.GetFileReference().value_or(0)) {
   Log::Trace("Attribute: Index Allocation");
 

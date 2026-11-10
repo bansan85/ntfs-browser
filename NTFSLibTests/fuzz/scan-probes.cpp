@@ -332,8 +332,9 @@ void ProbeStandingWalk(std::span<const BYTE> data, const VolumeOptions& options,
     return;
   }
   FileRecord<S> root(volume);
-  root.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
-                   NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+  root.SetParseOptions(
+      {.attr_mask = NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                    NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation});
   if (!root.ParseFileRecord(
           static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root)) ||
       !root.ParseAttrs()) {
@@ -361,8 +362,9 @@ void ProbeDirectoryReadAhead(std::span<const BYTE> data,
     return;
   }
   FileRecord<S> listing(volume);
-  listing.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
-                      NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+  listing.SetParseOptions(
+      {.attr_mask = NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                    NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation});
   if (!listing.ParseFileRecord(
           static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root)) ||
       !listing.ParseAttrs()) {

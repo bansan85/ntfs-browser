@@ -60,7 +60,7 @@ CountedListRecord<S> OpenCountedListRecord(const VolumeOptions& options = {}) {
   ParsedRecord<S> opened = OpenRecordFrom<S>(
       std::move(reader), TestFakeImage::attr_list_lifetime_base_idx, options);
   // Only ParseAttrs() reads the mask.
-  opened.record->SetAttrMask(Attr::Mask::Data);
+  opened.record->SetParseOptions({.attr_mask = Attr::Mask::Data});
   return {std::move(opened), counting};
 }
 

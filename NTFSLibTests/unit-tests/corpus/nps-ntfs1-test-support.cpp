@@ -41,8 +41,9 @@ std::wstring Widen(std::string_view narrow) {
 void ParseDir(NTFS_BROWSER_NAMESPACE::Io::FileRecord<
                   NTFS_BROWSER_NAMESPACE::Cache::Strategy::NoCache>& dir,
               ULONGLONG file_ref) {
-  dir.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
-                  NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+  dir.SetParseOptions(
+      {.attr_mask = NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                    NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation});
   REQUIRE(dir.ParseFileRecord(file_ref));
   REQUIRE(dir.ParseAttrs());
 }
@@ -76,7 +77,7 @@ void OpenFile(NTFS_BROWSER_NAMESPACE::Io::FileRecord<
   const std::optional<IndexEntry> entry = dir.FindSubEntry(Widen(name));
   REQUIRE(entry.has_value());
 
-  file.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::Data);
+  file.SetParseOptions({.attr_mask = NTFS_BROWSER_NAMESPACE::Attr::Mask::Data});
   REQUIRE(file.ParseFileRecord(
       NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(entry).GetFileReference()));
   REQUIRE(file.ParseAttrs());

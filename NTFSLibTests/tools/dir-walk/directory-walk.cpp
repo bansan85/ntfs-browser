@@ -529,7 +529,8 @@ int ListFrom(NtfsVolume<S>& volume, const ListTarget& target, bool recursive,
   Io::FileRecord<S> fr(volume);
   // we only need INDEX_ROOT and INDEX_ALLOCATION
   // don't waste time and ram to parse unwanted attributes
-  fr.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  fr.SetParseOptions(
+      {.attr_mask = Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation});
   if (!EnterDirectories(fr, target.label, target.path)) {
     return -1;
   }

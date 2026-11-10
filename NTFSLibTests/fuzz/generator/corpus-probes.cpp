@@ -77,7 +77,8 @@ void CorpusProbes::Require(bool ok, std::string_view what) {
 }
 
 void CorpusProbes::OpenRootDir(Record& dir) {
-  dir.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  dir.SetParseOptions(
+      {.attr_mask = Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation});
   Require(dir.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)),
           "the root record does not parse");
   Require(dir.ParseAttrs(), "the root attributes do not parse");
@@ -86,7 +87,8 @@ void CorpusProbes::OpenRootDir(Record& dir) {
 void CorpusProbes::OpenSubDir(Record& dir, std::wstring_view name) {
   const std::optional<IndexEntry> entry = dir.FindSubEntry(name);
   Require(entry.has_value(), "a directory is missing");
-  dir.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  dir.SetParseOptions(
+      {.attr_mask = Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation});
   Require(dir.ParseFileRecord(entry->GetFileReference()),
           "a directory record does not parse");
   Require(dir.ParseAttrs(), "a directory has bad attributes");
@@ -109,7 +111,7 @@ void CorpusProbes::ReadNpsDirectory(const Volume& volume,
     Require(entry.has_value(), "a file is missing");
 
     Record file(volume);
-    file.SetAttrMask(Attr::Mask::Data);
+    file.SetParseOptions({.attr_mask = Attr::Mask::Data});
     Require(file.ParseFileRecord(entry->GetFileReference()),
             "a file record does not parse");
     Require(file.ParseAttrs(), "a file has bad attributes");
@@ -130,7 +132,7 @@ void CorpusProbes::ReadRepairStreams(const Volume& volume) {
   Require(entry.has_value(), "$Repair is missing");
 
   Record file(volume);
-  file.SetAttrMask(Attr::Mask::Data);
+  file.SetParseOptions({.attr_mask = Attr::Mask::Data});
   Require(file.ParseFileRecord(entry->GetFileReference()),
           "the $Repair record does not parse");
   Require(file.ParseAttrs(), "the $Repair attributes do not parse");
@@ -149,7 +151,7 @@ void CorpusProbes::ReadKeywordFile(const Volume& volume, ULONGLONG mft_record,
                                    std::wstring_view stream_name,
                                    ULONGLONG size) {
   Record record(volume);
-  record.SetAttrMask(Attr::Mask::Data);
+  record.SetParseOptions({.attr_mask = Attr::Mask::Data});
   Require(record.ParseFileRecord(mft_record), "a keyword record is missing");
   Require(record.ParseAttrs(), "a keyword record has bad attributes");
 
@@ -166,7 +168,8 @@ void CorpusProbes::ReadDeletedFile(const Volume& volume, ULONGLONG mft_record,
                                    std::wstring_view stream_name,
                                    ULONGLONG size) {
   Record record(volume);
-  record.SetAttrMask(Attr::Mask::Data | Attr::Mask::StandardInformation);
+  record.SetParseOptions(
+      {.attr_mask = Attr::Mask::Data | Attr::Mask::StandardInformation});
   Require(record.ParseFileRecord(mft_record), "a deleted record is missing");
   Require(record.ParseAttrs(), "a deleted record has bad attributes");
 
@@ -189,7 +192,7 @@ void CorpusProbes::AutodetectPartition(const Opener& open) {
   Require(entry.has_value(), "ntfs.txt is missing");
 
   Record file(volume);
-  file.SetAttrMask(Attr::Mask::Data);
+  file.SetParseOptions({.attr_mask = Attr::Mask::Data});
   Require(file.ParseFileRecord(entry->GetFileReference()),
           "the ntfs.txt record does not parse");
   Require(file.ParseAttrs(), "the ntfs.txt attributes do not parse");
@@ -214,7 +217,7 @@ void CorpusProbes::KeywordSearch(const Opener& open) {
   ReadKeywordFile(deleted_volume, kw_deleted_record, {}, kw_resident_size);
 
   Record slack(volume);
-  slack.SetAttrMask(Attr::Mask::Data);
+  slack.SetParseOptions({.attr_mask = Attr::Mask::Data});
   Require(slack.ParseFileRecord(kw_slack_record),
           "the slack record is missing");
   Require(slack.ParseAttrs(), "the slack record has bad attributes");
@@ -270,7 +273,7 @@ void CorpusProbes::LastAccess(const Opener& open) {
   Require(entry.has_value(), "1.txt is missing");
 
   Record file(volume);
-  file.SetAttrMask(Attr::Mask::StandardInformation);
+  file.SetParseOptions({.attr_mask = Attr::Mask::StandardInformation});
   Require(file.ParseFileRecord(entry->GetFileReference()),
           "the 1.txt record does not parse");
   Require(file.ParseAttrs(), "the 1.txt attributes do not parse");
@@ -288,7 +291,8 @@ void CorpusProbes::SiVsFn(const Opener& open) {
   Require(entry.has_value(), "test.txt is missing");
 
   Record file(volume);
-  file.SetAttrMask(Attr::Mask::StandardInformation | Attr::Mask::FileName);
+  file.SetParseOptions(
+      {.attr_mask = Attr::Mask::StandardInformation | Attr::Mask::FileName});
   Require(file.ParseFileRecord(entry->GetFileReference()),
           "the test.txt record does not parse");
   Require(file.ParseAttrs(), "the test.txt attributes do not parse");
@@ -306,7 +310,7 @@ void CorpusProbes::TwoFileTimes(const Opener& open) {
     Require(entry.has_value(), "a file is missing");
 
     Record file(volume);
-    file.SetAttrMask(Attr::Mask::StandardInformation);
+    file.SetParseOptions({.attr_mask = Attr::Mask::StandardInformation});
     Require(file.ParseFileRecord(entry->GetFileReference()),
             "a file record does not parse");
     Require(file.ParseAttrs(), "a file has bad attributes");

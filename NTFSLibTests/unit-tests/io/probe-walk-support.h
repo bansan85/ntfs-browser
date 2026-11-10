@@ -84,8 +84,9 @@ template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 [[nodiscard]] std::map<ULONGLONG, std::vector<BYTE>>
     BlocksOf(const NtfsVolume<S>& volume, ULONGLONG directory) {
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(volume);
-  record.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
-                     NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+  record.SetParseOptions(
+      {.attr_mask = NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                    NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation});
   REQUIRE(record.ParseFileRecord(directory));
   REQUIRE(record.ParseAttrs());
 
@@ -150,16 +151,18 @@ template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
                                           ULONGLONG directory,
                                           const WalkSetup& setup) {
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(*open.volume);
-  record.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
-                     NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+  NTFS_BROWSER_NAMESPACE::Io::RecordParseOptions options{
+      .attr_mask = NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                   NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation};
   if (setup.held != nullptr) {
-    record.SetIndexBlockSource(
+    options.index_block_source =
         [held = setup.held](ULONGLONG, ULONGLONG vcn) -> std::span<const BYTE> {
-          const auto block = held->find(vcn);
-          return block == held->end() ? std::span<const BYTE>()
-                                      : std::span<const BYTE>(block->second);
-        });
+      const auto block = held->find(vcn);
+      return block == held->end() ? std::span<const BYTE>()
+                                  : std::span<const BYTE>(block->second);
+    };
   }
+  record.SetParseOptions(std::move(options));
   REQUIRE(record.ParseFileRecord(directory));
   REQUIRE(record.ParseAttrs());
 
@@ -175,7 +178,7 @@ template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
   walk.recovered_by_groups =
       NTFS_BROWSER_NAMESPACE::Log::Detail::RecoveredCount() - recovered;
 
-  typename NTFS_BROWSER_NAMESPACE::Io::FileRecord<S>::ProbeStore store;
+  NTFS_BROWSER_NAMESPACE::Io::ProbeStore store;
   if (!setup.note_only) {
     store.find = [&walk, &setup](ULONGLONG slot) -> std::span<const BYTE> {
       walk.asked.push_back(slot);
@@ -194,7 +197,10 @@ template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
   store.ran = [&walk](ULONGLONG first, ULONGLONG count) {
     walk.ran.emplace_back(first, count);
   };
-  record.SetProbeStore(store);
+  NTFS_BROWSER_NAMESPACE::Io::RecordParseOptions with_store =
+      record.GetParseOptions();
+  with_store.probe_store = store;
+  record.SetParseOptions(std::move(with_store));
 
   open.reads->Reset();
   record.TraverseSubEntriesWithStanding(

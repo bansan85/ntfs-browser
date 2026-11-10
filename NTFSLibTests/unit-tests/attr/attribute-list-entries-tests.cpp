@@ -307,9 +307,11 @@ TEMPLATE_TEST_CASE_SIG(
       OpenUnparsed<S>(TestFakeImage::BuildFakeNtfsImageWithExtensionLink(
           TestFakeImage::genuine_extension_link));
 
-  REQUIRE(record.record->InstallAttrRawCB(
+  NTFS_BROWSER_NAMESPACE::Io::RecordParseOptions options;
+  REQUIRE(options.SetRawCallback(
       Attr::Type::Data, [](const NTFS_BROWSER_NAMESPACE::Attr::HeaderCommon&,
                            bool& discard) { discard = true; }));
+  record.record->SetParseOptions(options);
   REQUIRE(record.record->ParseFileRecord(
       TestFakeImage::attr_list_lifetime_base_idx));
   REQUIRE(record.record->ParseAttrs());

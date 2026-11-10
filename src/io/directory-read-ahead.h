@@ -89,7 +89,7 @@ struct DirectoryReadAheadStats {
 // side by side in $MFT would read the same clusters twice: this class also
 // keeps the runs of $MFT that the probes and its own batches read last, up to
 // Tuning::WalkTuning::record_window_bytes, and hands them to the listing's
-// FileRecord (FileRecord::SetProbeStore() and SetRecordSource()). A FullCache
+// FileRecord (FileRecord::SetParseOptions()). A FullCache
 // volume has its block cache and keeps none. The listing, its log and the
 // reads that are not held do not change. It also keeps, for many more records
 // than the window holds, the few bytes of a record that a probe reads

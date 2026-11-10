@@ -189,11 +189,12 @@ void FuzzRootRecord(const NtfsVolume<S>& volume) {
   // Without DATA here, FindStream() below never sees a named $DATA
   // attribute on ROOT to walk. BITMAP and OBJECT_ID reach AttrBitmap and
   // the unhandled-attribute path of ParseAttr().
-  file_record.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
-                          NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation |
-                          NTFS_BROWSER_NAMESPACE::Attr::Mask::Data |
-                          NTFS_BROWSER_NAMESPACE::Attr::Mask::Bitmap |
-                          NTFS_BROWSER_NAMESPACE::Attr::Mask::ObjectId);
+  file_record.SetParseOptions(
+      {.attr_mask = NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                    NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation |
+                    NTFS_BROWSER_NAMESPACE::Attr::Mask::Data |
+                    NTFS_BROWSER_NAMESPACE::Attr::Mask::Bitmap |
+                    NTFS_BROWSER_NAMESPACE::Attr::Mask::ObjectId});
   if (!file_record.ParseFileRecord(
           static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root))) {
     // file_record_ is guaranteed empty here, exercising IsDeleted()/
@@ -368,8 +369,9 @@ constexpr std::wstring_view supplementary_search_name = L"\U0001F41C";
 template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 void ProbeSupplementarySearch(const NtfsVolume<S>& volume) {
   NTFS_BROWSER_NAMESPACE::Io::FileRecord file_record(volume);
-  file_record.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
-                          NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+  file_record.SetParseOptions(
+      {.attr_mask = NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                    NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation});
   if (file_record.ParseFileRecord(
           static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root)) &&
       file_record.ParseAttrs()) {
@@ -404,8 +406,9 @@ std::wstring FlippedCase(std::wstring_view name) {
 template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 void ProbeCaseSearch(const NtfsVolume<S>& volume) {
   NTFS_BROWSER_NAMESPACE::Io::FileRecord file_record(volume);
-  file_record.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
-                          NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+  file_record.SetParseOptions(
+      {.attr_mask = NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                    NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation});
   if (!file_record.ParseFileRecord(
           static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root)) ||
       !file_record.ParseAttrs()) {
@@ -519,7 +522,8 @@ void ProbeAllocation(const NtfsVolume<S>& volume) {
 
   const auto probe_record = [&volume](ULONGLONG record) {
     NTFS_BROWSER_NAMESPACE::Io::FileRecord file_record(volume);
-    file_record.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::Data);
+    file_record.SetParseOptions(
+        {.attr_mask = NTFS_BROWSER_NAMESPACE::Attr::Mask::Data});
     if (!file_record.ParseFileRecord(record) || !file_record.ParseAttrs()) {
       return;
     }
@@ -597,16 +601,18 @@ void ProbeVolumeApi(NtfsVolume<S>& volume) {
   (void)volume.InstallAttrRawCB(NTFS_BROWSER_NAMESPACE::Attr::Type::IndexRoot,
                                 KeepAttr);
   NTFS_BROWSER_NAMESPACE::Io::FileRecord file_record(volume);
-  (void)file_record.InstallAttrRawCB(unknown_attr_type, DiscardAttr);
-  (void)file_record.InstallAttrRawCB(
+  NTFS_BROWSER_NAMESPACE::Io::RecordParseOptions raw_options;
+  (void)raw_options.SetRawCallback(unknown_attr_type, DiscardAttr);
+  (void)raw_options.SetRawCallback(
       NTFS_BROWSER_NAMESPACE::Attr::Type::StandardInformation, DiscardAttr);
-  (void)file_record.InstallAttrRawCB(
-      NTFS_BROWSER_NAMESPACE::Attr::Type::FileName, KeepAttr);
+  (void)raw_options.SetRawCallback(NTFS_BROWSER_NAMESPACE::Attr::Type::FileName,
+                                   KeepAttr);
+  file_record.SetParseOptions(raw_options);
   if (file_record.ParseFileRecord(
           static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root))) {
     (void)file_record.ParseAttrs();
   }
-  file_record.ClearAttrRawCB();
+  file_record.SetParseOptions({});
   volume.ClearAttrRawCB();
 }
 

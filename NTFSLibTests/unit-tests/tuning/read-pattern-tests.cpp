@@ -198,8 +198,9 @@ TEST_CASE("The batched walk probes in M2", "[tuning][read-pattern]") {
       VolumeOptions{});
   REQUIRE(volume.IsVolumeOK());
   Io::FileRecord<Cache::Strategy::NoCache> root(volume);
-  root.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
-                   NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+  root.SetParseOptions(
+      {.attr_mask = NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                    NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation});
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
   seen->clear();

@@ -42,8 +42,9 @@ VolumeRecordLoader<S>::VolumeRecordLoader(const NtfsVolume<S>& volume) noexcept
 
 template <Cache::Strategy S>
 bool VolumeRecordLoader<S>::ParseRecord(Io::FileRecord<S>& vol) {
-  vol.SetBypassDeletedGate(true);
-  vol.SetAttrMask(Attr::Mask::VolumeName | Attr::Mask::VolumeInformation);
+  vol.SetParseOptions(
+      {.attr_mask = Attr::Mask::VolumeName | Attr::Mask::VolumeInformation,
+       .bypass_deleted_gate = true});
   if (!vol.ParseFileRecord(static_cast<DWORD>(Mft::Idx::Volume)) ||
       !vol.ParseAttrs()) {
     return false;

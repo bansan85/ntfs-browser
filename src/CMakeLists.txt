@@ -169,6 +169,7 @@ set(
   "io/extended-path.h"
   "io/file-record.h"
   "io/read-ahead-disk-reader.h"
+  "io/record-parse-options.h"
   "io/record-standing.h"
   "index-entry.h"
   "log/log.h"

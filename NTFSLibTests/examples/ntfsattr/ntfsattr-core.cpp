@@ -123,7 +123,8 @@ std::wstring_view EntryName(const std::vector<std::wstring_view>& parts) {
 Failure OpenRoot(Record& fr) {
   // we only need to parse INDEX_ROOT and INDEX_ALLOCATION
   // don't waste time and ram to parse unwanted attributes
-  fr.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  fr.SetParseOptions(
+      {.attr_mask = Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation});
   if (!fr.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root))) {
     return L"Cannot read root directory of volume";
   }
@@ -160,7 +161,7 @@ Failure OpenEntry(Record& fr, std::wstring_view name) {
     return L"Cannot read file";
   }
   // parse all attributes
-  fr.SetAttrMask(Attr::Mask::All);
+  fr.SetParseOptions({.attr_mask = Attr::Mask::All});
   if (!fr.ParseAttrs()) {
     return L"Cannot parse file attributes";
   }

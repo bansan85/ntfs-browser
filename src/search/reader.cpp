@@ -301,7 +301,7 @@ class Reader::Impl {
       return ReadError::None;
     }
     record_->ClearAttrs();
-    record_->SetAttrMask(mask);
+    record_->SetParseOptions({.attr_mask = mask});
     if (!record_->ParseAttrs()) {
       Log::Error("The attributes of record {} do not parse",
                  parsed_record_.value_or(0));

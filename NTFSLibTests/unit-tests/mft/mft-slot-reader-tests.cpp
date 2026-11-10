@@ -171,7 +171,8 @@ Snapshot ReaderSnapshot(Mft::SlotReader<S>& reader,
 // Prepares file_record to read the attributes the tree scan reads.
 template <Cache::Strategy S>
 void SetScanMask(Io::FileRecord<S>& file_record) {
-  file_record.SetAttrMask(Attr::Mask::FileName | Attr::Mask::Data);
+  file_record.SetParseOptions(
+      {.attr_mask = Attr::Mask::FileName | Attr::Mask::Data});
 }
 
 // Checks that, with blocks of block_bytes, reader gives every slot the

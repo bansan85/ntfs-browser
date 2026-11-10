@@ -103,8 +103,9 @@ template <Strategy S>
 std::optional<IndexEntry> FindInDocs(NtfsVolume<S>& volume,
                                      std::wstring_view name) {
   FileRecord<S> docs(volume);
-  docs.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
-                   NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+  docs.SetParseOptions(
+      {.attr_mask = NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                    NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation});
   REQUIRE(docs.ParseFileRecord(
       NTFS_BROWSER_NAMESPACE::Test::FakeImage::mft_tree_docs_idx));
   REQUIRE(docs.ParseAttrs());

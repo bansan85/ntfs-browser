@@ -47,8 +47,9 @@ template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
   using NTFS_BROWSER_NAMESPACE::Io::FileRecord;
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> current(volume);
-  current.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
-                      NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+  current.SetParseOptions(
+      {.attr_mask = NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                    NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation});
   if (!current.ParseFileRecord(
           static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root)) ||
       !current.ParseAttrs()) {
@@ -125,8 +126,9 @@ template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
     stack.pop_back();
 
     NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> dir(volume);
-    dir.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
-                    NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+    dir.SetParseOptions(
+        {.attr_mask = NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                      NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation});
     if (!dir.ParseFileRecord(frame.record) || !dir.ParseAttrs()) {
       continue;
     }

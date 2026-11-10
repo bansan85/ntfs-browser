@@ -50,7 +50,7 @@ TEST_CASE(
       nullptr, nullptr, &index_access);
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> file(volume);
-  file.SetAttrMask(Attr::Mask::StandardInformation);
+  file.SetParseOptions({.attr_mask = Attr::Mask::StandardInformation});
   REQUIRE(file.ParseFileRecord(
       NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(entry).GetFileReference()));
   REQUIRE(file.ParseAttrs());
@@ -88,7 +88,8 @@ TEST_CASE(
       nullptr, &index_create, nullptr);
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> file(volume);
-  file.SetAttrMask(Attr::Mask::StandardInformation | Attr::Mask::FileName);
+  file.SetParseOptions(
+      {.attr_mask = Attr::Mask::StandardInformation | Attr::Mask::FileName});
   REQUIRE(file.ParseFileRecord(
       NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(entry).GetFileReference()));
   REQUIRE(file.ParseAttrs());
@@ -149,7 +150,7 @@ TEST_CASE(
 
         NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> file(
             volume);
-        file.SetAttrMask(Attr::Mask::StandardInformation);
+        file.SetParseOptions({.attr_mask = Attr::Mask::StandardInformation});
         REQUIRE(file.ParseFileRecord(entry->GetFileReference()));
         REQUIRE(file.ParseAttrs());
 

@@ -80,7 +80,8 @@ std::uint64_t RunsPlannedOn(const ImageFile& file,
   NtfsVolume<S> volume(file.Path().wstring(), options);
   REQUIRE(volume.IsVolumeOK());
   Io::FileRecord<S> listing(volume);
-  listing.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  listing.SetParseOptions(
+      {.attr_mask = Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation});
   REQUIRE(listing.ParseFileRecord(
       static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root)));
   REQUIRE(listing.ParseAttrs());

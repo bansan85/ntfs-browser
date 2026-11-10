@@ -254,7 +254,8 @@ std::vector<std::wstring> RootNames(std::vector<BYTE> image,
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
-  root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  root.SetParseOptions(
+      {.attr_mask = Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation});
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
 
@@ -485,16 +486,20 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(file.ParseFileRecord(scratch_idx));
 
   SECTION("discarded before it is wrapped") {
-    CHECK(file.InstallAttrRawCB(Attr::Type::Data,
-                                [](const Attr::HeaderCommon& /*head*/,
-                                   bool& discard) { discard = true; }));
+    NTFS_BROWSER_NAMESPACE::Io::RecordParseOptions options;
+    CHECK(options.SetRawCallback(Attr::Type::Data,
+                                 [](const Attr::HeaderCommon& /*head*/,
+                                    bool& discard) { discard = true; }));
+    file.SetParseOptions(options);
     REQUIRE(file.ParseAttrs());
     CHECK(file.GetAttr(Attr::Type::Data).empty());
   }
   SECTION("kept when the callback leaves discard clear") {
-    CHECK(file.InstallAttrRawCB(
+    NTFS_BROWSER_NAMESPACE::Io::RecordParseOptions options;
+    CHECK(options.SetRawCallback(
         Attr::Type::Data,
         [](const Attr::HeaderCommon& /*head*/, bool& /*discard*/) {}));
+    file.SetParseOptions(options);
     REQUIRE(file.ParseAttrs());
     CHECK(file.GetAttr(Attr::Type::Data).size() == 1);
   }
@@ -586,7 +591,8 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<S> root(volume);
-  root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  root.SetParseOptions(
+      {.attr_mask = Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation});
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
 

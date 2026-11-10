@@ -202,7 +202,8 @@ std::optional<ULONGLONG>
     FindFolder(const NtfsVolume<Cache::Strategy::NoCache>& volume,
                const std::vector<std::wstring>& inside) {
   Io::FileRecord<Cache::Strategy::NoCache> folder(volume);
-  folder.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  folder.SetParseOptions(
+      {.attr_mask = Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation});
   if (!folder.ParseFileRecord(root_record) || !folder.ParseAttrs()) {
     Log::Error("Cannot read root directory of the volume");
     return std::nullopt;

@@ -60,8 +60,9 @@ template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 [[nodiscard]] std::vector<std::wstring>
     WalkRoot(const NTFS_BROWSER_NAMESPACE::NtfsVolume<S>& volume) {
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
-  root.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
-                   NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+  root.SetParseOptions(
+      {.attr_mask = NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                    NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation});
   REQUIRE(root.ParseFileRecord(
       static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());

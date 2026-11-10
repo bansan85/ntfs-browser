@@ -59,7 +59,8 @@ void CheckReadsPartitionImage(std::wstring_view image_name,
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord root(volume);
-  root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  root.SetParseOptions(
+      {.attr_mask = Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation});
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
 
@@ -70,7 +71,7 @@ void CheckReadsPartitionImage(std::wstring_view image_name,
   CHECK(NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(entry).GetFileSize() > 0);
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord file(volume);
-  file.SetAttrMask(Attr::Mask::Data);
+  file.SetParseOptions({.attr_mask = Attr::Mask::Data});
   REQUIRE(file.ParseFileRecord(
       NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(entry).GetFileReference()));
   REQUIRE(file.ParseAttrs());
@@ -156,7 +157,7 @@ constexpr ULONGLONG slack_record = 36;
 void CheckReadsKeywordFile(const NtfsVolume<Cache::Strategy::NoCache>& volume,
                            const KeywordFile& file) {
   NTFS_BROWSER_NAMESPACE::Io::FileRecord record(volume);
-  record.SetAttrMask(Attr::Mask::Data);
+  record.SetParseOptions({.attr_mask = Attr::Mask::Data});
   REQUIRE(record.ParseFileRecord(file.mft_record));
   CHECK(record.IsDeleted() == file.deleted);
   REQUIRE(record.ParseAttrs());
@@ -210,7 +211,7 @@ TEST_CASE("Reads DFTT test #3 (NTFS Keyword Search) files",
   // file's slack space, past its logical size. ReadData()/GetDataSize()
   // expose only the file's own content, so the term MUST NOT be found there.
   NTFS_BROWSER_NAMESPACE::Io::FileRecord slack(volume);
-  slack.SetAttrMask(Attr::Mask::Data);
+  slack.SetParseOptions({.attr_mask = Attr::Mask::Data});
   REQUIRE(slack.ParseFileRecord(slack_record));
   REQUIRE(slack.ParseAttrs());
   const NTFS_BROWSER_NAMESPACE::Attr::AttrBase<Cache::Strategy::NoCache>*
@@ -281,7 +282,8 @@ void CheckRecoversDeletedFile(
     const NtfsVolume<Cache::Strategy::NoCache>& volume,
     const DeletedFile& file) {
   NTFS_BROWSER_NAMESPACE::Io::FileRecord record(volume);
-  record.SetAttrMask(Attr::Mask::Data | Attr::Mask::StandardInformation);
+  record.SetParseOptions(
+      {.attr_mask = Attr::Mask::Data | Attr::Mask::StandardInformation});
   REQUIRE(record.ParseFileRecord(file.mft_record));
   CHECK(record.IsDeleted());
   REQUIRE(record.ParseAttrs());

@@ -28,8 +28,8 @@ std::unique_ptr<Io::FileRecord<S>>
   }
 
   auto record = std::make_unique<Io::FileRecord<S>>(*volume_);
-  record->SetBypassDeletedGate(true);
-  record->SetAttrMask(Attr::Mask::Data);
+  record->SetParseOptions(
+      {.attr_mask = Attr::Mask::Data, .bypass_deleted_gate = true});
   if (!record->ParseFileRecord(index) || !record->ParseAttrs()) {
     return {};
   }

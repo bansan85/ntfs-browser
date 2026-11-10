@@ -107,7 +107,8 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
-  root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  root.SetParseOptions(
+      {.attr_mask = Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation});
   REQUIRE(root.ParseFileRecord(root_idx));
   REQUIRE(root.ParseAttrs());
 
@@ -137,7 +138,8 @@ TEST_CASE("FindSubEntry falls back when a $UpCase read is refused",
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> root(volume);
-  root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  root.SetParseOptions(
+      {.attr_mask = Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation});
   REQUIRE(root.ParseFileRecord(root_idx));
   REQUIRE(root.ParseAttrs());
 

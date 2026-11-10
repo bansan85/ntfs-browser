@@ -76,7 +76,7 @@ std::vector<std::wstring> RootNames(
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
-  root.SetAttrMask(mask);
+  root.SetParseOptions({.attr_mask = mask});
 
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());

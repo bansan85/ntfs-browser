@@ -170,7 +170,7 @@ template <Cache::Strategy S>
 std::unique_ptr<Journal> ReadJournal(const NtfsVolume<S>& volume) {
   const Bench::Detail::KindScope kind(Bench::ReadKind::Journal);
   Io::FileRecord<S> extend(volume);
-  extend.SetBypassDeletedGate(true);
+  extend.SetParseOptions({.bypass_deleted_gate = true});
   if (!extend.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Extend)) ||
       !extend.ParseAttrs()) {
     Log::Debug("USN journal: $Extend does not parse");
@@ -184,8 +184,8 @@ std::unique_ptr<Journal> ReadJournal(const NtfsVolume<S>& volume) {
   }
 
   Io::FileRecord<S> record(volume);
-  record.SetBypassDeletedGate(true);
-  record.SetAttrMask(Attr::Mask::Data);
+  record.SetParseOptions(
+      {.attr_mask = Attr::Mask::Data, .bypass_deleted_gate = true});
   if (!record.ParseFileRecord(entry->GetFileReference()) ||
       !record.ParseAttrs()) {
     Log::Debug("USN journal: $UsnJrnl does not parse");

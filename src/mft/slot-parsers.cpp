@@ -107,13 +107,13 @@ WindowParser<S>::WindowParser(const NtfsVolume<S>& volume, size_t threads,
   for (size_t slot = 0; slot < pool_.Slots(); slot++) {
     Io::FileRecord<S>& context =
         *contexts_.emplace_back(std::make_unique<Io::FileRecord<S>>(volume));
-    context.SetAttrMask(Attr::Mask::FileName | Attr::Mask::Data);
-    if (features.account) {
-      context.SetClaimMask(Attr::Mask::All);
-    }
     // Resolving a list reads the volume, which no worker does. A record with a
     // list never gets to parse its attributes here.
-    context.SetResolveAttrList(false);
+    context.SetParseOptions(
+        {.attr_mask = Attr::Mask::FileName | Attr::Mask::Data,
+         .claim_mask =
+             features.account ? Attr::Mask::All : static_cast<Attr::Mask>(0),
+         .resolve_attr_list = false});
   }
 }
 
@@ -223,15 +223,15 @@ WaitingParser<S>::WaitingParser(const NtfsVolume<S>& volume, size_t threads,
   for (size_t slot = 0; slot < pool_.Slots(); slot++) {
     Context& context =
         *contexts_.emplace_back(std::make_unique<Context>(volume));
-    context.record.SetAttrMask(Attr::Mask::FileName | Attr::Mask::Data);
-    if (features.account) {
-      context.record.SetClaimMask(Attr::Mask::All);
-    }
-    context.record.SetExtensionSource(
-        [&held](ULONGLONG record) { return held.FindExtension(record); });
-    context.record.SetBaseSource(
-        [&bases](ULONGLONG record) { return bases.BaseOf(record); });
-    context.record.SetReadRefusal(&context.refused);
+    context.record.SetParseOptions(
+        {.attr_mask = Attr::Mask::FileName | Attr::Mask::Data,
+         .claim_mask =
+             features.account ? Attr::Mask::All : static_cast<Attr::Mask>(0),
+         .extension_source =
+             [&held](ULONGLONG record) { return held.FindExtension(record); },
+         .base_source =
+             [&bases](ULONGLONG record) { return bases.BaseOf(record); },
+         .read_refusal = &context.refused});
   }
 }
 

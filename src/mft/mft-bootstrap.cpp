@@ -51,15 +51,15 @@ MftBootstrap<S>::MftBootstrap(NtfsVolume<S>& volume)
   // The volume's own metadata reads always see their own content, whatever
   // include_deleted says: a freed $MFT would otherwise make the whole volume
   // unreadable.
-  record_.SetBypassDeletedGate(true);
+  record_.SetParseOptions({.attr_mask = Attr::Mask::Data,
+                           .exact_attr_mask = true,
+                           .bypass_deleted_gate = true});
 }
 
 // Parses $MFT's base record for its DATA attribute. False when it does not
 // parse.
 template <Cache::Strategy S>
 bool MftBootstrap<S>::ParseRecord() {
-  // Skips SetAttrMask()'s automatic ATTRIBUTE_LIST bit (resolved later).
-  record_.SetExactAttrMask(Attr::Mask::Data);
   return record_.ParseFileRecord(static_cast<DWORD>(Idx::Mft)) &&
          record_.ParseAttrs();
 }
@@ -117,9 +117,10 @@ template <Cache::Strategy S>
 void MftBootstrap<S>::ResolveMftDataExtents() {
   // Isolated from record_; resolve_attr_list_ = false skips AttrList.
   Io::FileRecord<S> list_record(*volume_);
-  list_record.SetExactAttrMask(Attr::Mask::AttributeList);
-  list_record.SetResolveAttrList(false);
-  list_record.SetBypassDeletedGate(true);
+  list_record.SetParseOptions({.attr_mask = Attr::Mask::AttributeList,
+                               .exact_attr_mask = true,
+                               .resolve_attr_list = false,
+                               .bypass_deleted_gate = true});
 
   if (!list_record.ParseFileRecord(static_cast<DWORD>(Idx::Mft)) ||
       !list_record.ParseAttrs()) {
@@ -233,8 +234,9 @@ void MftBootstrap<S>::ResolvePendingMftExtension(
     const PendingMftExtension& item, ULONGLONG self_ref) {
   extension_records_.emplace_back(*volume_);
   Io::FileRecord<S>& ext = extension_records_.back();
-  ext.SetExactAttrMask(Attr::Mask::Data);
-  ext.SetBypassDeletedGate(true);
+  ext.SetParseOptions({.attr_mask = Attr::Mask::Data,
+                       .exact_attr_mask = true,
+                       .bypass_deleted_gate = true});
 
   const bool parsed = ext.ParseFileRecord(item.record);
   // A record another file reused since the list was written is not

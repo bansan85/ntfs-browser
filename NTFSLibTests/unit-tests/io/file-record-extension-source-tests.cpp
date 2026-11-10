@@ -150,7 +150,7 @@ TEMPLATE_TEST_CASE_SIG(
     CHECK(extents.front().clusters == 1);
     CHECK(opened.reader->Calls().empty());
     // The list the extents map is the one ParseAttrs() reads.
-    record.SetAttrMask(Attr::Mask::FileName);
+    record.SetParseOptions({.attr_mask = Attr::Mask::FileName});
     REQUIRE(record.ParseAttrs());
     CHECK(record.GetAttr(Attr::Type::FileName).size() == 2);
   }
@@ -186,22 +186,24 @@ TEMPLATE_TEST_CASE_SIG(
   }
 }
 
-TEST_CASE("FileRecord::SetExtensionSource() serves extension records",
+TEST_CASE("RecordParseOptions::extension_source serves extension records",
           "[file-record]") {
   const std::vector<BYTE> image =
       TestFakeImage::BuildFakeNtfsImageWithMftTreeAttributeList();
   const CountedVolume<Cache::Strategy::NoCache> opened =
       OpenCounted<Cache::Strategy::NoCache>(image);
   Io::FileRecord<Cache::Strategy::NoCache> record(*opened.volume);
-  record.SetAttrMask(Attr::Mask::FileName | Attr::Mask::Data);
+  Io::RecordParseOptions options{.attr_mask =
+                                     Attr::Mask::FileName | Attr::Mask::Data};
 
   SECTION("a record the source gives is not read") {
-    record.SetExtensionSource([&image](ULONGLONG idx) {
+    options.extension_source = [&image](ULONGLONG idx) {
       return idx == TestFakeImage::mft_tree_list_low_ext_idx ||
                      idx == TestFakeImage::mft_tree_list_high_ext_idx
                  ? RecordBytes(image, idx)
                  : std::span<const BYTE>{};
-    });
+    };
+    record.SetParseOptions(std::move(options));
     REQUIRE(record.ParseFileRecord(TestFakeImage::mft_tree_list_base_idx));
     opened.reader->Reset();
     REQUIRE(record.ParseAttrs());
@@ -215,8 +217,10 @@ TEST_CASE("FileRecord::SetExtensionSource() serves extension records",
   }
 
   SECTION("a record the source does not give is read, once per list entry") {
-    record.SetExtensionSource(
-        [](ULONGLONG /*idx*/) { return std::span<const BYTE>{}; });
+    options.extension_source = [](ULONGLONG /*idx*/) {
+      return std::span<const BYTE>{};
+    };
+    record.SetParseOptions(std::move(options));
     REQUIRE(record.ParseFileRecord(TestFakeImage::mft_tree_list_base_idx));
     opened.reader->Reset();
     REQUIRE(record.ParseAttrs());
@@ -229,7 +233,7 @@ TEST_CASE("FileRecord::SetExtensionSource() serves extension records",
   }
 }
 
-TEST_CASE("FileRecord::SetBaseSource() spares the read of a foreign slot",
+TEST_CASE("RecordParseOptions::base_source spares the read of a foreign slot",
           "[file-record]") {
   // The hard-linked file, which the Foreign extension names as its base.
   static constexpr ULONGLONG other_base = TestFakeImage::mft_tree_hard_link_idx;
@@ -241,17 +245,20 @@ TEST_CASE("FileRecord::SetBaseSource() spares the read of a foreign slot",
       OpenCounted<Cache::Strategy::NoCache>(
           image, VolumeOptions{.recover_errors = recover});
   Io::FileRecord<Cache::Strategy::NoCache> record(*opened.volume);
-  record.SetAttrMask(Attr::Mask::FileName | Attr::Mask::Data);
-  record.SetExtensionSource(
-      [](ULONGLONG /*idx*/) { return std::span<const BYTE>{}; });
+  Io::RecordParseOptions options{.attr_mask =
+                                     Attr::Mask::FileName | Attr::Mask::Data,
+                                 .extension_source = [](ULONGLONG /*idx*/) {
+                                   return std::span<const BYTE>{};
+                                 }};
 
   SECTION("a slot that names another base is not read") {
-    record.SetBaseSource([](ULONGLONG idx) -> std::optional<ULONGLONG> {
+    options.base_source = [](ULONGLONG idx) -> std::optional<ULONGLONG> {
       if (idx == TestFakeImage::mft_tree_list_low_ext_idx) {
         return TestFakeImage::mft_tree_list_base_idx;
       }
       return other_base;
-    });
+    };
+    record.SetParseOptions(std::move(options));
     REQUIRE(record.ParseFileRecord(TestFakeImage::mft_tree_list_base_idx));
     opened.reader->Reset();
 
@@ -268,11 +275,12 @@ TEST_CASE("FileRecord::SetBaseSource() spares the read of a foreign slot",
 
   SECTION("a slot that names this record, or none, is read") {
     const bool known = GENERATE(false, true);
-    record.SetBaseSource([known](ULONGLONG /*idx*/) {
+    options.base_source = [known](ULONGLONG /*idx*/) {
       return known ? std::optional<
                          ULONGLONG>{TestFakeImage::mft_tree_list_base_idx}
                    : std::nullopt;
-    });
+    };
+    record.SetParseOptions(std::move(options));
     REQUIRE(record.ParseFileRecord(TestFakeImage::mft_tree_list_base_idx));
     opened.reader->Reset();
 

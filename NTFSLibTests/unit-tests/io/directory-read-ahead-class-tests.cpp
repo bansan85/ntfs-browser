@@ -104,8 +104,9 @@ struct Rig {
     volume = std::make_unique<NtfsVolume<S>>(std::move(counting), options);
     REQUIRE(volume->IsVolumeOK());
     listing = std::make_unique<Io::FileRecord<S>>(*volume);
-    listing->SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
-                         NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+    listing->SetParseOptions(
+        {.attr_mask = NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                      NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation});
     REQUIRE(listing->ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     REQUIRE(listing->ParseAttrs());
     reads->Reset();
@@ -434,7 +435,7 @@ TEMPLATE_TEST_CASE_SIG("The read ahead does nothing while it is off",
   CHECK_FALSE(ahead.Enabled());
   CHECK(ahead.Window() == 0);
   CHECK(rig.reads->Calls().empty());
-  CHECK_FALSE(rig.listing->GetIndexBlockSource());
+  CHECK_FALSE(rig.listing->GetParseOptions().index_block_source);
   const Io::DirectoryReadAheadStats stats = ahead.GetStats();
   CHECK(stats.batches == 0);
   CHECK(stats.held_bytes == 0);

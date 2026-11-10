@@ -92,7 +92,8 @@ constexpr ULONGLONG large_image_partition_offset = 1048576;
 // FindSubEntry(). dir must already be constructed on that volume.
 inline void OpenRootDir(
     NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache>& dir) {
-  dir.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  dir.SetParseOptions(
+      {.attr_mask = Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation});
   REQUIRE(dir.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(dir.ParseAttrs());
 }
@@ -104,7 +105,8 @@ inline void OpenSubDir(
     std::wstring_view name) {
   const std::optional<IndexEntry> entry = dir.FindSubEntry(name);
   REQUIRE(entry.has_value());
-  dir.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  dir.SetParseOptions(
+      {.attr_mask = Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation});
   REQUIRE(dir.ParseFileRecord(
       NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(entry).GetFileReference()));
   REQUIRE(dir.ParseAttrs());
@@ -198,7 +200,7 @@ inline void CheckRepairStreamsHoldPtrnPattern(
   REQUIRE(entry.has_value());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<Cache::Strategy::NoCache> file(volume);
-  file.SetAttrMask(Attr::Mask::Data);
+  file.SetParseOptions({.attr_mask = Attr::Mask::Data});
   REQUIRE(file.ParseFileRecord(
       NTFS_BROWSER_NAMESPACE::Test::Support::Unwrap(entry).GetFileReference()));
   REQUIRE(file.ParseAttrs());

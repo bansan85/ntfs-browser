@@ -172,16 +172,17 @@ class SlotScan {
         file_record_(volume),
         resolver_(volume, entries, stats, input.features.account),
         slots_(volume, volume.GetOptions().tuning.mft.window_bytes) {
-    file_record_.SetAttrMask(Attr::Mask::FileName | Attr::Mask::Data);
-    if (features_.account) {
-      file_record_.SetClaimMask(Attr::Mask::All);
-    }
-    file_record_.SetExtensionSource([this](ULONGLONG record) {
-      const std::span<const BYTE> bytes = held_.FindExtension(record);
-      return bytes.empty() ? unheld_.Find(record) : bytes;
-    });
-    file_record_.SetBaseSource(
-        [this](ULONGLONG record) { return bases_.BaseOf(record); });
+    file_record_.SetParseOptions(
+        {.attr_mask = Attr::Mask::FileName | Attr::Mask::Data,
+         .claim_mask =
+             features_.account ? Attr::Mask::All : static_cast<Attr::Mask>(0),
+         .extension_source =
+             [this](ULONGLONG record) {
+               const std::span<const BYTE> bytes = held_.FindExtension(record);
+               return bytes.empty() ? unheld_.Find(record) : bytes;
+             },
+         .base_source =
+             [this](ULONGLONG record) { return bases_.BaseOf(record); }});
     if (input.bitmap) {
       slots_.Plan(PlanSlotRanges(*input.bitmap, total_,
                                  volume.GetOptions().tuning.mft.max_gap_slots));

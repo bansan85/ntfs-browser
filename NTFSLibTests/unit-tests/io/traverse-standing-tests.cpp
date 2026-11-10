@@ -166,8 +166,9 @@ RootWalk WalkRootOnly(const std::vector<BYTE>& image, bool batched,
   const auto volume = OpenVolume<S>(std::move(reader), options);
 
   FileRecord<S> root(*volume);
-  root.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
-                   NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+  root.SetParseOptions(
+      {.attr_mask = NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                    NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation});
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
   reads.Reset();

@@ -17,6 +17,7 @@
 #include "attr/type.h"
 #include "cache/strategy.h"
 #include "internal-export.h"
+#include "io/record-parse-options.h"
 #include "io/record-standing.h"
 #include "record/carved-name.h"
 #include "win-types.h"
@@ -61,43 +62,14 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FileRecord {
   using AttrsCallback = std::function<void(const Attr::AttrBase<S>& attr,
                                            void* context, bool* stop)>;
 
-  // The raw bytes of an $MFT record, as $MFT holds them, when the caller
-  // already has them, else an empty span.
-  using RecordSource = std::function<std::span<const BYTE>(ULONGLONG record)>;
-
-  // The record number of the base record that slot `record` of $MFT names, as
-  // the caller read it: 0 for a base record. Nothing when the caller did not
-  // read that slot.
-  using BaseSource = std::function<std::optional<ULONGLONG>(ULONGLONG record)>;
-
-  // The raw bytes of one $INDEX_ALLOCATION block of the directory `directory`,
-  // at sub-node VCN `vcn`, as the walk of that directory asks for it. Empty
-  // when the caller does not hold it.
-  using IndexBlockSource =
-      std::function<std::span<const BYTE>(ULONGLONG directory, ULONGLONG vcn)>;
-
-  // Takes the records of one run of $MFT that a probe has just read, from the
-  // slot `first_record` on, `bytes` long. Only valid for the call.
-  using RunSink =
-      std::function<void(ULONGLONG first_record, std::span<const BYTE> bytes)>;
-
-  // Called by a probe after it has read one run of $MFT, from the slot
-  // `first_record` on, `count` records long: the run as it was read, widened
-  // to clusters when the store keeps runs. Called once for each run, whether
-  // the read succeeded or not, in the order the runs are read, after the
-  // records of the run are probed. The run MAY be one that an announcement
-  // named.
-  using RunNote = std::function<void(ULONGLONG first_record, ULONGLONG count)>;
-
-  // What the probes of TraverseSubEntriesWithStanding() may reuse, and where
-  // they leave what they read. `find` answers as a RecordSource does, an
-  // empty `keep` keeps nothing, and an empty `ran` is never called and costs
-  // nothing. The three work apart: a store MAY set any of them.
-  struct ProbeStore {
-    RecordSource find;
-    RunSink keep;
-    RunNote ran;
-  };
+  // The types of the sources and the store of RecordParseOptions, under their
+  // old names.
+  using RecordSource = Io::RecordSource;
+  using BaseSource = Io::BaseSource;
+  using IndexBlockSource = Io::IndexBlockSource;
+  using RunSink = Io::RunSink;
+  using RunNote = Io::RunNote;
+  using ProbeStore = Io::ProbeStore;
 
   explicit FileRecord(const NtfsVolume<S>& volume);
   // Defined out of line, so the move needs Impl complete only in
@@ -175,69 +147,21 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FileRecord {
   // resident or compressed list, or none.
   [[nodiscard]] std::vector<Alloc::Extent>
       AttributeListExtents(ULONGLONG max_bytes) const;
-  // Where ParseAttrs() takes the extension records its $ATTRIBUTE_LIST names
-  // from. A record the source does not give is read from the disk. The source
-  // MUST outlive the parses that use it.
-  void SetExtensionSource(RecordSource source);
-  // Tells ParseAttrs() which base record the slots of $MFT name, for a slot
-  // the extension source does not hold. A listed record that names another
-  // base is not an extension of this one, whatever its sequence number: it is
-  // skipped like any other foreign record, without a read of the disk. A slot
-  // the source knows nothing about, or that names this record, is read as
-  // usual. The source MUST outlive the parses that use it, and MUST answer as
-  // the disk would: the same bytes were read.
-  void SetBaseSource(BaseSource source);
-  // Where ParseFileRecord(file_ref) takes the bytes of a record that $MFT maps
-  // before it reads them from the disk. A record the source does not give is
-  // read as usual. The bytes MUST be the ones the disk holds, as ReadMftSlots()
-  // gives them, and the source MUST outlive the parses that use it. Unlike
-  // ParseFileRecord(file_ref, preread), only where the bytes come from changes:
-  // a record with a failed update sequence check, or one read from $MFTMirr,
-  // goes through the same steps and logs the same lines. A record below
-  // Mft::Idx::User is read from its fixed address, and never asked of the
-  // source. Not used for the extension records of $ATTRIBUTE_LIST.
-  void SetRecordSource(RecordSource source);
-  // Where the $INDEX_ALLOCATION attribute that a later ParseAttrs() of this
-  // record builds takes the bytes of its blocks before it reads them from the
-  // disk. A block the source does not give is read as usual, and a block it
-  // gives is parsed as the disk's would be. The source MUST outlive the
-  // attribute. An $INDEX_ALLOCATION that comes from an extension record does
-  // not use it. The source is asked under the number given to
-  // ParseFileRecord().
-  void SetIndexBlockSource(IndexBlockSource source);
-  // The source SetIndexBlockSource() was given, empty when there is none. For
-  // the attributes this record builds.
-  [[nodiscard]] const IndexBlockSource& GetIndexBlockSource() const noexcept;
-  // Where the probes of TraverseSubEntriesWithStanding() take the records of
-  // the entries they judge before they read them from $MFT, and where they
-  // leave each run they read, so that the probes of the next directory find
-  // it. A record that `find` gives is not read, and its bytes MUST be the ones
-  // the disk holds: the walk, its log and its listing do not change, only the
-  // reads do. The functions MUST outlive the walks that use them. Not used by
-  // TraverseSubEntries().
-  void SetProbeStore(ProbeStore store);
-  // The store SetProbeStore() was given, empty when there is none.
-  [[nodiscard]] const ProbeStore& GetProbeStore() const noexcept;
-  [[nodiscard]] bool InstallAttrRawCB(Attr::Type attr_type,
-                                      Attr::RawCallback callback) noexcept;
-  void ClearAttrRawCB() noexcept;
-
-  void SetAttrMask(Attr::Mask mask) noexcept;
-  // Makes ParseAttrs() also list the layout of each non-resident attribute of
-  // the types in mask, in this record and in the extension records its
-  // $ATTRIBUTE_LIST names, without building an attribute for it: no defect in
-  // one changes whether the record parses, what it logs at Warn or Error, or
-  // what the record keeps. A type already in the attribute mask is not listed
-  // here: its attributes give their own GetLayout(). The extension records
-  // such a type needs are read like the others, and are skipped without a word
-  // when one cannot be used. Default: none.
-  void SetClaimMask(Attr::Mask mask) noexcept;
-  // The layouts SetClaimMask() asked for, from the last ParseAttrs().
+  // Sets how this record parses, all at once: the attributes it keeps, the
+  // sources it reuses instead of reading the volume, and the reads it refuses.
+  // It replaces every earlier option, those of the default record included. To
+  // change one option, start from GetParseOptions(). The functions and flags
+  // in options MUST outlive the parses that use them. It acts on the next
+  // parse or walk: what is already parsed stays.
+  void SetParseOptions(RecordParseOptions options);
+  // The options SetParseOptions() was given, or the defaults when there are
+  // none. A mask that was not exact comes back with the attributes that
+  // parsing adds, so passing it back changes nothing.
+  [[nodiscard]] const RecordParseOptions& GetParseOptions() const noexcept;
+  // The layouts that RecordParseOptions::claim_mask asked for, from the last
+  // ParseAttrs().
   [[nodiscard]] const std::vector<Alloc::StreamLayout>&
       GetClaimedLayouts() const noexcept;
-  // Like SetAttrMask(), but keeps exactly mask: it adds none of the attributes
-  // SetAttrMask() always parses. For the volume's own metadata records.
-  void SetExactAttrMask(Attr::Mask mask) noexcept;
   // Moves the attributes of one $ATTRIBUTE_LIST entry, from the extension
   // record that holds them, into this record. A contained or unwanted
   // attribute is skipped. record_number and sequence_number are the entry's
@@ -249,26 +173,12 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY FileRecord {
                            Attr::Type attr_type,
                            std::unordered_set<ULONGLONG>& attr_list_chain,
                            bool recover);
-  // Marks this record as volume metadata ($MFT, $UpCase, ...): ParseAttrs()
-  // then ignores the deleted flag, whatever include_deleted says.
-  void SetBypassDeletedGate(bool bypass) noexcept;
-  // Whether SetBypassDeletedGate(true) was called. A directory record that
+  // Whether the options set bypass_deleted_gate. A directory record that
   // bypasses the gate also shows the entries that name freed records, since
   // volume metadata is read whatever include_deleted says.
   [[nodiscard]] bool BypassesDeletedGate() const noexcept;
-  // False makes a $ATTRIBUTE_LIST be wrapped as a plain attribute, not
-  // resolved into the attributes it names.
-  void SetResolveAttrList(bool resolve) noexcept;
-  // Makes the parses of this record refuse the reads of the volume that a
-  // $ATTRIBUTE_LIST or an $EFS stream would cause: an extension record the
-  // source does not give, a non-resident list, a non-resident $EFS stream.
-  // What would be read is skipped, and *refused is set. A parse that set it is
-  // incomplete, and its result MUST be thrown away. For a parse on a thread
-  // that MUST NOT touch the volume. refused MUST outlive the parses. Null
-  // reads again.
-  void SetReadRefusal(bool* refused) noexcept;
   // Called where a parse of this record is about to read the volume. True
-  // when the read is refused: the flag SetReadRefusal() was given is then set.
+  // when the read is refused: the flag that read_refusal names is then set.
   [[nodiscard]] bool RefuseRead() const noexcept;
   void TraverseAttrs(const AttrsCallback& attr_call_back, void* context);
   [[nodiscard]] const std::vector<std::unique_ptr<Attr::AttrBase<S>>>&

@@ -96,7 +96,7 @@ void CountRawAttr(const Attr::HeaderCommon& /*header*/, bool& /*discard*/) {
 template <Cache::Strategy S>
 void ParseVolumeInformation(const NtfsVolume<S>& volume) {
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> volume_record(volume);
-  volume_record.SetAttrMask(Attr::Mask::VolumeInformation);
+  volume_record.SetParseOptions({.attr_mask = Attr::Mask::VolumeInformation});
   REQUIRE(volume_record.ParseFileRecord(volume_idx));
   REQUIRE(volume_record.ParseAttrs());
 }

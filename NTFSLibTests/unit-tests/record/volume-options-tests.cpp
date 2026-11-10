@@ -125,7 +125,8 @@ void RunOrphanScanCapsDeclaredBlockCount() {
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
-  root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  root.SetParseOptions(
+      {.attr_mask = Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation});
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
 
@@ -161,7 +162,8 @@ void RunMultiClusterOrphanScanConvertsBlockIndexToVcn() {
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
-  root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  root.SetParseOptions(
+      {.attr_mask = Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation});
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
 
@@ -307,7 +309,8 @@ void RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix() {
     REQUIRE(volume.IsVolumeOK());
 
     NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
-    root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+    root.SetParseOptions(
+        {.attr_mask = Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation});
     REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     REQUIRE(root.ParseAttrs());
 
@@ -324,7 +327,8 @@ void RunBadIndexBlockEntrySkipsBlockOrKeepsPrefix() {
     REQUIRE(volume.IsVolumeOK());
 
     NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
-    root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+    root.SetParseOptions(
+        {.attr_mask = Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation});
     REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     REQUIRE(root.ParseAttrs());
 
@@ -367,7 +371,7 @@ void RunMalformedIndexEntryRejectsOrKeepsNameless() {
     REQUIRE(volume.IsVolumeOK());
 
     NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
-    root.SetAttrMask(Attr::Mask::IndexRoot);
+    root.SetParseOptions({.attr_mask = Attr::Mask::IndexRoot});
     REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     CHECK_FALSE(root.ParseAttrs());
     CHECK(root.GetAttr(Attr::Type::IndexRoot).empty());
@@ -380,7 +384,7 @@ void RunMalformedIndexEntryRejectsOrKeepsNameless() {
     REQUIRE(volume.IsVolumeOK());
 
     NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
-    root.SetAttrMask(Attr::Mask::IndexRoot);
+    root.SetParseOptions({.attr_mask = Attr::Mask::IndexRoot});
     REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     REQUIRE(root.ParseAttrs());
 

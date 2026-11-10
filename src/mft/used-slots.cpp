@@ -48,7 +48,7 @@ std::optional<std::vector<BYTE>> ReadMftBitmap(const NtfsVolume<S>& volume,
                                                ULONGLONG total) {
   try {
     Io::FileRecord<S> mft_record(volume);
-    mft_record.SetAttrMask(Attr::Mask::Bitmap);
+    mft_record.SetParseOptions({.attr_mask = Attr::Mask::Bitmap});
     if (!mft_record.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Mft)) ||
         !TryParseAttrs(mft_record)) {
       return std::nullopt;

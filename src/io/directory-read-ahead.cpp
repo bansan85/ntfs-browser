@@ -91,14 +91,17 @@ void DirectoryReadAhead<S>::Impl::Attach(FileRecord<S>& listing) {
   }
   listing_ = &listing;
   lane_.Attach(listing);
-  listing.SetRecordSource(
-      [this](ULONGLONG record) { return HeldRecordBytes(record); });
-  listing.SetIndexBlockSource([this](ULONGLONG directory, ULONGLONG vcn) {
+  // The listing keeps the options its caller gave it: the mask, say.
+  RecordParseOptions options = listing.GetParseOptions();
+  options.record_source = [this](ULONGLONG record) {
+    return HeldRecordBytes(record);
+  };
+  options.index_block_source = [this](ULONGLONG directory, ULONGLONG vcn) {
     return shared_.store.ServeBlock(directory, vcn);
-  });
+  };
   // The three parts of the store work apart: a FullCache volume keeps no
   // window, and gets a store that only notes the runs read.
-  typename FileRecord<S>::ProbeStore store;
+  ProbeStore store;
   if (shared_.keeper.Enabled()) {
     store.find = [this](ULONGLONG record) {
       return shared_.keeper.FindForProbe(record);
@@ -113,8 +116,9 @@ void DirectoryReadAhead<S>::Impl::Attach(FileRecord<S>& listing) {
     };
   }
   if (store.find || store.keep || store.ran) {
-    listing.SetProbeStore(std::move(store));
+    options.probe_store = std::move(store);
   }
+  listing.SetParseOptions(std::move(options));
 }
 
 template <Cache::Strategy S>
@@ -123,9 +127,11 @@ void DirectoryReadAhead<S>::Impl::Detach() noexcept {
   if (listing_ == nullptr) {
     return;
   }
-  listing_->SetRecordSource({});
-  listing_->SetIndexBlockSource({});
-  listing_->SetProbeStore({});
+  RecordParseOptions options = listing_->GetParseOptions();
+  options.record_source = {};
+  options.index_block_source = {};
+  options.probe_store = {};
+  listing_->SetParseOptions(std::move(options));
   for (const auto& attr : listing_->GetAttr(Attr::Type::IndexAllocation)) {
     static_cast<Attr::AttrIndexAlloc<S>*>(attr.get())->SetBlockSource({}, 0);
   }

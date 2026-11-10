@@ -34,7 +34,8 @@ TEMPLATE_TEST_CASE_SIG(
           TestFakeImage::BuildFakeNtfsImageWithMftTree()));
   REQUIRE(volume.IsVolumeOK());
   FileRecord<S> record(volume);
-  record.SetAttrMask(Attr::Mask::FileName | Attr::Mask::Data);
+  record.SetParseOptions(
+      {.attr_mask = Attr::Mask::FileName | Attr::Mask::Data});
   REQUIRE(record.ParseFileRecord(TestFakeImage::mft_tree_report_idx));
   REQUIRE(record.ParseAttrs());
   REQUIRE_FALSE(record.GetAttr(Attr::Type::FileName).empty());

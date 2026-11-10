@@ -77,12 +77,16 @@ RootWalk WalkRoot(const std::vector<BYTE>& image, const Store* store) {
   REQUIRE(volume.IsVolumeOK());
 
   FileRecord<walk_cache> root(volume);
-  root.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
-                   NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+  root.SetParseOptions(
+      {.attr_mask = NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                    NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation});
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
   if (store != nullptr) {
-    root.SetProbeStore(*store);
+    NTFS_BROWSER_NAMESPACE::Io::RecordParseOptions options =
+        root.GetParseOptions();
+    options.probe_store = *store;
+    root.SetParseOptions(std::move(options));
   }
   reads.Reset();
   (void)TestSupport::TakeCapturedLog();
@@ -201,20 +205,24 @@ TEST_CASE("The plain walk never asks the probe store", "[io][probe-store]") {
   NtfsVolume<walk_cache> volume(std::move(reader), VolumeOptions{});
   REQUIRE(volume.IsVolumeOK());
   FileRecord<walk_cache> root(volume);
-  root.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
-                   NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+  root.SetParseOptions(
+      {.attr_mask = NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                    NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation});
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
 
   std::size_t asked = 0;
   std::size_t kept = 0;
-  root.SetProbeStore(
-      {.find =
-           [&asked](ULONGLONG) {
-             asked++;
-             return std::span<const BYTE>();
-           },
-       .keep = [&kept](ULONGLONG, std::span<const BYTE>) { kept++; }});
+  NTFS_BROWSER_NAMESPACE::Io::RecordParseOptions options =
+      root.GetParseOptions();
+  options.probe_store = {
+      .find =
+          [&asked](ULONGLONG) {
+            asked++;
+            return std::span<const BYTE>();
+          },
+      .keep = [&kept](ULONGLONG, std::span<const BYTE>) { kept++; }};
+  root.SetParseOptions(std::move(options));
   std::size_t listed = 0;
   root.TraverseSubEntries(
       [](const IndexEntryView&, void* context) {

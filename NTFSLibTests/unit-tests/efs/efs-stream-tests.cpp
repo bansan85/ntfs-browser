@@ -383,10 +383,9 @@ TEMPLATE_TEST_CASE_SIG("A resident $EFS stream works like a non-resident one",
   CHECK(ReadAt<S>(OnlyData<S>(*opened.record), 0, 900) == plaintext);
 }
 
-TEMPLATE_TEST_CASE_SIG(
-    "SetAttrMask(Mask::DATA) still pulls in the $EFS stream it needs", "[efs]",
-    ((Cache::Strategy S), S), Cache::Strategy::NoCache,
-    Cache::Strategy::FullCache) {
+TEMPLATE_TEST_CASE_SIG("A mask of Data still pulls in the $EFS stream it needs",
+                       "[efs]", ((Cache::Strategy S), S),
+                       Cache::Strategy::NoCache, Cache::Strategy::FullCache) {
   // The exact mask ntfsdump/ntfsundel narrow to before reading file data.
   Fixture fixture = MakeFixture(Algorithm::Aes256);
   const Opened<S> opened =

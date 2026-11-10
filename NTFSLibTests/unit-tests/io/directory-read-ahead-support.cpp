@@ -591,8 +591,9 @@ LaneRun ListForLane(const std::vector<BYTE>& image,
   volume.SetReadPattern(
       NTFS_BROWSER_NAMESPACE::Tuning::Pattern::DependentSmall);
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> fr(volume);
-  fr.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
-                 NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+  fr.SetParseOptions(
+      {.attr_mask = NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                    NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation});
   REQUIRE(fr.ParseFileRecord(
       static_cast<ULONGLONG>(NTFS_BROWSER_NAMESPACE::Mft::Idx::Root)));
   REQUIRE(fr.ParseAttrs());

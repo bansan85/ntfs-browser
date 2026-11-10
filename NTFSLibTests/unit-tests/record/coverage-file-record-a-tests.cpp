@@ -451,7 +451,7 @@ TEMPLATE_TEST_CASE_SIG(
   file.TraverseAttrs(stop_first, &visits);
   CHECK(visits == 1);
 
-  file.SetAttrMask(Attr::Mask::StandardInformation);
+  file.SetParseOptions({.attr_mask = Attr::Mask::StandardInformation});
   visits = 0;
   file.TraverseAttrs(count_all, &visits);
   CHECK(visits == 0);
@@ -472,17 +472,19 @@ TEMPLATE_TEST_CASE_SIG(
   REQUIRE(volume.IsVolumeOK());
 
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> file(volume);
-  CHECK_FALSE(file.InstallAttrRawCB(unknown_attr_type,
-                                    [](const Attr::HeaderCommon& /*head*/,
-                                       bool& discard) { discard = true; }));
-  REQUIRE(file.InstallAttrRawCB(Attr::Type::Data,
-                                [](const Attr::HeaderCommon& /*head*/,
-                                   bool& discard) { discard = true; }));
+  NTFS_BROWSER_NAMESPACE::Io::RecordParseOptions options;
+  CHECK_FALSE(options.SetRawCallback(unknown_attr_type,
+                                     [](const Attr::HeaderCommon& /*head*/,
+                                        bool& discard) { discard = true; }));
+  REQUIRE(options.SetRawCallback(Attr::Type::Data,
+                                 [](const Attr::HeaderCommon& /*head*/,
+                                    bool& discard) { discard = true; }));
+  file.SetParseOptions(options);
   REQUIRE(file.ParseFileRecord(scratch_idx));
   REQUIRE(file.ParseAttrs());
   CHECK(file.GetAttr(Attr::Type::Data).empty());
 
-  file.ClearAttrRawCB();
+  file.SetParseOptions({});
   REQUIRE(file.ParseAttrs());
   CHECK(file.GetAttr(Attr::Type::Data).size() == 1);
 }

@@ -82,14 +82,11 @@ class FileRecord<S>::Impl {
   const NtfsVolume<S>* volume;
   std::unique_ptr<Record::HeaderImpl<S>> file_record;
   std::optional<ULONGLONG> file_reference;
-  std::array<Attr::RawCallback, Attr::attr_nums> attr_raw_call_back{};
-  Attr::Mask attr_mask{Attr::Mask::All};
-  // The types, besides those of attr_mask, whose non-resident attributes the
-  // parse only lists in claimed_layouts: no attribute is built for them, so a
-  // defect in one changes nothing else about the parse. See SetClaimMask().
-  Attr::Mask claim_mask{static_cast<Attr::Mask>(0)};
-  // The layouts of the non-resident attributes of claim_mask, from this record
-  // and from the extension records its $ATTRIBUTE_LIST names.
+  // How this record parses, as SetParseOptions() resolved it: the mask is the
+  // one the parse tests, standard information and attribute list included.
+  Io::RecordParseOptions options;
+  // The layouts of the non-resident attributes of options.claim_mask, from
+  // this record and from the extension records its $ATTRIBUTE_LIST names.
   std::vector<Alloc::StreamLayout> claimed_layouts;
 
   // The extension records $ATTRIBUTE_LIST opened. An attribute imported from
@@ -104,20 +101,6 @@ class FileRecord<S>::Impl {
   std::array<std::vector<std::unique_ptr<Attr::AttrBase<S>>>, Attr::attr_nums>
       attr_list{};
 
-  // False makes AttrParser::AllocAttr() wrap $ATTRIBUTE_LIST generically, not
-  // via AttrList.
-  bool resolve_attr_list{true};
-
-  // Set by the caller that refuses the volume reads of a parse, and told when
-  // one is refused. Null: the parse reads. See SetReadRefusal().
-  bool* read_refusal{nullptr};
-
-  // True bypasses the deleted-record gate in ParseAttrs(): set by
-  // NtfsVolume on its own internal FileRecords ($Volume, $MFT, $MFT
-  // extension records), so a freed one doesn't take the whole volume down,
-  // whatever include_deleted says.
-  bool bypass_deleted_gate{false};
-
   // Owned per-instance so this FileRecord's raw bytes (viewed by NoCache
   // attributes as plain pointers/spans, no copy) are never aliased by
   // another FileRecord's read (eg. NtfsVolume's $MFT record vs. this one).
@@ -126,22 +109,6 @@ class FileRecord<S>::Impl {
   // The $ATTRIBUTE_LIST chain of the running ParseAttrs(). Kept from one call
   // to the next, emptied each time, so that a parse does not allocate a set.
   std::unordered_set<ULONGLONG> attr_list_chain;
-
-  // Where ExtensionImporter looks for an extension record before it reads it
-  // from the disk. Empty: always from the disk.
-  typename Io::FileRecord<S>::RecordSource extension_source;
-  // Which base record a slot names, for a slot extension_source does not hold.
-  // Empty: every such slot is read from the disk.
-  typename Io::FileRecord<S>::BaseSource base_source;
-  // Where RecordLoader looks for the bytes of a record before it reads them
-  // from $MFT. Empty: always from $MFT. See SetRecordSource().
-  typename Io::FileRecord<S>::RecordSource record_source;
-  // Where the $INDEX_ALLOCATION attribute of this record looks for a block
-  // before it reads it. Empty: always from the disk.
-  typename Io::FileRecord<S>::IndexBlockSource index_block_source;
-  // Where the probes of the batched walk look for a record, and what they do
-  // with a run they read. Empty: they read every record.
-  typename Io::FileRecord<S>::ProbeStore probe_store;
 
   // Where the attribute walk of the last ParseAttrs() met the end marker.
   // Empty when it did not reach one.

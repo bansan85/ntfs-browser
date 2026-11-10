@@ -198,7 +198,8 @@ struct Rig {
     volume = std::make_unique<NtfsVolume<S>>(std::move(counting), options);
     REQUIRE(volume->IsVolumeOK());
     listing = std::make_unique<Io::FileRecord<S>>(*volume);
-    listing->SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+    listing->SetParseOptions(
+        {.attr_mask = Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation});
     REQUIRE(listing->ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
     REQUIRE(listing->ParseAttrs());
     reads->Reset();

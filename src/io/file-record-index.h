@@ -129,7 +129,7 @@ class NTFS_BROWSER_EXPORT_TESTS_ONLY DirectoryIndex {
   // order, repeats included (a DOS alias and its Win32 name). A node that
   // names no record gives no group. Holds the $INDEX_ROOT, and the blocks the
   // $INDEX_ALLOCATION's block source holds (see
-  // FileRecord<S>::SetIndexBlockSource()). A block it does not hold ends the
+  // RecordParseOptions::index_block_source). A block it does not hold ends the
   // descent into its subtree, and so does a block that does not parse. The
   // orphaned blocks of the recovery scan are not part of it. Reads and logs
   // nothing, and leaves RecoveredCount() as it was.

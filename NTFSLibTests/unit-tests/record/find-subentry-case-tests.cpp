@@ -68,7 +68,8 @@ template <Cache::Strategy S>
 std::optional<IndexEntry> FindInRoot(const NtfsVolume<S>& volume,
                                      std::wstring_view name) {
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> root(volume);
-  root.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+  root.SetParseOptions(
+      {.attr_mask = Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation});
   REQUIRE(root.ParseFileRecord(static_cast<ULONGLONG>(Mft::Idx::Root)));
   REQUIRE(root.ParseAttrs());
   return root.FindSubEntry(name);
@@ -173,7 +174,8 @@ TEMPLATE_TEST_CASE_SIG(
     CHECK(found->GetFileReference() == NameTreeRecord(directory));
 
     NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(*volume);
-    record.SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
+    record.SetParseOptions(
+        {.attr_mask = Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation});
     REQUIRE(record.ParseFileRecord(found->GetFileReference()));
     REQUIRE(record.ParseAttrs());
     const std::optional<IndexEntry> child = record.FindSubEntry(L"x");

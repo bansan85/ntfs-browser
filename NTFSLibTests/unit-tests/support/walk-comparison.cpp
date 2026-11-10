@@ -77,8 +77,9 @@ WalkedEntry EntryOf(const IndexEntryView& view,
 template <NTFS_BROWSER_NAMESPACE::Cache::Strategy S>
 WalkResult WalkVolume(const NtfsVolume<S>& volume, bool batched) {
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> dir(volume);
-  dir.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
-                  NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+  dir.SetParseOptions(
+      {.attr_mask = NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                    NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation});
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> probe(volume);
 
   WalkResult result;

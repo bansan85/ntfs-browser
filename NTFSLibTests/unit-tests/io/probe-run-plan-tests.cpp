@@ -433,15 +433,19 @@ TEMPLATE_TEST_CASE_SIG("The plain walk never calls the note of a probe store",
       TestFakeImage::BuildFakeNtfsImageWithNameTree(RunTree());
   auto open = TestIo::Open<S>(image);
   NTFS_BROWSER_NAMESPACE::Io::FileRecord<S> record(*open.volume);
-  record.SetAttrMask(NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
-                     NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation);
+  record.SetParseOptions(
+      {.attr_mask = NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexRoot |
+                    NTFS_BROWSER_NAMESPACE::Attr::Mask::IndexAllocation});
   REQUIRE(record.ParseFileRecord(TestFakeImage::name_tree_first_record));
   REQUIRE(record.ParseAttrs());
 
   std::size_t noted = 0;
-  record.SetProbeStore({.find = {},
-                        .keep = {},
-                        .ran = [&noted](ULONGLONG, ULONGLONG) { noted++; }});
+  NTFS_BROWSER_NAMESPACE::Io::RecordParseOptions options =
+      record.GetParseOptions();
+  options.probe_store = {.find = {},
+                         .keep = {},
+                         .ran = [&noted](ULONGLONG, ULONGLONG) { noted++; }};
+  record.SetParseOptions(std::move(options));
   std::size_t listed = 0;
   record.TraverseSubEntries(
       [](const IndexEntryView&, void* context) {

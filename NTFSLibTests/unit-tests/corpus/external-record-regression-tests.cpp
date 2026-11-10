@@ -97,7 +97,7 @@ TEST_CASE("The $Boot file of a real $MFT starts at cluster 0",
   const auto volume = OpenStandaloneMftVolume(Fixture(name));
 
   FileRecord<Cache::Strategy::NoCache> record(*volume);
-  record.SetAttrMask(Attr::Mask::Data);
+  record.SetParseOptions({.attr_mask = Attr::Mask::Data});
   REQUIRE(record.ParseFileRecord(boot_record));
   REQUIRE(record.ParseAttrs());
   const auto& streams = record.GetAttr(Attr::Type::Data);

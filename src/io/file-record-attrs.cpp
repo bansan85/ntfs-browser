@@ -316,7 +316,7 @@ const Attr::HeaderCommon*
   // A freed record still parsed its header (IsDeleted() works), but not its
   // attributes: this record exposes no content unless include_deleted opted
   // in, or this is one of the volume's own metadata reads.
-  if (!impl_.bypass_deleted_gate && impl_.self->IsDeleted() &&
+  if (!impl_.options.bypass_deleted_gate && impl_.self->IsDeleted() &&
       !impl_.volume->GetOptions().include_deleted) {
     Log::Debug("ParseAttrs() skipped: file record {} is deleted",
                impl_.file_reference.value_or(0));
@@ -380,9 +380,10 @@ bool Io::FileRecord<S>::Impl::AttrParser::VisitAttr(
   // True only when the type is a real attribute slot and the caller's
   // mask requests that slot.
   if (!Attr::IsValidAttrType(head.type) ||
-      !static_cast<bool>(Attr::AttrMask(head.type) & impl_.attr_mask)) {
+      !static_cast<bool>(Attr::AttrMask(head.type) & impl_.options.attr_mask)) {
     if (Attr::IsValidAttrType(head.type) && head.non_resident != 0 &&
-        static_cast<bool>(Attr::AttrMask(head.type) & impl_.claim_mask)) {
+        static_cast<bool>(Attr::AttrMask(head.type) &
+                          impl_.options.claim_mask)) {
       impl_.ClaimLayout(AlignedAttrHeader(cur));
     }
     return true;
@@ -443,7 +444,7 @@ std::unique_ptr<Attr::AttrBase<S>>
 
   switch (ahc.type) {
     case Attr::Type::AttributeList:
-      return MakeAttributeList(ahc, record, impl_.resolve_attr_list,
+      return MakeAttributeList(ahc, record, impl_.options.resolve_attr_list,
                                attr_list_chain);
 
     case Attr::Type::Data:

@@ -110,7 +110,7 @@ bool Io::FileRecord<S>::Impl::ParseRecord(ULONGLONG file_ref,
   overwritten_list = false;
 
   typename RecordLoader<S>::Loaded loaded =
-      RecordLoader<S>(*volume, record_buffer, record_source)
+      RecordLoader<S>(*volume, record_buffer, options.record_source)
           .Load(file_ref, preread);
   failed_fixup = loaded.failed_fixup;
   header_salvaged = loaded.salvaged;
@@ -162,8 +162,8 @@ void Io::FileRecord<S>::Impl::UserCallBack(DWORD att_type,
                                            bool& discard) {
   discard = false;
 
-  if (attr_raw_call_back.at(att_type) != nullptr) {
-    attr_raw_call_back.at(att_type)(ahc, discard);
+  if (options.attr_raw_callbacks.at(att_type) != nullptr) {
+    options.attr_raw_callbacks.at(att_type)(ahc, discard);
   } else {
     volume->DispatchAttrRawCB(att_type, ahc, discard);
   }
@@ -273,64 +273,33 @@ std::vector<Alloc::Extent>
       .AttributeListExtents(impl_->volume->GetClusterSize(), max_bytes);
 }
 
+// The mask is resolved here, once, so that the parse tests one field.
 template <Cache::Strategy S>
-void Io::FileRecord<S>::SetExtensionSource(RecordSource source) {
-  impl_->extension_source = std::move(source);
-}
+void Io::FileRecord<S>::SetParseOptions(RecordParseOptions options) {
+  if (!options.exact_attr_mask) {
+    // Standard Information and Attribute List is needed always
+    const Attr::Mask wanted = options.attr_mask;
+    options.attr_mask =
+        wanted | Attr::Mask::StandardInformation | Attr::Mask::AttributeList;
 
-template <Cache::Strategy S>
-void Io::FileRecord<S>::SetBaseSource(BaseSource source) {
-  impl_->base_source = std::move(source);
-}
-
-template <Cache::Strategy S>
-void Io::FileRecord<S>::SetRecordSource(RecordSource source) {
-  impl_->record_source = std::move(source);
-}
-
-template <Cache::Strategy S>
-void Io::FileRecord<S>::SetIndexBlockSource(IndexBlockSource source) {
-  impl_->index_block_source = std::move(source);
-}
-
-template <Cache::Strategy S>
-const typename Io::FileRecord<S>::IndexBlockSource&
-    Io::FileRecord<S>::GetIndexBlockSource() const noexcept {
-  return impl_->index_block_source;
-}
-
-template <Cache::Strategy S>
-void Io::FileRecord<S>::SetProbeStore(ProbeStore store) {
-  impl_->probe_store = std::move(store);
-}
-
-template <Cache::Strategy S>
-const typename Io::FileRecord<S>::ProbeStore&
-    Io::FileRecord<S>::GetProbeStore() const noexcept {
-  return impl_->probe_store;
-}
-
-// Install Attribute raw data CallBack routines for a single File Record
-template <Cache::Strategy S>
-bool Io::FileRecord<S>::InstallAttrRawCB(Attr::Type attr_type,
-                                         Attr::RawCallback callback) noexcept {
-  const DWORD at_idx = Attr::AttrIndex(attr_type);
-  if (at_idx >= Attr::attr_nums) {
-    return false;
+    // The $EFS stream holds the key of every encrypted $DATA.
+    if ((wanted & Attr::Mask::Data) == Attr::Mask::Data) {
+      options.attr_mask |= Attr::Mask::LoggedUtilityStream;
+    }
   }
-
-  // atIdx < attr_nums was checked above.
-  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  impl_->attr_raw_call_back[at_idx] = callback;
-  return true;
+  impl_->options = std::move(options);
 }
 
-// Clear all Attribute CallBack routines
 template <Cache::Strategy S>
-void Io::FileRecord<S>::ClearAttrRawCB() noexcept {
-  for (Attr::RawCallback& callback : impl_->attr_raw_call_back) {
-    callback = nullptr;
-  }
+const Io::RecordParseOptions&
+    Io::FileRecord<S>::GetParseOptions() const noexcept {
+  return impl_->options;
+}
+
+template <Cache::Strategy S>
+const std::vector<Alloc::StreamLayout>&
+    Io::FileRecord<S>::GetClaimedLayouts() const noexcept {
+  return impl_->claimed_layouts;
 }
 
 template <Cache::Strategy S>
@@ -341,61 +310,17 @@ void Io::FileRecord<S>::ImportAttrListEntry(
   importer.Import(record_number, sequence_number, attr_type);
 }
 
-// Choose attributes to handle, unwanted attributes will be discarded silently
-template <Cache::Strategy S>
-void Io::FileRecord<S>::SetAttrMask(Attr::Mask mask) noexcept {
-  // Standard Information and Attribute List is needed always
-  impl_->attr_mask =
-      mask | Attr::Mask::StandardInformation | Attr::Mask::AttributeList;
-
-  // The $EFS stream holds the key of every encrypted $DATA.
-  if ((mask & Attr::Mask::Data) == Attr::Mask::Data) {
-    impl_->attr_mask |= Attr::Mask::LoggedUtilityStream;
-  }
-}
-
-template <Cache::Strategy S>
-void Io::FileRecord<S>::SetClaimMask(Attr::Mask mask) noexcept {
-  impl_->claim_mask = mask;
-}
-
-template <Cache::Strategy S>
-const std::vector<Alloc::StreamLayout>&
-    Io::FileRecord<S>::GetClaimedLayouts() const noexcept {
-  return impl_->claimed_layouts;
-}
-
-template <Cache::Strategy S>
-void Io::FileRecord<S>::SetExactAttrMask(Attr::Mask mask) noexcept {
-  impl_->attr_mask = mask;
-}
-
-template <Cache::Strategy S>
-void Io::FileRecord<S>::SetBypassDeletedGate(bool bypass) noexcept {
-  impl_->bypass_deleted_gate = bypass;
-}
-
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::BypassesDeletedGate() const noexcept {
-  return impl_->bypass_deleted_gate;
-}
-
-template <Cache::Strategy S>
-void Io::FileRecord<S>::SetResolveAttrList(bool resolve) noexcept {
-  impl_->resolve_attr_list = resolve;
-}
-
-template <Cache::Strategy S>
-void Io::FileRecord<S>::SetReadRefusal(bool* refused) noexcept {
-  impl_->read_refusal = refused;
+  return impl_->options.bypass_deleted_gate;
 }
 
 template <Cache::Strategy S>
 bool Io::FileRecord<S>::RefuseRead() const noexcept {
-  if (impl_->read_refusal == nullptr) {
+  if (impl_->options.read_refusal == nullptr) {
     return false;
   }
-  *impl_->read_refusal = true;
+  *impl_->options.read_refusal = true;
   return true;
 }
 
@@ -410,7 +335,7 @@ void Io::FileRecord<S>::TraverseAttrs(const AttrsCallback& attr_call_back,
 
   for (size_t i = 0; i < Attr::attr_nums; i++) {
     // skip masked attributes
-    if (static_cast<bool>(impl_->attr_mask &
+    if (static_cast<bool>(impl_->options.attr_mask &
                           (static_cast<Attr::Mask>(1U << i)))) {
       // i < attr_nums by the loop condition.
       // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)

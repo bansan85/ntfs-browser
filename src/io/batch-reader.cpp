@@ -168,8 +168,9 @@ template <Cache::Strategy S>
 std::unique_ptr<FileRecord<S>> BatchReader<S>::MakeScratch() {
   auto scratch = std::make_unique<FileRecord<S>>(*volume_);
   // The attributes a listing reads, and no more.
-  scratch->SetAttrMask(Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation);
-  scratch->SetReadRefusal(&refused_);
+  scratch->SetParseOptions(
+      {.attr_mask = Attr::Mask::IndexRoot | Attr::Mask::IndexAllocation,
+       .read_refusal = &refused_});
   return scratch;
 }
 
