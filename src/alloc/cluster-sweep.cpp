@@ -589,6 +589,51 @@ std::vector<VcnRange> BrokenUnits(const std::vector<ClusterPiece>& pieces,
   return broken;
 }
 
+// Appends the part [from, to) of piece to out. A part inside a broken unit
+// that was fine is marked as lost with its unit. An empty part is dropped.
+void AppendPiecePart(std::vector<ClusterPiece>& out, const ClusterPiece& piece,
+                     ULONGLONG from, ULONGLONG to, bool inside) {
+  if (to <= from) {
+    return;
+  }
+  ClusterPiece part = piece;
+  part.first_vcn = from;
+  part.clusters = to - from;
+  if (part.lcn) {
+    part.lcn = *piece.lcn + (from - piece.first_vcn);
+  }
+  if (inside && LostWhenUnitBreaks(piece.condition)) {
+    part.condition = ClusterCondition::LostWithUnit;
+  }
+  out.push_back(part);
+}
+
+// Appends piece to out, cut at the edges of the broken ranges. at is the first
+// broken range that may still reach the piece: it moves forward, as pieces
+// come in VCN order.
+void SplitAtBrokenUnits(std::vector<ClusterPiece>& out,
+                        const ClusterPiece& piece,
+                        const std::vector<VcnRange>& broken, std::size_t& at) {
+  ULONGLONG vcn = piece.first_vcn;
+  const ULONGLONG end = piece.first_vcn + piece.clusters;
+  while (at < broken.size() &&
+         broken.at(at).vcn + broken.at(at).clusters <= vcn) {
+    at++;
+  }
+  for (std::size_t i = at; i < broken.size() && vcn < end; i++) {
+    const ULONGLONG from = broken.at(i).vcn;
+    const ULONGLONG to = from + broken.at(i).clusters;
+    if (from >= end) {
+      break;
+    }
+    AppendPiecePart(out, piece, vcn, (std::min)(from, end), false);
+    vcn = (std::max)(vcn, from);
+    AppendPiecePart(out, piece, vcn, (std::min)(to, end), true);
+    vcn = (std::min)(to, end);
+  }
+  AppendPiecePart(out, piece, vcn, end, false);
+}
+
 // Splits pieces, sorted by VCN, at the edges of the broken ranges, and marks
 // as lost with their unit the parts inside them that were fine.
 std::vector<ClusterPiece>
@@ -598,39 +643,7 @@ std::vector<ClusterPiece>
   result.reserve(pieces.size());
   std::size_t at = 0;
   for (const ClusterPiece& piece : pieces) {
-    ULONGLONG vcn = piece.first_vcn;
-    const ULONGLONG end = piece.first_vcn + piece.clusters;
-    const auto emit = [&](ULONGLONG from, ULONGLONG to, bool inside) {
-      if (to <= from) {
-        return;
-      }
-      ClusterPiece part = piece;
-      part.first_vcn = from;
-      part.clusters = to - from;
-      if (part.lcn) {
-        part.lcn = *piece.lcn + (from - piece.first_vcn);
-      }
-      if (inside && LostWhenUnitBreaks(piece.condition)) {
-        part.condition = ClusterCondition::LostWithUnit;
-      }
-      result.push_back(part);
-    };
-    while (at < broken.size() &&
-           broken.at(at).vcn + broken.at(at).clusters <= vcn) {
-      at++;
-    }
-    for (std::size_t i = at; i < broken.size() && vcn < end; i++) {
-      const ULONGLONG from = broken.at(i).vcn;
-      const ULONGLONG to = from + broken.at(i).clusters;
-      if (from >= end) {
-        break;
-      }
-      emit(vcn, (std::min)(from, end), false);
-      vcn = (std::max)(vcn, from);
-      emit(vcn, (std::min)(to, end), true);
-      vcn = (std::min)(to, end);
-    }
-    emit(vcn, end, false);
+    SplitAtBrokenUnits(result, piece, broken, at);
   }
   return result;
 }

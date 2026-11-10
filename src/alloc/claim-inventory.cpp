@@ -122,6 +122,53 @@ void TakeSizes(const StreamLayout& layout, AccountStream& account) {
       (std::max)({account.span, layout.declared_clusters, layout.covered_end});
 }
 
+// Whether the stream is the $Bad stream of $BadClus.
+bool IsBadStream(ULONGLONG record, Attr::Type type, std::wstring_view name) {
+  return record == static_cast<ULONGLONG>(Mft::Idx::BadCluster) &&
+         type == Attr::Type::Data && name == bad_stream_name;
+}
+
+// Builds the streams, accounts and claims of one record.
+class ClaimBuilder {
+ public:
+  explicit ClaimBuilder(RecordClaims& out) : out_(&out) {}
+
+  // Adds a stream that has an account: a data stream of a concerned record.
+  void AddAccounted(std::wstring_view name, const StreamLayout& layout) {
+    const std::uint32_t stream = StreamOf(name);
+    AccountStream& account = out_->accounts.at(out_->stream_account.at(stream));
+    TakeSizes(layout, account);
+    AppendClaims(layout, stream, out_->claims, &account);
+  }
+
+  // Adds a stream that has no account.
+  void AddPlain(const StreamLayout& layout) {
+    const auto stream = static_cast<std::uint32_t>(out_->stream_account.size());
+    out_->stream_account.push_back(no_account);
+    AppendClaims(layout, stream, out_->claims, nullptr);
+  }
+
+ private:
+  // The local stream of a concerned stream by name, made when first met.
+  std::uint32_t StreamOf(std::wstring_view name) {
+    for (std::size_t i = 0; i < out_->accounts.size(); i++) {
+      if (out_->accounts.at(i).name == name) {
+        return account_stream_.at(i);
+      }
+    }
+    const auto stream = static_cast<std::uint32_t>(out_->stream_account.size());
+    out_->stream_account.push_back(
+        static_cast<std::uint32_t>(out_->accounts.size()));
+    out_->accounts.push_back({.name = std::wstring(name)});
+    account_stream_.push_back(stream);
+    return stream;
+  }
+
+  RecordClaims* out_;
+  // The local stream of each account, by account.
+  std::vector<std::uint32_t> account_stream_;
+};
+
 }  // namespace
 
 template <Cache::Strategy S>
@@ -131,23 +178,7 @@ RecordClaims CollectClaims(const Io::FileRecord<S>& file_record,
                    .lsn = file_record.GetLogSequenceNumber(),
                    .freed = freed,
                    .concerned = concerned};
-
-  // The local stream of a concerned stream by name, made when first met.
-  // account_stream holds it for each account.
-  std::vector<std::uint32_t> account_stream;
-  const auto stream_of = [&out, &account_stream](std::wstring_view name) {
-    for (std::size_t i = 0; i < out.accounts.size(); i++) {
-      if (out.accounts.at(i).name == name) {
-        return account_stream.at(i);
-      }
-    }
-    const auto stream = static_cast<std::uint32_t>(out.stream_account.size());
-    out.stream_account.push_back(
-        static_cast<std::uint32_t>(out.accounts.size()));
-    out.accounts.push_back({.name = std::wstring(name)});
-    account_stream.push_back(stream);
-    return stream;
-  };
+  ClaimBuilder builder(out);
 
   for (std::size_t index = 0; index < Attr::attr_nums; index++) {
     const auto type = static_cast<Attr::Type>((index + 1) << 4U);
@@ -157,27 +188,19 @@ RecordClaims CollectClaims(const Io::FileRecord<S>& file_record,
         continue;
       }
       const std::wstring_view name = attr->GetAttrName();
-      if (record == static_cast<ULONGLONG>(Mft::Idx::BadCluster) &&
-          type == Attr::Type::Data && name == bad_stream_name) {
+      if (IsBadStream(record, type, name)) {
         continue;
       }
       const StreamLayout layout = attr->GetLayout();
       if (concerned && type == Attr::Type::Data) {
-        const std::uint32_t stream = stream_of(name);
-        AccountStream& account = out.accounts.at(out.stream_account.at(stream));
-        TakeSizes(layout, account);
-        AppendClaims(layout, stream, out.claims, &account);
-        continue;
+        builder.AddAccounted(name, layout);
+      } else {
+        builder.AddPlain(layout);
       }
-      const auto stream = static_cast<std::uint32_t>(out.stream_account.size());
-      out.stream_account.push_back(no_account);
-      AppendClaims(layout, stream, out.claims, nullptr);
     }
   }
   for (const StreamLayout& layout : file_record.GetClaimedLayouts()) {
-    const auto stream = static_cast<std::uint32_t>(out.stream_account.size());
-    out.stream_account.push_back(no_account);
-    AppendClaims(layout, stream, out.claims, nullptr);
+    builder.AddPlain(layout);
   }
   return out;
 }
